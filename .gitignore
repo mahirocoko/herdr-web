@@ -1,0 +1,10 @@
+node_modules/
+dist/
+build/
+.react-router/
+coverage/
+.letta/
+.agent-state/
+.DS_Store
+*.local
+*.log

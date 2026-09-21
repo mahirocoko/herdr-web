@@ -1,0 +1,37 @@
+{
+  "name": "herdr-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "react-router dev",
+    "build": "react-router build",
+    "start": "bun server/index.ts",
+    "schema:sync": "bun scripts/sync-herdr-schema.ts",
+    "schema:check": "bun scripts/sync-herdr-schema.ts --check",
+    "test": "bun test",
+    "test:live": "HERDR_LIVE_TEST=1 bun test",
+    "typecheck": "react-router typegen && tsc --noEmit"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
+    "isbot": "5.2.2",
+    "lucide-react": "1.47.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-router": "8.4.0",
+    "web-push": "3.6.7"
+  },
+  "devDependencies": {
+    "@react-router/dev": "8.4.0",
+    "@react-router/fs-routes": "8.4.0",
+    "@react-router/node": "8.4.0",
+    "@types/bun": "1.4.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/web-push": "3.6.4",
+    "typescript": "7.0.2",
+    "vite": "8.3.0"
+  }
+}

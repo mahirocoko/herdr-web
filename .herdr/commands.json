@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "run-tests",
+      "label": "Run tests",
+      "fillValue": "bun test",
+      "description": "Run unit test suite",
+      "category": "Testing",
+      "mode": "shell"
+    },
+    {
+      "id": "run-typecheck",
+      "label": "Typecheck",
+      "fillValue": "bun run typecheck",
+      "description": "Run TypeScript compiler check",
+      "category": "Testing",
+      "mode": "shell"
+    },
+    {
+      "id": "run-build",
+      "label": "Build",
+      "fillValue": "bun run build",
+      "description": "Run client and server build",
+      "category": "Build",
+      "mode": "shell"
+    },
+    {
+      "id": "git-status",
+      "label": "Git status",
+      "fillValue": "git status",
+      "description": "Check git working tree status",
+      "category": "Git",
+      "mode": "shell"
+    },
+    {
+      "id": "git-diff",
+      "label": "Git diff",
+      "fillValue": "git diff",
+      "description": "View git unstaged changes",
+      "category": "Git",
+      "mode": "shell"
+    }
+  ]
+}

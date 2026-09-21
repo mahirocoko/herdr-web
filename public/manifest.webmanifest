@@ -1,0 +1,18 @@
+{
+  "id": "/",
+  "name": "Herdr Web",
+  "short_name": "Herdr",
+  "description": "Mobile command center for Herdr terminal sessions and AI agents",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#090d16",
+  "theme_color": "#090d16",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
