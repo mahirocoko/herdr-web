@@ -64,8 +64,8 @@ export interface IPane {
   terminal_title?: string
   terminal_title_stripped?: string
   display_agent?: string
-  cwd: string
-  foreground_cwd?: string
+  cwd: string | null
+  foreground_cwd?: string | null
   focused: boolean
   revision?: number
   scroll?: IPaneScroll
@@ -106,6 +106,32 @@ export interface ITabCreateTargetIdentity {
   terminalId: string
 }
 
+export interface IWorkspaceCreateSource {
+  workspaceId: string
+  paneId: string
+  terminalId: string
+}
+
+export interface IWorkspaceCloseExpectedMembership {
+  tabIds: string[]
+  paneIds: string[]
+}
+
+export interface IWorkspaceCloseTargetIdentity {
+  workspaceId: string
+  expected: IWorkspaceCloseExpectedMembership
+}
+
+export interface ITabCloseExpectedMembership {
+  paneIds: string[]
+}
+
+export interface ITabCloseTargetIdentity {
+  workspaceId: string
+  tabId: string
+  expected: ITabCloseExpectedMembership
+}
+
 export type IActionRequest =
   | {
       type: 'prompt'
@@ -132,6 +158,66 @@ export type IActionRequest =
       target: ITabCreateTargetIdentity
       label?: string
     }
+  | {
+      type: 'workspace-create'
+      operationId: string
+      label?: string
+      source?: IWorkspaceCreateSource
+    }
+  | {
+      type: 'workspace-close'
+      operationId: string
+      target: IWorkspaceCloseTargetIdentity
+    }
+  | {
+      type: 'tab-close'
+      operationId: string
+      target: ITabCloseTargetIdentity
+    }
+
+export interface ITabCreateExecutionResult {
+  ok: boolean
+  status?: number
+  error?: string
+  outcome?: 'observed' | 'rejected' | 'unknown'
+  result?: {
+    tabId: string
+    paneId: string
+  }
+}
+
+export interface IWorkspaceCreateExecutionResult {
+  ok: boolean
+  status?: number
+  error?: string
+  outcome?: 'observed' | 'rejected' | 'unknown'
+  result?: {
+    workspaceId: string
+    tabId: string
+    paneId: string
+  }
+}
+
+export interface IWorkspaceCloseExecutionResult {
+  ok: boolean
+  status?: number
+  error?: string
+  outcome?: 'observed' | 'rejected' | 'unknown'
+  result?: {
+    workspaceId: string
+  }
+}
+
+export interface ITabCloseExecutionResult {
+  ok: boolean
+  status?: number
+  error?: string
+  outcome?: 'observed' | 'rejected' | 'unknown'
+  result?: {
+    workspaceId: string
+    tabId: string
+  }
+}
 
 export type ICatalogSourceKind = 'repo-config' | 'native-agent' | 'server-preset'
 

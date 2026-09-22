@@ -268,6 +268,303 @@ describe('security: validateActionRequest', () => {
     expect(res.valid).toBe(true)
     expect(res.data?.type).toBe('tab-create')
   })
+
+  test('rejects unsupported tab-create root and target fields', () => {
+    const rootExtra = validateActionRequest({
+      type: 'tab-create',
+      operationId: 'op-tab-extra-root',
+      workspaceId: 'ws-main',
+      target: { paneId: 'ws-main:p1', terminalId: 'term-root' },
+      close_group: true
+    })
+    expect(rootExtra.valid).toBe(false)
+    expect(rootExtra.error).toContain('Unsupported field "close_group"')
+
+    const targetExtra = validateActionRequest({
+      type: 'tab-create',
+      operationId: 'op-tab-extra-target',
+      workspaceId: 'ws-main',
+      target: {
+        paneId: 'ws-main:p1',
+        terminalId: 'term-root',
+        expectedMode: 'shell'
+      }
+    })
+    expect(targetExtra.valid).toBe(false)
+    expect(targetExtra.error).toContain('Unsupported field "expectedMode"')
+  })
+
+  test('accepts valid workspace-create action without source', () => {
+    const res = validateActionRequest({
+      type: 'workspace-create',
+      operationId: 'op-ws-1',
+      label: 'New Space'
+    })
+    expect(res.valid).toBe(true)
+    expect(res.data).toEqual({
+      type: 'workspace-create',
+      operationId: 'op-ws-1',
+      label: 'New Space'
+    })
+  })
+
+  test('rejects workspace-create with explicit null source', () => {
+    const res = validateActionRequest({
+      type: 'workspace-create',
+      operationId: 'op-ws-null-source',
+      source: null
+    })
+    expect(res.valid).toBe(false)
+    expect(res.error).toContain('non-null object')
+  })
+
+  test('accepts valid workspace-create action with source', () => {
+    const res = validateActionRequest({
+      type: 'workspace-create',
+      operationId: 'op-ws-2',
+      source: {
+        workspaceId: 'ws-orig',
+        paneId: 'ws-orig:p1',
+        terminalId: 'term-orig'
+      }
+    })
+    expect(res.valid).toBe(true)
+    expect(res.data).toEqual({
+      type: 'workspace-create',
+      operationId: 'op-ws-2',
+      source: {
+        workspaceId: 'ws-orig',
+        paneId: 'ws-orig:p1',
+        terminalId: 'term-orig'
+      }
+    })
+  })
+
+  test('rejects workspace-create with unsupported fields', () => {
+    const res = validateActionRequest({
+      type: 'workspace-create',
+      operationId: 'op-ws-bad',
+      label: 'Space',
+      unsupportedExtra: 'evil'
+    })
+    expect(res.valid).toBe(false)
+    expect(res.error).toContain('Unsupported field "unsupportedExtra"')
+  })
+
+  test('rejects workspace-create with unsupported fields on source', () => {
+    const res = validateActionRequest({
+      type: 'workspace-create',
+      operationId: 'op-ws-bad-src',
+      source: {
+        workspaceId: 'ws-1',
+        paneId: 'ws-1:p1',
+        terminalId: 'term-1',
+        unexpectedKey: 123
+      }
+    })
+    expect(res.valid).toBe(false)
+    expect(res.error).toContain('Unsupported field "unexpectedKey"')
+  })
+
+  test('rejects workspace-create with invalid or oversized label or control characters', () => {
+    const resNull = validateActionRequest({
+      type: 'workspace-create',
+      operationId: 'op-ws-label-null',
+      label: null
+    })
+    expect(resNull.valid).toBe(false)
+    expect(resNull.error).toContain('must be a string')
+
+    const resOversized = validateActionRequest({
+      type: 'workspace-create',
+      operationId: 'op-ws-label-len',
+      label: 'a'.repeat(101)
+    })
+    expect(resOversized.valid).toBe(false)
+    expect(resOversized.error).toContain('maximum length of 100 characters')
+
+    const resControl = validateActionRequest({
+      type: 'workspace-create',
+      operationId: 'op-ws-label-ctrl',
+      label: 'Bad\x00Label'
+    })
+    expect(resControl.valid).toBe(false)
+    expect(resControl.error).toContain('control characters')
+  })
+
+  test('rejects workspace-create with numeric alias or invalid source tokens', () => {
+    const resNumericWs = validateActionRequest({
+      type: 'workspace-create',
+      operationId: 'op-ws-num',
+      source: {
+        workspaceId: 1, // numeric alias
+        paneId: 'ws-1:p1',
+        terminalId: 'term-1'
+      }
+    })
+    expect(resNumericWs.valid).toBe(false)
+
+    const resBadPane = validateActionRequest({
+      type: 'workspace-create',
+      operationId: 'op-ws-badpane',
+      source: {
+        workspaceId: 'ws-1',
+        paneId: 'not-a-pane',
+        terminalId: 'term-1'
+      }
+    })
+    expect(resBadPane.valid).toBe(false)
+  })
+
+  test('accepts valid workspace-close action', () => {
+    const res = validateActionRequest({
+      type: 'workspace-close',
+      operationId: 'op-close-ws',
+      target: {
+        workspaceId: 'ws-target',
+        expected: {
+          tabIds: ['tab-b', 'tab-a'],
+          paneIds: ['pane-b', 'pane-a']
+        }
+      }
+    })
+    expect(res.valid).toBe(true)
+    expect(res.data).toEqual({
+      type: 'workspace-close',
+      operationId: 'op-close-ws',
+      target: {
+        workspaceId: 'ws-target',
+        expected: {
+          tabIds: ['tab-a', 'tab-b'],
+          paneIds: ['pane-a', 'pane-b']
+        }
+      }
+    })
+  })
+
+  test('rejects malformed, duplicate, oversized, null, and extra close manifests', () => {
+    const workspaceBase = {
+      type: 'workspace-close',
+      operationId: 'op-close-manifest',
+      target: { workspaceId: 'ws-1', expected: { tabIds: ['tab-1'], paneIds: ['pane-1'] } }
+    }
+    const invalidWorkspaceExpected = [
+      null,
+      { tabIds: null, paneIds: [] },
+      { tabIds: ['tab-1', 'tab-1'], paneIds: [] },
+      { tabIds: [1], paneIds: [] },
+      { tabIds: [], paneIds: [], extra: true },
+      { tabIds: Array.from({ length: 65 }, (_, index) => `tab-${index}`), paneIds: [] }
+    ]
+    for (const expected of invalidWorkspaceExpected) {
+      const result = validateActionRequest({
+        ...workspaceBase,
+        target: { ...workspaceBase.target, expected }
+      })
+      expect(result.valid).toBe(false)
+    }
+
+    const invalidTabExpected = [
+      null,
+      { paneIds: null },
+      { paneIds: ['pane-1', 'pane-1'] },
+      { paneIds: [1] },
+      { paneIds: [], extra: true }
+    ]
+    for (const expected of invalidTabExpected) {
+      const result = validateActionRequest({
+        type: 'tab-close',
+        operationId: 'op-tab-manifest',
+        target: { workspaceId: 'ws-1', tabId: 'tab-1', expected }
+      })
+      expect(result.valid).toBe(false)
+    }
+  })
+
+  test('rejects workspace-close with unsupported fields on root or target', () => {
+    const resRoot = validateActionRequest({
+      type: 'workspace-close',
+      operationId: 'op-close-ws',
+      target: { workspaceId: 'ws-1' },
+      extraRoot: true
+    })
+    expect(resRoot.valid).toBe(false)
+    expect(resRoot.error).toContain('Unsupported field "extraRoot"')
+
+    const resTarget = validateActionRequest({
+      type: 'workspace-close',
+      operationId: 'op-close-ws',
+      target: {
+        workspaceId: 'ws-1',
+        extraTarget: 'bad'
+      }
+    })
+    expect(resTarget.valid).toBe(false)
+    expect(resTarget.error).toContain('Unsupported field "extraTarget"')
+  })
+
+  test('rejects workspace-close with numeric alias or missing target', () => {
+    const resNumeric = validateActionRequest({
+      type: 'workspace-close',
+      operationId: 'op-close-ws',
+      target: {
+        workspaceId: 123
+      }
+    })
+    expect(resNumeric.valid).toBe(false)
+
+    const resMissing = validateActionRequest({
+      type: 'workspace-close',
+      operationId: 'op-close-ws'
+    })
+    expect(resMissing.valid).toBe(false)
+  })
+
+  test('accepts valid tab-close action', () => {
+    const res = validateActionRequest({
+      type: 'tab-close',
+      operationId: 'op-close-tab',
+      target: {
+        workspaceId: 'ws-1',
+        tabId: 'tab-2',
+        expected: { paneIds: ['pane-b', 'pane-a'] }
+      }
+    })
+    expect(res.valid).toBe(true)
+    expect(res.data).toEqual({
+      type: 'tab-close',
+      operationId: 'op-close-tab',
+      target: {
+        workspaceId: 'ws-1',
+        tabId: 'tab-2',
+        expected: { paneIds: ['pane-a', 'pane-b'] }
+      }
+    })
+  })
+
+  test('rejects tab-close with unsupported fields or numeric alias', () => {
+    const resExtra = validateActionRequest({
+      type: 'tab-close',
+      operationId: 'op-close-tab',
+      target: {
+        workspaceId: 'ws-1',
+        tabId: 'tab-2',
+        extra: 'bad'
+      }
+    })
+    expect(resExtra.valid).toBe(false)
+    expect(resExtra.error).toContain('Unsupported field "extra"')
+
+    const resNumeric = validateActionRequest({
+      type: 'tab-close',
+      operationId: 'op-close-tab',
+      target: {
+        workspaceId: 'ws-1',
+        tabId: 99
+      }
+    })
+    expect(resNumeric.valid).toBe(false)
+  })
 })
 
 describe('security: validatePaneReadParams', () => {

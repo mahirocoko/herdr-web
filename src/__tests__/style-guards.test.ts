@@ -7,6 +7,8 @@ describe('style-guards: loader spinner classes', () => {
   const cssContent = fs.readFileSync(cssPath, 'utf8')
   const paneDrawerPath = path.resolve(import.meta.dir, '../components/pane-drawer.tsx')
   const paneDrawerContent = fs.readFileSync(paneDrawerPath, 'utf8')
+  const spaceDrawerPath = path.resolve(import.meta.dir, '../components/space-drawer.tsx')
+  const spaceDrawerContent = fs.readFileSync(spaceDrawerPath, 'utf8')
 
   const extractClassBlock = (className: string): string => {
     const escaped = className.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')
@@ -63,6 +65,19 @@ describe('style-guards: loader spinner classes', () => {
     const reducedMotionBlock = cssContent.slice(startIndex, endIndex + 1)
     expect(reducedMotionBlock).toContain('.spin')
     expect(reducedMotionBlock).toContain('animation: none !important')
+  })
+
+  it('keeps lifecycle controls touch-safe and assigns non-overlapping Tab header ownership', () => {
+    expect(extractClassBlock('space-drawer-action')).toContain('min-height: 44px')
+    expect(extractClassBlock('tab-close-action')).toContain('min-height: 44px')
+    expect(cssContent).toContain('.lifecycle-cancel-btn,\n.lifecycle-danger-btn {\n  min-height: 44px')
+    expect(extractClassBlock('tab-group__info')).toContain('min-width: 0')
+    expect(extractClassBlock('tab-group__info')).toContain('flex: 1 1 auto')
+    expect(extractClassBlock('tab-group__actions')).toContain('flex: 0 1 auto')
+    expect(cssContent).toContain('@media (max-width: 390px)')
+    expect(cssContent).toContain('flex-wrap: wrap')
+    expect(spaceDrawerContent).toContain('aria-label="Space lifecycle actions"')
+    expect(paneDrawerContent).not.toContain('Space lifecycle actions')
   })
 
   it('renders per-Tab notifications as a semantic track-and-thumb Switch', () => {

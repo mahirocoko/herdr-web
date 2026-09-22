@@ -12,7 +12,9 @@ export interface ICachedOperation {
 export interface IActiveAttempt {
   token: string
   operationId: string
-  paneId: string
+  targetKey: string
+  paneId?: string
+  topology: 'exclusive' | 'shared'
   payloadFingerprint: string
   createdAt: number
 }
@@ -23,6 +25,18 @@ export interface IPaneClaim {
   kind: 'action' | 'control'
   ownerId: string
   createdAt: number
+}
+
+export interface ITopologyClaim {
+  token: string
+  ownerId: string
+  createdAt: number
+}
+
+export interface IBeginActionOptions {
+  topology?: 'exclusive' | 'shared'
+  paneId?: string
+  targetKey?: string
 }
 
 export const DEFAULT_OPERATION_TTL_MS = 60 * 1000 // 1 minute bounded TTL
@@ -67,6 +81,46 @@ export const computePayloadFingerprint = (action: IActionRequest): string => {
     })
   }
 
+  if (action.type === 'workspace-create') {
+    return JSON.stringify({
+      type: action.type,
+      label: action.label ?? null,
+      source: action.source
+        ? {
+            workspaceId: action.source.workspaceId,
+            paneId: action.source.paneId,
+            terminalId: action.source.terminalId
+          }
+        : null
+    })
+  }
+
+  if (action.type === 'workspace-close') {
+    return JSON.stringify({
+      type: action.type,
+      target: {
+        workspaceId: action.target.workspaceId,
+        expected: {
+          tabIds: [...action.target.expected.tabIds].sort(),
+          paneIds: [...action.target.expected.paneIds].sort()
+        }
+      }
+    })
+  }
+
+  if (action.type === 'tab-close') {
+    return JSON.stringify({
+      type: action.type,
+      target: {
+        workspaceId: action.target.workspaceId,
+        tabId: action.target.tabId,
+        expected: {
+          paneIds: [...action.target.expected.paneIds].sort()
+        }
+      }
+    })
+  }
+
   return JSON.stringify(action)
 }
 
@@ -79,8 +133,10 @@ export type BeginActionResult =
 
 export class OperationCoordinator {
   private activeAttempts = new Map<string, IActiveAttempt>() // token -> IActiveAttempt
-  private activeOperationIds = new Map<string, { token: string; payloadFingerprint: string; paneId: string }>() // operationId -> info
+  private activeOperationIds = new Map<string, { token: string; payloadFingerprint: string; targetKey: string }>() // operationId -> info
   private paneClaims = new Map<string, IPaneClaim>() // paneId -> IPaneClaim
+  private exclusiveTopologyClaim: ITopologyClaim | null = null
+  private sharedTopologyClaims = new Map<string, ITopologyClaim>() // token -> ITopologyClaim
   private cachedOperations = new Map<string, ICachedOperation>() // operationId -> ICachedOperation (genuine LRU)
   private readonly ttlMs: number
   private readonly maxEntries: number
@@ -96,17 +152,25 @@ export class OperationCoordinator {
    * 1. Replays exact cached result (refreshing LRU order).
    * 2. Conflicts on cached/active same operationId with different fingerprint.
    * 3. Returns in-flight on exact active ID.
-   * 4. Returns pane contention for different owner (action or control).
-   * 5. Otherwise reserves operation ID and physical pane with opaque attempt token.
+   * 4. Checks topology contention (exclusive vs shared/exclusive) and pane contention.
+   * 5. Otherwise reserves operation ID, topology claim, and pane with opaque attempt token.
    */
   public beginAction(
     operationId: string,
-    paneId: string,
+    targetOrOptions: string | IBeginActionOptions,
     payloadFingerprint: string
   ): BeginActionResult {
     const now = Date.now()
+    const options: IBeginActionOptions =
+      typeof targetOrOptions === 'string'
+        ? { paneId: targetOrOptions, topology: 'shared', targetKey: targetOrOptions }
+        : targetOrOptions
 
-    // 1. Check completed cache
+    const topology = options.topology ?? (options.paneId ? 'shared' : 'exclusive')
+    const paneId = options.paneId
+    const targetKey = options.targetKey ?? paneId ?? 'global'
+
+    // 1. Check completed cache (replay/conflict before contention)
     const cached = this.cachedOperations.get(operationId)
     if (cached) {
       if (now - cached.createdAt > this.ttlMs) {
@@ -130,7 +194,7 @@ export class OperationCoordinator {
       }
     }
 
-    // 2. Check active in-flight operation IDs
+    // 2. Check active in-flight operation IDs (conflict/in-flight before contention)
     const active = this.activeOperationIds.get(operationId)
     if (active) {
       if (active.payloadFingerprint !== payloadFingerprint) {
@@ -147,49 +211,95 @@ export class OperationCoordinator {
       }
     }
 
-    // 3. Check physical pane claim (shared with Terminal Control and other actions)
-    const existingClaim = this.paneClaims.get(paneId)
-    if (existingClaim) {
-      if (existingClaim.kind === 'control') {
+    // 3. Topology and pane contention checks
+    if (topology === 'exclusive') {
+      if (this.exclusiveTopologyClaim !== null) {
         return {
           kind: 'contention',
           status: 409,
-          error: 'Cannot perform action: pane is currently controlled by a terminal control session'
+          error: 'Cannot perform action: exclusive topology mutation is currently in-flight'
         }
       }
-      return {
-        kind: 'contention',
-        status: 409,
-        error: `A mutation is already in-flight for terminal target "${paneId}"`
+      if (this.sharedTopologyClaims.size > 0) {
+        return {
+          kind: 'contention',
+          status: 409,
+          error: 'Cannot perform action: concurrent operations are active'
+        }
+      }
+    } else {
+      // Shared topology
+      if (this.exclusiveTopologyClaim !== null) {
+        return {
+          kind: 'contention',
+          status: 409,
+          error: 'Cannot perform action: exclusive topology mutation is currently in-flight'
+        }
+      }
+      if (paneId) {
+        const existingClaim = this.paneClaims.get(paneId)
+        if (existingClaim) {
+          if (existingClaim.kind === 'control') {
+            return {
+              kind: 'contention',
+              status: 409,
+              error: 'Cannot perform action: pane is currently controlled by a terminal control session'
+            }
+          }
+          return {
+            kind: 'contention',
+            status: 409,
+            error: `A mutation is already in-flight for terminal target "${paneId}"`
+          }
+        }
       }
     }
 
-    // 4. Reserve operation ID and pane with opaque attempt token
+    // 4. Reserve operation ID, topology claim, and pane with opaque attempt token
     const token = crypto.randomUUID()
     const attempt: IActiveAttempt = {
       token,
       operationId,
-      paneId,
+      targetKey,
+      ...(paneId ? { paneId } : {}),
+      topology,
       payloadFingerprint,
       createdAt: now
     }
 
     this.activeAttempts.set(token, attempt)
-    this.activeOperationIds.set(operationId, { token, payloadFingerprint, paneId })
-    this.paneClaims.set(paneId, {
-      paneId,
-      token,
-      kind: 'action',
-      ownerId: operationId,
-      createdAt: now
-    })
+    this.activeOperationIds.set(operationId, { token, payloadFingerprint, targetKey })
+
+    if (topology === 'exclusive') {
+      this.exclusiveTopologyClaim = {
+        token,
+        ownerId: operationId,
+        createdAt: now
+      }
+    } else {
+      this.sharedTopologyClaims.set(token, {
+        token,
+        ownerId: operationId,
+        createdAt: now
+      })
+    }
+
+    if (paneId) {
+      this.paneClaims.set(paneId, {
+        paneId,
+        token,
+        kind: 'action',
+        ownerId: operationId,
+        createdAt: now
+      })
+    }
 
     return { kind: 'admitted', token }
   }
 
   /**
    * Completes an action attempt: stores terminal result into genuine LRU cache,
-   * then frees operationId and pane claim.
+   * then frees operationId, topology claim, and pane claim.
    * Only matching attempt token may complete.
    */
   public completeAction(
@@ -202,17 +312,22 @@ export class OperationCoordinator {
       return false
     }
 
-    const targetKey = `${attempt.paneId}`
     // Store terminal result before releasing claim
-    this.cacheResult(attempt.operationId, targetKey, attempt.payloadFingerprint, status, body)
+    this.cacheResult(attempt.operationId, attempt.targetKey, attempt.payloadFingerprint, status, body)
 
     // Release claim
     this.activeAttempts.delete(token)
     if (this.activeOperationIds.get(attempt.operationId)?.token === token) {
       this.activeOperationIds.delete(attempt.operationId)
     }
-    if (this.paneClaims.get(attempt.paneId)?.token === token) {
+    if (attempt.paneId && this.paneClaims.get(attempt.paneId)?.token === token) {
       this.paneClaims.delete(attempt.paneId)
+    }
+    if (this.exclusiveTopologyClaim?.token === token) {
+      this.exclusiveTopologyClaim = null
+    }
+    if (this.sharedTopologyClaims.has(token)) {
+      this.sharedTopologyClaims.delete(token)
     }
 
     return true
@@ -233,8 +348,14 @@ export class OperationCoordinator {
     if (this.activeOperationIds.get(attempt.operationId)?.token === token) {
       this.activeOperationIds.delete(attempt.operationId)
     }
-    if (this.paneClaims.get(attempt.paneId)?.token === token) {
+    if (attempt.paneId && this.paneClaims.get(attempt.paneId)?.token === token) {
       this.paneClaims.delete(attempt.paneId)
+    }
+    if (this.exclusiveTopologyClaim?.token === token) {
+      this.exclusiveTopologyClaim = null
+    }
+    if (this.sharedTopologyClaims.has(token)) {
+      this.sharedTopologyClaims.delete(token)
     }
 
     return true
@@ -242,12 +363,20 @@ export class OperationCoordinator {
 
   /**
    * Terminal Control pane claim acquisition.
-   * Holds claim through release lifecycle.
+   * Holds shared topology + pane claim through release lifecycle.
    */
   public claimPaneForControl(
     paneId: string,
     leaseId: string
   ): { ok: true; token: string } | { ok: false; status: number; error: string } {
+    if (this.exclusiveTopologyClaim !== null) {
+      return {
+        ok: false,
+        status: 409,
+        error: 'Cannot control terminal: exclusive topology mutation is currently in-flight'
+      }
+    }
+
     const existingClaim = this.paneClaims.get(paneId)
     if (existingClaim) {
       if (existingClaim.kind === 'control') {
@@ -265,11 +394,57 @@ export class OperationCoordinator {
     }
 
     const token = crypto.randomUUID()
+    const now = Date.now()
     this.paneClaims.set(paneId, {
       paneId,
       token,
       kind: 'control',
       ownerId: leaseId,
+      createdAt: now
+    })
+    this.sharedTopologyClaims.set(token, {
+      token,
+      ownerId: leaseId,
+      createdAt: now
+    })
+
+    return { ok: true, token }
+  }
+
+  /**
+   * Releases a Terminal Control pane claim and shared topology claim by matching attempt token.
+   */
+  public releaseControlPane(token: string): boolean {
+    let released = false
+    for (const [paneId, claim] of this.paneClaims.entries()) {
+      if (claim.token === token && claim.kind === 'control') {
+        this.paneClaims.delete(paneId)
+        released = true
+      }
+    }
+    if (this.sharedTopologyClaims.has(token)) {
+      this.sharedTopologyClaims.delete(token)
+      released = true
+    }
+    return released
+  }
+
+  /**
+   * Acquires a transient shared topology claim (e.g. for Tab-policy mutation).
+   */
+  public claimSharedTopology(ownerId = 'tab-policy'): { ok: true; token: string } | { ok: false; status: number; error: string } {
+    if (this.exclusiveTopologyClaim !== null) {
+      return {
+        ok: false,
+        status: 409,
+        error: 'Cannot update tab policy: exclusive topology mutation is currently in-flight'
+      }
+    }
+
+    const token = crypto.randomUUID()
+    this.sharedTopologyClaims.set(token, {
+      token,
+      ownerId,
       createdAt: Date.now()
     })
 
@@ -277,14 +452,12 @@ export class OperationCoordinator {
   }
 
   /**
-   * Releases a Terminal Control pane claim by matching attempt token.
+   * Releases a transient shared topology claim by matching token.
    */
-  public releaseControlPane(token: string): boolean {
-    for (const [paneId, claim] of this.paneClaims.entries()) {
-      if (claim.token === token && claim.kind === 'control') {
-        this.paneClaims.delete(paneId)
-        return true
-      }
+  public releaseSharedTopology(token: string): boolean {
+    if (this.sharedTopologyClaims.has(token)) {
+      this.sharedTopologyClaims.delete(token)
+      return true
     }
     return false
   }
@@ -350,11 +523,21 @@ export class OperationCoordinator {
     return this.paneClaims.size
   }
 
+  public getExclusiveTopologyClaimForTesting(): ITopologyClaim | null {
+    return this.exclusiveTopologyClaim
+  }
+
+  public getSharedTopologyClaimsCountForTesting(): number {
+    return this.sharedTopologyClaims.size
+  }
+
   public resetForTesting(): void {
     this.activeAttempts.clear()
     this.activeOperationIds.clear()
     this.paneClaims.clear()
     this.cachedOperations.clear()
+    this.exclusiveTopologyClaim = null
+    this.sharedTopologyClaims.clear()
   }
 }
 

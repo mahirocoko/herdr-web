@@ -11,6 +11,7 @@
 - Delegates to `server/herdr-cli.ts` when `HERDR_TRANSPORT=cli` is explicitly configured.
 - `server/snapshot-bridge.ts` manages long-lived `events.subscribe` connections for event-driven snapshot invalidation and broadcasts over WebSocket `/api/events`.
 - In socket mode, `spawnObserverProcess` is the sole intentional CLI transport because the raw socket API does not expose terminal session observation.
+- Typed lifecycle adapters map `workspace-create`, `workspace-close`, and `tab-close` to exact socket RPCs. Close adapters compare the client-confirmed raw membership with a fresh snapshot immediately before RPC and verify exact postconditions afterward.
 
 Rules:
 
@@ -19,3 +20,4 @@ Rules:
 - No hidden fallback between transports: transport is selected explicitly via `HERDR_TRANSPORT`.
 - Return typed, actionable errors (`HerdrSocketError` with `.code` and `.message`) mapping `pane_not_found` to 404.
 - Recheck live pane identity before mutations and reads.
+- Recheck lifecycle target identity and full confirmed membership immediately before destructive topology RPCs; never automatically retry an unknown close outcome.

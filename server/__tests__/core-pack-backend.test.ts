@@ -817,6 +817,139 @@ describe('Core Pack Backend Foundation', () => {
       expect(coordinator.isPaneClaimed('pane-ctrl-1')).toBe(false)
     })
 
+    it('coordinates exclusive lifecycle against shared action, control, and tab-policy claims in both orders', () => {
+      const exclusive = coordinator.beginAction('op-exclusive-1', { topology: 'exclusive', targetKey: 'workspace:create' }, 'fp-exclusive-1')
+      expect(exclusive.kind).toBe('admitted')
+      if (exclusive.kind !== 'admitted') return
+
+      expect(coordinator.beginAction('op-shared-blocked', { topology: 'shared', paneId: 'pane-1' }, 'fp-shared').kind).toBe('contention')
+      expect(coordinator.claimPaneForControl('pane-2', 'lease-blocked').ok).toBe(false)
+      expect(coordinator.claimSharedTopology('tab-policy-blocked').ok).toBe(false)
+      coordinator.abandonAction(exclusive.token)
+
+      const shared = coordinator.beginAction('op-shared-1', { topology: 'shared', paneId: 'pane-1' }, 'fp-shared-1')
+      expect(shared.kind).toBe('admitted')
+      expect(coordinator.beginAction('op-exclusive-blocked-1', { topology: 'exclusive' }, 'fp-exclusive-2').kind).toBe('contention')
+      if (shared.kind === 'admitted') coordinator.abandonAction(shared.token)
+
+      const control = coordinator.claimPaneForControl('pane-2', 'lease-1')
+      expect(control.ok).toBe(true)
+      expect(coordinator.beginAction('op-exclusive-blocked-2', { topology: 'exclusive' }, 'fp-exclusive-3').kind).toBe('contention')
+      if (control.ok) coordinator.releaseControlPane(control.token)
+
+      const tabPolicy = coordinator.claimSharedTopology('tab-policy')
+      expect(tabPolicy.ok).toBe(true)
+      expect(coordinator.beginAction('op-exclusive-blocked-3', { topology: 'exclusive' }, 'fp-exclusive-4').kind).toBe('contention')
+      if (tabPolicy.ok) coordinator.releaseSharedTopology(tabPolicy.token)
+    })
+
+    it('stale exclusive and transient-shared releases cannot unlock newer claims', () => {
+      const oldExclusive = coordinator.beginAction('op-old-exclusive', { topology: 'exclusive' }, 'fp-old-exclusive')
+      expect(oldExclusive.kind).toBe('admitted')
+      if (oldExclusive.kind !== 'admitted') return
+      expect(coordinator.abandonAction(oldExclusive.token)).toBe(true)
+
+      const newExclusive = coordinator.beginAction('op-new-exclusive', { topology: 'exclusive' }, 'fp-new-exclusive')
+      expect(newExclusive.kind).toBe('admitted')
+      if (newExclusive.kind !== 'admitted') return
+      expect(coordinator.abandonAction(oldExclusive.token)).toBe(false)
+      expect(coordinator.getExclusiveTopologyClaimForTesting()?.token).toBe(newExclusive.token)
+      coordinator.abandonAction(newExclusive.token)
+
+      const oldShared = coordinator.claimSharedTopology('old-policy')
+      expect(oldShared.ok).toBe(true)
+      if (!oldShared.ok) return
+      expect(coordinator.releaseSharedTopology(oldShared.token)).toBe(true)
+      const newShared = coordinator.claimSharedTopology('new-policy')
+      expect(newShared.ok).toBe(true)
+      if (!newShared.ok) return
+      expect(coordinator.releaseSharedTopology(oldShared.token)).toBe(false)
+      expect(coordinator.getSharedTopologyClaimsCountForTesting()).toBe(1)
+      expect(coordinator.beginAction('op-blocked-by-new-shared', { topology: 'exclusive' }, 'fp-blocked').kind).toBe('contention')
+      coordinator.releaseSharedTopology(newShared.token)
+    })
+
+    it('fingerprints and replays new lifecycle actions while conflicting changed payload reuse', () => {
+      const original: IActionRequest = {
+        type: 'workspace-create',
+        operationId: 'op-workspace-replay',
+        label: 'Original',
+        source: { workspaceId: 'ws-1', paneId: 'ws-1:p1', terminalId: 'term-1' }
+      }
+      const admitted = coordinator.beginAction(original.operationId, { topology: 'exclusive' }, computePayloadFingerprint(original))
+      expect(admitted.kind).toBe('admitted')
+      if (admitted.kind !== 'admitted') return
+      coordinator.completeAction(admitted.token, 200, { ok: true, outcome: 'observed' })
+
+      expect(coordinator.beginAction(original.operationId, { topology: 'exclusive' }, computePayloadFingerprint(original)).kind).toBe('replay')
+      const changed: IActionRequest = { ...original, label: 'Changed' }
+      expect(coordinator.beginAction(changed.operationId, { topology: 'exclusive' }, computePayloadFingerprint(changed)).kind).toBe('conflict')
+
+      const closeOriginal: IActionRequest = {
+        type: 'workspace-close',
+        operationId: 'op-close-manifest-replay',
+        target: {
+          workspaceId: 'ws-1',
+          expected: { tabIds: ['tab-b', 'tab-a'], paneIds: ['pane-b', 'pane-a'] }
+        }
+      }
+      const closeFingerprint = computePayloadFingerprint(closeOriginal)
+      const canonicalOrder: IActionRequest = {
+        ...closeOriginal,
+        target: {
+          ...closeOriginal.target,
+          expected: { tabIds: ['tab-a', 'tab-b'], paneIds: ['pane-a', 'pane-b'] }
+        }
+      }
+      expect(computePayloadFingerprint(canonicalOrder)).toBe(closeFingerprint)
+      const closeAdmitted = coordinator.beginAction(closeOriginal.operationId, { topology: 'exclusive' }, closeFingerprint)
+      expect(closeAdmitted.kind).toBe('admitted')
+      if (closeAdmitted.kind !== 'admitted') return
+      coordinator.completeAction(closeAdmitted.token, 200, { ok: true, outcome: 'observed' })
+      expect(coordinator.beginAction(canonicalOrder.operationId, { topology: 'exclusive' }, computePayloadFingerprint(canonicalOrder)).kind).toBe('replay')
+
+      const changedManifest: IActionRequest = {
+        ...canonicalOrder,
+        target: {
+          ...canonicalOrder.target,
+          expected: { ...canonicalOrder.target.expected, paneIds: ['pane-a'] }
+        }
+      }
+      expect(coordinator.beginAction(changedManifest.operationId, { topology: 'exclusive' }, computePayloadFingerprint(changedManifest)).kind).toBe('conflict')
+
+      const tabCloseOriginal: IActionRequest = {
+        type: 'tab-close',
+        operationId: 'op-tab-close-manifest-replay',
+        target: {
+          workspaceId: 'ws-1',
+          tabId: 'tab-a',
+          expected: { paneIds: ['pane-b', 'pane-a'] }
+        }
+      }
+      const tabCloseCanonical: IActionRequest = {
+        ...tabCloseOriginal,
+        target: {
+          ...tabCloseOriginal.target,
+          expected: { paneIds: ['pane-a', 'pane-b'] }
+        }
+      }
+      const tabCloseFingerprint = computePayloadFingerprint(tabCloseOriginal)
+      expect(computePayloadFingerprint(tabCloseCanonical)).toBe(tabCloseFingerprint)
+      const tabCloseAdmitted = coordinator.beginAction(tabCloseOriginal.operationId, { topology: 'exclusive' }, tabCloseFingerprint)
+      expect(tabCloseAdmitted.kind).toBe('admitted')
+      if (tabCloseAdmitted.kind !== 'admitted') return
+      coordinator.completeAction(tabCloseAdmitted.token, 200, { ok: true, outcome: 'observed' })
+      expect(coordinator.beginAction(tabCloseCanonical.operationId, { topology: 'exclusive' }, computePayloadFingerprint(tabCloseCanonical)).kind).toBe('replay')
+      const changedTabManifest: IActionRequest = {
+        ...tabCloseCanonical,
+        target: {
+          ...tabCloseCanonical.target,
+          expected: { paneIds: ['pane-a'] }
+        }
+      }
+      expect(coordinator.beginAction(changedTabManifest.operationId, { topology: 'exclusive' }, computePayloadFingerprint(changedTabManifest)).kind).toBe('conflict')
+    })
+
     it('maintains genuine LRU order: replay access touches entry and prevents eviction', () => {
       const lruCoordinator = new OperationCoordinator({ maxEntries: 3 })
       const paneId = 'ws:p1'
@@ -1662,6 +1795,130 @@ describe('Core Pack Backend Foundation', () => {
       return { promise, resolve, reject }
     }
 
+    it('bounds and content-types the action body before validation or admission', async () => {
+      const oversized = await fetch(`http://127.0.0.1:${server.port}/api/action`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: `http://127.0.0.1:${server.port}`
+        },
+        body: 'x'.repeat(4097)
+      })
+      expect(oversized.status).toBe(413)
+      expect(await oversized.json()).toEqual({
+        ok: false,
+        error: 'Payload exceeds 4096 bytes limit'
+      })
+      expect(coordinator.getActiveAttemptsCountForTesting()).toBe(0)
+
+      const wrongContentType = await fetch(`http://127.0.0.1:${server.port}/api/action`, {
+        method: 'POST',
+        headers: { origin: `http://127.0.0.1:${server.port}` },
+        body: '{}'
+      })
+      expect(wrongContentType.status).toBe(400)
+      expect(await wrongContentType.json()).toEqual({
+        ok: false,
+        error: 'Content-Type must be application/json'
+      })
+      expect(coordinator.getActiveAttemptsCountForTesting()).toBe(0)
+    })
+
+    it('holds an exclusive lifecycle route claim until its deferred executor settles', async () => {
+      const executorStarted = createDeferred<void>()
+      const executorResult = createDeferred<any>()
+      const testServer = createServer(0, '127.0.0.1', {
+        startPushBridge: false,
+        deps: {
+          coordinator,
+          leaseManager,
+          fetchSnapshot: async () => ({
+            protocol: 22,
+            version: '0.9.1',
+            workspaces: [],
+            tabs: [],
+            panes: []
+          }),
+          executeWorkspaceCreate: async () => {
+            executorStarted.resolve()
+            return await executorResult.promise
+          }
+        }
+      })
+
+      let request: Promise<Response> | undefined
+      try {
+        request = fetch(`http://127.0.0.1:${testServer.port}/api/action`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', origin: `http://127.0.0.1:${testServer.port}` },
+          body: JSON.stringify({ type: 'workspace-create', operationId: 'op-route-exclusive', label: 'New' })
+        })
+        await executorStarted.promise
+
+        expect(coordinator.getExclusiveTopologyClaimForTesting()).not.toBeNull()
+        expect(coordinator.beginAction('op-shared-while-route', { topology: 'shared', paneId: 'pane-1' }, 'fp-shared').kind).toBe('contention')
+        expect(leaseManager.reserveLease('pane-control').ok).toBe(false)
+        expect(coordinator.claimSharedTopology('tab-policy-while-route').ok).toBe(false)
+
+        executorResult.resolve({ ok: true, status: 200, outcome: 'observed', result: { workspaceId: 'ws-new', tabId: 'tab-new', paneId: 'pane-new' } })
+        const response = await request
+        expect(response.status).toBe(200)
+        expect(coordinator.getExclusiveTopologyClaimForTesting()).toBeNull()
+      } finally {
+        executorResult.resolve({ ok: false, status: 504, outcome: 'unknown' })
+        if (request) await request.catch(() => {})
+        testServer.stop(true)
+      }
+    })
+
+    it('replays a completed lifecycle route action and rejects changed-payload operation ID reuse', async () => {
+      let dispatchCount = 0
+      const testServer = createServer(0, '127.0.0.1', {
+        startPushBridge: false,
+        deps: {
+          coordinator,
+          leaseManager,
+          fetchSnapshot: async () => ({
+            protocol: 22,
+            version: '0.9.1',
+            workspaces: [],
+            tabs: [],
+            panes: []
+          }),
+          executeWorkspaceCreate: async () => {
+            dispatchCount++
+            return {
+              ok: true,
+              status: 200,
+              outcome: 'observed',
+              result: { workspaceId: 'ws-new', tabId: 'tab-new', paneId: 'pane-new' }
+            }
+          }
+        }
+      })
+      const post = (label: string) => fetch(`http://127.0.0.1:${testServer.port}/api/action`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: `http://127.0.0.1:${testServer.port}` },
+        body: JSON.stringify({ type: 'workspace-create', operationId: 'op-route-replay', label })
+      })
+
+      try {
+        const first = await post('Original')
+        expect(first.status).toBe(200)
+        const replay = await post('Original')
+        expect(replay.status).toBe(200)
+        expect(await replay.json()).toEqual(await first.json())
+        expect(dispatchCount).toBe(1)
+
+        const conflict = await post('Changed')
+        expect(conflict.status).toBe(409)
+        expect((await conflict.json()).error).toContain('Operation ID reuse conflict')
+        expect(dispatchCount).toBe(1)
+      } finally {
+        testServer.stop(true)
+      }
+    })
+
     it('paused action snapshot reserves ID and pane before await; concurrent action on same pane gets 409 contention', async () => {
       const snapshotStartedDeferred = createDeferred<void>()
       const deferredSnapshot = createDeferred<ISnapshotResult>()
@@ -1719,6 +1976,14 @@ describe('Core Pack Backend Foundation', () => {
         const data2 = await res2.json()
         expect(data2.ok).toBe(false)
         expect(data2.error).toContain('already in-flight')
+
+        const exclusiveWhileShared = await fetch(`http://127.0.0.1:${testServer.port}/api/action`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', origin: `http://127.0.0.1:${testServer.port}` },
+          body: JSON.stringify({ type: 'workspace-create', operationId: 'op-exclusive-while-shared' })
+        })
+        expect(exclusiveWhileShared.status).toBe(409)
+        expect((await exclusiveWhileShared.json()).error).toContain('concurrent operations are active')
 
         // Now resolve snapshot for action1 so it completes
         deferredSnapshot.resolve({
@@ -1978,6 +2243,18 @@ describe('Core Pack Backend Foundation', () => {
         const dataActionBlocked = await resActionBlocked.json()
         expect(dataActionBlocked.ok).toBe(false)
         expect(dataActionBlocked.error).toContain('currently controlled')
+
+        const exclusiveBlockedByControl = await fetch(`http://127.0.0.1:${testServer.port}/api/action`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', origin: `http://127.0.0.1:${testServer.port}` },
+          body: JSON.stringify({
+            type: 'workspace-close',
+            operationId: 'op-exclusive-blocked-by-control',
+            target: { workspaceId: 'ws-1', expected: { tabIds: [], paneIds: [] } }
+          })
+        })
+        expect(exclusiveBlockedByControl.status).toBe(409)
+        expect((await exclusiveBlockedByControl.json()).error).toContain('concurrent operations are active')
 
         // Release lease
         if (controlReservation.ok) {

@@ -54,23 +54,85 @@ export const fetchSnapshot = async (): Promise<ISnapshotResult> => {
   return data.snapshot
 }
 
-export const sendAction = async (action: IActionRequest): Promise<IActionResponse> => {
-  const res = await fetch('/api/action', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(action)
-  })
+const ACTION_OUTCOMES = new Set<IActionOutcome>(['acknowledged', 'observed', 'rejected', 'unknown'])
 
-  const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }))
-  if (!res.ok || !data.ok) {
-    const outcome: IActionOutcome | undefined =
-      data.outcome ?? (res.status === 504 || res.status === 502 ? 'unknown' : 'rejected')
-    const message = data.error || `Action failed with status ${res.status}`
-    throw new ActionError(message, res.status, outcome)
+const isActionResponse = (value: unknown): value is IActionResponse => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const data = value as Record<string, unknown>
+  if (typeof data.ok !== 'boolean') return false
+  if (data.outcome !== undefined && (typeof data.outcome !== 'string' || !ACTION_OUTCOMES.has(data.outcome as IActionOutcome))) {
+    return false
   }
-  return data
+  if (data.error !== undefined && typeof data.error !== 'string') return false
+  return true
+}
+
+const hasStringField = (value: unknown, key: string): boolean =>
+  Boolean(value && typeof value === 'object' && typeof (value as Record<string, unknown>)[key] === 'string')
+
+const hasValidObservedResult = (action: IActionRequest, response: IActionResponse): boolean => {
+  if (action.type === 'workspace-create') {
+    return response.outcome === 'observed' &&
+      hasStringField(response.result, 'workspaceId') &&
+      hasStringField(response.result, 'tabId') &&
+      hasStringField(response.result, 'paneId')
+  }
+  if (action.type === 'workspace-close') {
+    return response.outcome === 'observed' &&
+      hasStringField(response.result, 'workspaceId') &&
+      response.result?.workspaceId === action.target.workspaceId
+  }
+  if (action.type === 'tab-close') {
+    return response.outcome === 'observed' &&
+      response.result?.workspaceId === action.target.workspaceId &&
+      response.result?.tabId === action.target.tabId
+  }
+  if (action.type === 'tab-create') {
+    return response.outcome === 'observed' &&
+      hasStringField(response.result, 'tabId') &&
+      hasStringField(response.result, 'paneId')
+  }
+  return true
+}
+
+export const sendAction = async (action: IActionRequest): Promise<IActionResponse> => {
+  let res: Response
+  try {
+    res = await fetch('/api/action', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(action)
+    })
+  } catch (err) {
+    const message = err instanceof Error && err.name === 'AbortError'
+      ? 'Action request was aborted before its outcome could be confirmed'
+      : 'Action request failed before its outcome could be confirmed'
+    throw new ActionError(message, 0, 'unknown')
+  }
+
+  let parsed: unknown
+  try {
+    parsed = await res.json()
+  } catch {
+    throw new ActionError('Action response was malformed; its outcome could not be confirmed', res.status, 'unknown')
+  }
+
+  if (!isActionResponse(parsed)) {
+    throw new ActionError('Action response was malformed; its outcome could not be confirmed', res.status, 'unknown')
+  }
+
+  if (!res.ok || !parsed.ok) {
+    const outcome = parsed.outcome ?? (res.ok ? 'unknown' : 'rejected')
+    throw new ActionError(parsed.error || `Action failed with status ${res.status}`, res.status, outcome)
+  }
+
+  if (!parsed.outcome || !hasValidObservedResult(action, parsed)) {
+    throw new ActionError('Action response was malformed; its outcome could not be confirmed', res.status, 'unknown')
+  }
+
+  return parsed
 }
 
 export const fetchPaneRead = async (

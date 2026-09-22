@@ -5,6 +5,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import webpush from 'web-push'
 import { createServer } from '../index.ts'
+import { OperationCoordinator } from '../operation-coordinator.ts'
 import { resetSharedPushService } from '../push/service.ts'
 
 describe('server: push tab policy API routes integration', () => {
@@ -40,6 +41,7 @@ describe('server: push tab policy API routes integration', () => {
   let mockSocketServer: net.Server
   let appServer: ReturnType<typeof createServer>
   let baseUrl: string
+  const coordinator = new OperationCoordinator()
 
   const mockSnapshotData = {
     protocol: 22,
@@ -143,7 +145,10 @@ describe('server: push tab policy API routes integration', () => {
       mockSocketServer.listen(mockSocketPath, () => resolve())
     })
 
-    appServer = createServer(0, '127.0.0.1', { startPushBridge: false })
+    appServer = createServer(0, '127.0.0.1', {
+      startPushBridge: false,
+      deps: { coordinator }
+    })
     baseUrl = `http://127.0.0.1:${appServer.port}`
   })
 
@@ -284,6 +289,29 @@ describe('server: push tab policy API routes integration', () => {
       body: JSON.stringify({ tabId: 'non-existent-tab', enabled: true })
     })
     expect(notFound.status).toBe(404)
+    expect(coordinator.getSharedTopologyClaimsCountForTesting()).toBe(0)
+  })
+
+  test('PUT /api/push/tab-policy rejects while an exclusive topology lifecycle claim is active', async () => {
+    const exclusive = coordinator.beginAction('op-exclusive-policy-route', { topology: 'exclusive' }, 'fp-exclusive-policy-route')
+    expect(exclusive.kind).toBe('admitted')
+    if (exclusive.kind !== 'admitted') return
+
+    try {
+      const response = await fetch(`${baseUrl}/api/push/tab-policy`, {
+        method: 'PUT',
+        headers: {
+          host: `127.0.0.1:${appServer.port}`,
+          origin: `http://127.0.0.1:${appServer.port}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({ tabId: 'tab-2', enabled: true })
+      })
+      expect(response.status).toBe(409)
+      expect((await response.json()).error).toContain('exclusive topology mutation')
+    } finally {
+      coordinator.abandonAction(exclusive.token)
+    }
   })
 
   test('PUT /api/push/tab-policy enables non-first tab and removes override when set to default', async () => {
@@ -302,6 +330,7 @@ describe('server: push tab policy API routes integration', () => {
     expect(enableRes.status).toBe(200)
     const enableBody: any = await enableRes.json()
     expect(enableBody.ok).toBe(true)
+    expect(coordinator.getSharedTopologyClaimsCountForTesting()).toBe(0)
 
     const tab2Policy = enableBody.tabs.find((t: any) => t.tabId === 'tab-2')
     expect(tab2Policy).toMatchObject({

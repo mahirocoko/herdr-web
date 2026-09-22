@@ -112,6 +112,22 @@ describe('pane-drawer: pure helpers', () => {
     })
   })
 
+  describe('lifecycle source and accessibility guards', () => {
+    it('uses bounded source choices without arbitrary cwd, env, or focus inputs', async () => {
+      const spaceSource = await Bun.file(new URL('../space-drawer.tsx', import.meta.url)).text()
+      const tabSource = await Bun.file(new URL('../pane-drawer.tsx', import.meta.url)).text()
+      expect(spaceSource).toContain('id="new-space-source"')
+      expect(spaceSource).toContain('workspaceSourceChoices.map')
+      expect(spaceSource).toContain('maxLength={100}')
+      expect(spaceSource).not.toContain('name="cwd"')
+      expect(spaceSource).not.toContain('name="env"')
+      expect(spaceSource).not.toContain('name="focus"')
+      expect(spaceSource).toContain('ref={cancelButtonRef}')
+      expect(spaceSource).toContain('Dismiss — operation continues')
+      expect(tabSource).toContain('Use Close Space for the last Tab')
+    })
+  })
+
   describe('formatManifestSource', () => {
     it('formats manifest sources cleanly with optional version', () => {
       expect(formatManifestSource('builtin', '0.9.1')).toBe('Herdr built-in (0.9.1)')

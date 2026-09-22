@@ -55,8 +55,8 @@ export interface IPane {
   terminal_title?: string
   terminal_title_stripped?: string
   display_agent?: string
-  cwd: string
-  foreground_cwd?: string
+  cwd: string | null
+  foreground_cwd?: string | null
   focused: boolean
   revision?: number
   scroll?: IPaneScroll
@@ -92,6 +92,28 @@ export interface ITabCreateTargetIdentity {
   terminalId: string
 }
 
+export interface IWorkspaceCreateSource {
+  workspaceId: string
+  paneId: string
+  terminalId: string
+}
+
+export interface IWorkspaceCloseTargetIdentity {
+  workspaceId: string
+  expected: {
+    tabIds: string[]
+    paneIds: string[]
+  }
+}
+
+export interface ITabCloseTargetIdentity {
+  workspaceId: string
+  tabId: string
+  expected: {
+    paneIds: string[]
+  }
+}
+
 export type IStrictActionRequest =
   | {
       type: 'prompt'
@@ -118,6 +140,27 @@ export type IStrictActionRequest =
       target: ITabCreateTargetIdentity
       label?: string
     }
+  | {
+      type: 'workspace-create'
+      operationId: string
+      label?: string
+      source?: IWorkspaceCreateSource
+    }
+  | {
+      type: 'workspace-close'
+      operationId: string
+      target: IWorkspaceCloseTargetIdentity
+    }
+  | {
+      type: 'tab-close'
+      operationId: string
+      target: ITabCloseTargetIdentity
+    }
+
+export type ILifecycleActionRequest = Extract<
+  IStrictActionRequest,
+  { type: 'workspace-create' | 'workspace-close' | 'tab-close' }
+>
 
 export type IActionRequest = IStrictActionRequest
 
@@ -164,12 +207,19 @@ export interface INativeChoiceResponse {
 
 export type IActionOutcome = 'acknowledged' | 'observed' | 'rejected' | 'unknown'
 
+export interface IActionResult {
+  workspaceId?: string
+  tabId?: string
+  paneId?: string
+  [key: string]: unknown
+}
+
 export interface IActionResponse {
   ok: boolean
   outcome?: IActionOutcome
   error?: string
   status?: number
-  result?: any
+  result?: IActionResult
 }
 
 export type IPaneReadSource = 'detection' | 'visible' | 'recent-unwrapped'

@@ -11,24 +11,24 @@ export interface IHorizonHeaderProps {
   status: ISnapshotStatus
   activeWorkspace: IWorkspace | null
   activeTab?: ITab | null
-  isGlobalDrawerOpen: boolean
+  isSpaceDrawerOpen: boolean
   menuTriggerRef: RefObject<HTMLButtonElement | null>
-  onOpenMenu: () => void
-  isDrawerOpen: boolean
+  onOpenSpaces: () => void
+  isTabDrawerOpen: boolean
   drawerTriggerRef: RefObject<HTMLButtonElement | null>
-  onOpenDrawer: () => void
+  onOpenTabs: () => void
 }
 
 const HorizonHeader: FC<IHorizonHeaderProps> = ({
   status,
   activeWorkspace,
   activeTab,
-  isGlobalDrawerOpen,
+  isSpaceDrawerOpen,
   menuTriggerRef,
-  onOpenMenu,
-  isDrawerOpen,
+  onOpenSpaces,
+  isTabDrawerOpen,
   drawerTriggerRef,
-  onOpenDrawer
+  onOpenTabs
 }) => {
   return (
     <header className="horizon-header">
@@ -36,11 +36,11 @@ const HorizonHeader: FC<IHorizonHeaderProps> = ({
         ref={menuTriggerRef}
         type="button"
         className="horizon-header__menu-trigger"
-        onClick={onOpenMenu}
-        aria-label={`Application menu, connection ${getConnectionStatusLabel(status)}`}
+        onClick={onOpenSpaces}
+        aria-label={`Open Spaces, connection ${getConnectionStatusLabel(status)}`}
         aria-haspopup="dialog"
-        aria-expanded={isGlobalDrawerOpen}
-        aria-controls="global-app-drawer"
+        aria-expanded={isSpaceDrawerOpen}
+        aria-controls="space-drawer"
       >
         <Menu size={20} className="horizon-header__menu-icon" aria-hidden="true" />
         <span
@@ -49,26 +49,26 @@ const HorizonHeader: FC<IHorizonHeaderProps> = ({
         />
       </button>
 
-      <button
-        ref={drawerTriggerRef}
-        type="button"
-        className="horizon-header__workspace-trigger"
-        onClick={onOpenDrawer}
-        aria-label="Switch workspace and pane"
-        aria-haspopup="dialog"
-        aria-expanded={isDrawerOpen}
-        aria-controls="workspace-pane-drawer"
-      >
+      <div className="horizon-header__context">
         <span className="horizon-header__workspace-label">
           {activeWorkspace ? activeWorkspace.label : 'Select Workspace'}
         </span>
-        {activeTab && (
+        <button
+          ref={drawerTriggerRef}
+          type="button"
+          className="horizon-header__tab-trigger"
+          onClick={onOpenTabs}
+          aria-label="Open Tabs and Panes"
+          aria-haspopup="dialog"
+          aria-expanded={isTabDrawerOpen}
+          aria-controls="tab-pane-drawer"
+        >
           <span className="horizon-header__tab-label">
-            {formatTabLabel(activeTab)}
+            {activeTab ? formatTabLabel(activeTab) : 'Select Tab'}
           </span>
-        )}
-        <ChevronDown size={14} className="horizon-header__chevron" aria-hidden="true" />
-      </button>
+          <ChevronDown size={14} className="horizon-header__chevron" aria-hidden="true" />
+        </button>
+      </div>
     </header>
   )
 }

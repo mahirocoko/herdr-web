@@ -60,6 +60,37 @@ describe('drift-guards: retired absolute claims verification', () => {
     expect(archMd).toContain('SnapshotBridge')
   })
 
+  it('keeps lifecycle safety and upstream status semantics in active docs', () => {
+    const agentsMd = fs.readFileSync(path.join(REPO_ROOT, 'AGENTS.md'), 'utf8')
+    const readme = fs.readFileSync(path.join(REPO_ROOT, 'README.md'), 'utf8')
+    const archMd = fs.readFileSync(path.join(REPO_ROOT, 'docs/transport-architecture.md'), 'utf8')
+
+    for (const actionType of ['workspace-create', 'workspace-close', 'tab-close']) {
+      expect(agentsMd).toContain(actionType)
+      expect(archMd).toContain(actionType)
+    }
+    expect(agentsMd).toContain('raw membership manifest')
+    expect(archMd).toContain('changed membership returns a definitive 409 rejection and zero RPC')
+    expect(agentsMd).toContain('attention aggregates')
+    expect(readme).toContain('upstream attention aggregates')
+    expect(archMd).toContain('a Space can truthfully aggregate to `done` while another Tab is `working`')
+  })
+
+  it('keeps Space and Tab navigation ownership separated across source and active docs', () => {
+    const agentsMd = fs.readFileSync(path.join(REPO_ROOT, 'AGENTS.md'), 'utf8')
+    const readme = fs.readFileSync(path.join(REPO_ROOT, 'README.md'), 'utf8')
+    const spaceDrawer = fs.readFileSync(path.join(REPO_ROOT, 'src/components/space-drawer.tsx'), 'utf8')
+    const paneDrawer = fs.readFileSync(path.join(REPO_ROOT, 'src/components/pane-drawer.tsx'), 'utf8')
+
+    expect(agentsMd).toContain('Herdr-style Spaces side sheet')
+    expect(readme).toContain('active-Space Tabs & Panes sheet')
+    expect(spaceDrawer).toContain('aria-label="Herdr Spaces"')
+    expect(spaceDrawer).not.toContain('New Shell Tab')
+    expect(paneDrawer).toContain('Tabs & Panes')
+    expect(paneDrawer).not.toContain('New Space')
+    expect(paneDrawer).not.toContain('drawer-sheet__workspaces-scroll')
+  })
+
   it('ensures retired "no external router library" and no-router claims are absent', () => {
     for (const relPath of DOC_FILES) {
       const fullPath = path.join(REPO_ROOT, relPath)

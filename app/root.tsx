@@ -10,6 +10,7 @@ import {
   useNavigate
 } from 'react-router'
 import { useSnapshot } from '@/hooks/use-snapshot.ts'
+import { useLifecycleOperations, type ILifecycleOperations } from '@/hooks/use-lifecycle-operations.ts'
 import { usePushSubscription } from '@/hooks/use-push-subscription.ts'
 import { useVisualViewport } from '@/hooks/use-visual-viewport.ts'
 import type { IPane, ISnapshotResult, ISnapshotStatus } from '@/types/herdr.ts'
@@ -17,8 +18,14 @@ import type { IVisualViewportGeometry } from '@/utils/visual-viewport.ts'
 import {
   deriveSpacePath,
   evaluatePendingWorkspaceAck,
-  parsePushWorkspaceMessage
+  parsePushWorkspaceMessage,
+  parseSpacePath
 } from '@/utils/push-orchestration.ts'
+import {
+  shouldApplyCreateResultNavigation,
+  snapshotConfirmsCreatedTarget,
+  type ILifecycleNavigationOrigin
+} from '@/utils/lifecycle-operations.ts'
 import '@/app.css'
 
 export const recordPushClickDiagnostic = (
@@ -45,6 +52,7 @@ export interface IAppOutletContext {
   setSelectedWorkspaceId: (workspaceId: string) => void
   setSelectedPaneId: (paneId: string, workspaceId?: string) => void
   refreshSnapshot: () => Promise<boolean>
+  lifecycle: ILifecycleOperations
   push: ReturnType<typeof usePushSubscription>
   viewportGeometry: IVisualViewportGeometry | null
   drawerTriggerRef: React.RefObject<HTMLButtonElement | null>
@@ -90,9 +98,11 @@ const Root = () => {
     selectedPane,
     setSelectedWorkspaceId,
     setSelectedPaneId,
-    refreshSnapshot
+    refreshSnapshot,
+    getSnapshot
   } = useSnapshot(2000)
 
+  const lifecycle = useLifecycleOperations()
   const push = usePushSubscription()
   const viewportGeometry = useVisualViewport()
   const location = useLocation()
@@ -167,6 +177,103 @@ const Root = () => {
     }
   }, [pendingWorkspaceAck, location.pathname, snapshot, status, setSelectedWorkspaceId])
 
+  useEffect(() => {
+    if ((status !== 'connected' && status !== 'empty') || !snapshot) return
+    const routeWorkspaceId = parseSpacePath(location.pathname)
+    if (snapshot.workspaces.length === 0) {
+      if (location.pathname !== '/') navigate('/', { replace: true })
+      return
+    }
+    if (!routeWorkspaceId) return
+    if (snapshot.workspaces.some((workspace) => workspace.workspace_id === routeWorkspaceId)) return
+
+    const fallbackId = selectedWorkspaceId && snapshot.workspaces.some((workspace) => workspace.workspace_id === selectedWorkspaceId)
+      ? selectedWorkspaceId
+      : snapshot.focused_workspace_id && snapshot.workspaces.some((workspace) => workspace.workspace_id === snapshot.focused_workspace_id)
+        ? snapshot.focused_workspace_id
+        : snapshot.active_workspace_id && snapshot.workspaces.some((workspace) => workspace.workspace_id === snapshot.active_workspace_id)
+          ? snapshot.active_workspace_id
+          : snapshot.workspaces[0].workspace_id
+    navigate(deriveSpacePath(fallbackId), { replace: true })
+  }, [location.pathname, navigate, selectedWorkspaceId, snapshot, status])
+
+  const lifecycleOriginRef = useRef<Map<string, ILifecycleNavigationOrigin>>(new Map())
+  const currentPathnameRef = useRef(location.pathname)
+  const currentWorkspaceIdRef = useRef(selectedWorkspaceId)
+  const currentPaneIdRef = useRef(selectedPaneId)
+  const currentLifecycleTicketRef = useRef(lifecycle.ticket)
+  currentPathnameRef.current = location.pathname
+  currentWorkspaceIdRef.current = selectedWorkspaceId
+  currentPaneIdRef.current = selectedPaneId
+  currentLifecycleTicketRef.current = lifecycle.ticket
+
+  useEffect(() => {
+    const ticket = lifecycle.ticket
+    if (!ticket || ticket.phase !== 'pending' || lifecycleOriginRef.current.has(ticket.requestIdentity)) return
+    lifecycleOriginRef.current.set(ticket.requestIdentity, {
+      requestIdentity: ticket.requestIdentity,
+      pathname: currentPathnameRef.current,
+      workspaceId: currentWorkspaceIdRef.current,
+      paneId: currentPaneIdRef.current
+    })
+  }, [lifecycle.ticket])
+
+  const reconciledLifecycleRef = useRef<string | null>(null)
+  useEffect(() => {
+    const ticket = lifecycle.ticket
+    if (!ticket || ticket.phase !== 'observed') return
+    const attemptKey = `${ticket.requestIdentity}:${ticket.reconciliationAttempt}`
+    if (reconciledLifecycleRef.current === attemptKey) return
+    reconciledLifecycleRef.current = attemptKey
+
+    void (async () => {
+      const refreshed = await refreshSnapshot()
+      const currentTicket = currentLifecycleTicketRef.current
+      if (
+        currentTicket?.requestIdentity !== ticket.requestIdentity ||
+        currentTicket.reconciliationAttempt !== ticket.reconciliationAttempt ||
+        currentTicket.phase !== 'observed'
+      ) return
+
+      const authoritative = getSnapshot()
+      if (!refreshed || !authoritative) {
+        lifecycle.reportReconciliationFailure(
+          ticket.requestIdentity,
+          ticket.reconciliationAttempt,
+          'The server observed the action, but the browser could not confirm the refreshed session. Refresh and inspect before continuing.'
+        )
+        return
+      }
+
+      if (ticket.type === 'workspace-create') {
+        if (!snapshotConfirmsCreatedTarget(authoritative, ticket.result || undefined)) {
+          lifecycle.reportReconciliationFailure(
+            ticket.requestIdentity,
+            ticket.reconciliationAttempt,
+            'The server observed Space creation, but the returned Space and pane were not confirmed in the refreshed session.'
+          )
+          return
+        }
+        const result = ticket.result as { workspaceId: string; tabId: string; paneId: string }
+        if (shouldApplyCreateResultNavigation({
+          origin: lifecycleOriginRef.current.get(ticket.requestIdentity),
+          requestIdentity: ticket.requestIdentity,
+          attempt: ticket.reconciliationAttempt,
+          currentTicket: currentLifecycleTicketRef.current,
+          currentPathname: currentPathnameRef.current,
+          currentWorkspaceId: currentWorkspaceIdRef.current,
+          currentPaneId: currentPaneIdRef.current
+        })) {
+          setSelectedPaneId(result.paneId, result.workspaceId)
+          navigate(deriveSpacePath(result.workspaceId), { replace: true })
+        }
+      }
+
+      lifecycleOriginRef.current.delete(ticket.requestIdentity)
+      lifecycle.clearObserved(ticket.requestIdentity)
+    })()
+  }, [getSnapshot, lifecycle, navigate, refreshSnapshot, setSelectedPaneId])
+
   const context: IAppOutletContext = {
     snapshot,
     status,
@@ -177,6 +284,7 @@ const Root = () => {
     setSelectedWorkspaceId,
     setSelectedPaneId,
     refreshSnapshot,
+    lifecycle,
     push,
     viewportGeometry,
     drawerTriggerRef,

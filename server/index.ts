@@ -13,8 +13,11 @@ import {
 import {
   executeKeys,
   executePrompt,
+  executeTabClose,
   executeTabCreate,
   executeTerminalInput,
+  executeWorkspaceClose,
+  executeWorkspaceCreate,
   getAgentExplain,
   getHerdrHealth,
   getHerdrSnapshot,
@@ -39,6 +42,7 @@ import type { ISnapshotResult } from './types.ts'
 import {
   getSharedOperationCoordinator,
   computePayloadFingerprint,
+  type IBeginActionOptions,
   type OperationCoordinator
 } from './operation-coordinator.ts'
 import { resolveNearestRepoCatalog } from './catalog.ts'
@@ -100,6 +104,9 @@ export interface ICreateServerOptions {
     executeTerminalInput?: (paneId: string, text: string) => Promise<any>
     executeKeys?: (paneId: string, keys: string[]) => Promise<any>
     executeTabCreate?: typeof executeTabCreate
+    executeWorkspaceCreate?: typeof executeWorkspaceCreate
+    executeWorkspaceClose?: typeof executeWorkspaceClose
+    executeTabClose?: typeof executeTabClose
   }
 }
 
@@ -124,6 +131,73 @@ const PUSH_CLICK_DIAGNOSTIC_STAGES = new Set([
   'app_unknown',
   'app_ack'
 ])
+
+const parseBoundedJsonBody = async (
+  request: Request,
+  maxBytes = 4096
+): Promise<{ ok: boolean; status?: number; error?: string; data?: unknown }> => {
+  const cType = (request.headers.get('content-type') || '').toLowerCase()
+  if (!cType.includes('application/json')) {
+    return { ok: false, status: 400, error: 'Content-Type must be application/json' }
+  }
+
+  const cLen = request.headers.get('content-length')
+  if (cLen) {
+    const num = parseInt(cLen, 10)
+    if (!Number.isNaN(num) && num > maxBytes) {
+      return { ok: false, status: 413, error: `Payload exceeds ${maxBytes} bytes limit` }
+    }
+  }
+
+  if (!request.body) {
+    return { ok: false, status: 400, error: 'Request body required' }
+  }
+
+  const reader = request.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (value) {
+        total += value.byteLength
+        if (total > maxBytes) {
+          await reader.cancel()
+          return { ok: false, status: 413, error: `Payload exceeds ${maxBytes} bytes limit` }
+        }
+        chunks.push(value)
+      }
+    }
+  } catch {
+    return { ok: false, status: 400, error: 'Failed to read request body' }
+  }
+
+  if (total === 0) {
+    return { ok: false, status: 400, error: 'Request body is empty' }
+  }
+
+  const combined = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    combined.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+
+  let text = ''
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(combined)
+  } catch {
+    return { ok: false, status: 400, error: 'Invalid UTF-8 encoding in payload' }
+  }
+
+  try {
+    return { ok: true, data: JSON.parse(text) }
+  } catch {
+    return { ok: false, status: 400, error: 'Malformed JSON payload' }
+  }
+}
 
 export const createServer = (
   port = PORT,
@@ -227,20 +301,18 @@ export const createServer = (
           )
         }
 
-        let body: unknown
-        try {
-          body = await req.json()
-        } catch {
+        const bodyParsed = await parseBoundedJsonBody(req)
+        if (!bodyParsed.ok) {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Malformed JSON payload' }),
+            JSON.stringify({ ok: false, error: bodyParsed.error || 'Invalid action payload' }),
             {
-              status: 400,
+              status: bodyParsed.status || 400,
               headers: { 'content-type': 'application/json' }
             }
           )
         }
 
-        const validation = validateActionRequest(body)
+        const validation = validateActionRequest(bodyParsed.data)
         if (!validation.valid || !validation.data) {
           return new Response(
             JSON.stringify({ ok: false, error: validation.error || 'Invalid action payload' }),
@@ -255,7 +327,20 @@ export const createServer = (
         const fingerprint = computePayloadFingerprint(action)
 
         // 1. Synchronous token-fenced admission arbiter BEFORE ANY await
-        const admission = coordinator.beginAction(action.operationId, action.target.paneId, fingerprint)
+        let beginOptions: IBeginActionOptions
+        if (action.type === 'workspace-create') {
+          beginOptions = { topology: 'exclusive', targetKey: 'workspace-create' }
+        } else if (action.type === 'workspace-close') {
+          beginOptions = { topology: 'exclusive', targetKey: `workspace:${action.target.workspaceId}` }
+        } else if (action.type === 'tab-create') {
+          beginOptions = { topology: 'exclusive', targetKey: `workspace:${action.workspaceId}`, paneId: action.target.paneId }
+        } else if (action.type === 'tab-close') {
+          beginOptions = { topology: 'exclusive', targetKey: `tab:${action.target.tabId}` }
+        } else {
+          beginOptions = { topology: 'shared', targetKey: action.target.paneId, paneId: action.target.paneId }
+        }
+
+        const admission = coordinator.beginAction(action.operationId, beginOptions, fingerprint)
 
         if (admission.kind === 'replay') {
           return new Response(
@@ -314,20 +399,27 @@ export const createServer = (
             )
           }
 
-          const verifyFn = options.deps?.verifyTarget ?? verifyTargetAgainstSnapshot
-          const preflight = verifyFn(snapshot, action.target, {
-            isTabCreate: action.type === 'tab-create',
-            actionType: action.type
-          })
-          if (!preflight.ok) {
-            const status = preflight.status || 409
-            const errorBody = { ok: false, outcome: 'rejected' as const, error: preflight.error }
-            // Authoritative target/mode/session mismatch remains a definitive cached rejection!
-            safeComplete(status, errorBody)
-            return new Response(
-              JSON.stringify(errorBody),
-              { status, headers: { 'content-type': 'application/json' } }
-            )
+          if (
+            action.type === 'prompt' ||
+            action.type === 'terminal-input' ||
+            action.type === 'keys' ||
+            action.type === 'tab-create'
+          ) {
+            const verifyFn = options.deps?.verifyTarget ?? verifyTargetAgainstSnapshot
+            const preflight = verifyFn(snapshot, action.target, {
+              isTabCreate: action.type === 'tab-create',
+              actionType: action.type
+            })
+            if (!preflight.ok) {
+              const status = preflight.status || 409
+              const errorBody = { ok: false, outcome: 'rejected' as const, error: preflight.error }
+              // Authoritative target/mode/session mismatch remains a definitive cached rejection!
+              safeComplete(status, errorBody)
+              return new Response(
+                JSON.stringify(errorBody),
+                { status, headers: { 'content-type': 'application/json' } }
+              )
+            }
           }
 
           try {
@@ -354,6 +446,25 @@ export const createServer = (
               const res = await tabCreateFn(action.workspaceId, action.target, action.label, {
                 preSnapshot: snapshot
               })
+              responseStatus = res.status ?? (res.ok ? 200 : 500)
+              responseBody = res
+            } else if (action.type === 'workspace-create') {
+              const workspaceCreateFn = options.deps?.executeWorkspaceCreate ?? executeWorkspaceCreate
+              const res = await workspaceCreateFn(action.label, action.source, {
+                preSnapshot: snapshot
+              })
+              responseStatus = res.status ?? (res.ok ? 200 : 500)
+              responseBody = res
+            } else if (action.type === 'workspace-close') {
+              const workspaceCloseFn = options.deps?.executeWorkspaceClose ?? executeWorkspaceClose
+              // Close mutations perform their own immediately-before-RPC snapshot fetch so
+              // the client-confirmed membership manifest cannot race this earlier route snapshot.
+              const res = await workspaceCloseFn(action.target)
+              responseStatus = res.status ?? (res.ok ? 200 : 500)
+              responseBody = res
+            } else if (action.type === 'tab-close') {
+              const tabCloseFn = options.deps?.executeTabClose ?? executeTabClose
+              const res = await tabCloseFn(action.target)
               responseStatus = res.status ?? (res.ok ? 200 : 500)
               responseBody = res
             }
@@ -606,72 +717,6 @@ export const createServer = (
               headers: { 'content-type': 'application/json' }
             }
           )
-        }
-      }
-
-      // Helper: parse bounded JSON body under 4096 UTF-8 bytes limit
-      const parseBoundedJsonBody = async (request: Request, maxBytes = 4096): Promise<{ ok: boolean; status?: number; error?: string; data?: unknown }> => {
-        const cType = (request.headers.get('content-type') || '').toLowerCase()
-        if (!cType.includes('application/json')) {
-          return { ok: false, status: 400, error: 'Content-Type must be application/json' }
-        }
-
-        const cLen = request.headers.get('content-length')
-        if (cLen) {
-          const num = parseInt(cLen, 10)
-          if (!Number.isNaN(num) && num > maxBytes) {
-            return { ok: false, status: 413, error: `Payload exceeds ${maxBytes} bytes limit` }
-          }
-        }
-
-        if (!request.body) {
-          return { ok: false, status: 400, error: 'Request body required' }
-        }
-
-        const reader = request.body.getReader()
-        const chunks: Uint8Array[] = []
-        let total = 0
-
-        try {
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-            if (value) {
-              total += value.byteLength
-              if (total > maxBytes) {
-                await reader.cancel()
-                return { ok: false, status: 413, error: `Payload exceeds ${maxBytes} bytes limit` }
-              }
-              chunks.push(value)
-            }
-          }
-        } catch {
-          return { ok: false, status: 400, error: 'Failed to read request body' }
-        }
-
-        if (total === 0) {
-          return { ok: false, status: 400, error: 'Request body is empty' }
-        }
-
-        const combined = new Uint8Array(total)
-        let offset = 0
-        for (const chunk of chunks) {
-          combined.set(chunk, offset)
-          offset += chunk.byteLength
-        }
-
-        let text = ''
-        try {
-          text = new TextDecoder('utf-8', { fatal: true }).decode(combined)
-        } catch {
-          return { ok: false, status: 400, error: 'Invalid UTF-8 encoding in payload' }
-        }
-
-        try {
-          const parsed = JSON.parse(text)
-          return { ok: true, data: parsed }
-        } catch {
-          return { ok: false, status: 400, error: 'Malformed JSON payload' }
         }
       }
 
@@ -1005,69 +1050,94 @@ export const createServer = (
         const targetTabId = raw.tabId.trim()
         const targetEnabled = raw.enabled
 
-        let snapshot: ISnapshotResult
+        const topoClaim = coordinator.claimSharedTopology('tab-policy')
+        if (!topoClaim.ok) {
+          return new Response(
+            JSON.stringify({ ok: false, error: topoClaim.error }),
+            { status: topoClaim.status, headers: { 'content-type': 'application/json' } }
+          )
+        }
+
         try {
-          snapshot = await getHerdrSnapshot(5000)
-        } catch (err) {
+          let snapshot: ISnapshotResult
+          try {
+            snapshot = await getHerdrSnapshot(5000)
+          } catch (err) {
+            return new Response(
+              JSON.stringify({ ok: false, error: 'Failed to fetch authoritative snapshot' }),
+              { status: 502, headers: { 'content-type': 'application/json' } }
+            )
+          }
+
+          if (!Array.isArray(snapshot.workspaces) || !Array.isArray(snapshot.tabs) || !Array.isArray(snapshot.panes)) {
+            return new Response(
+              JSON.stringify({ ok: false, error: 'Malformed authoritative snapshot topology' }),
+              { status: 502, headers: { 'content-type': 'application/json' } }
+            )
+          }
+
+          const currentTabs = snapshot.tabs
+          const currentWorkspaces = snapshot.workspaces
+
+          const matchingTabs = currentTabs.filter((t) => t && t.tab_id === targetTabId)
+          if (matchingTabs.length === 0) {
+            return new Response(
+              JSON.stringify({ ok: false, error: 'Tab not found in active session' }),
+              { status: 404, headers: { 'content-type': 'application/json' } }
+            )
+          }
+          if (matchingTabs.length > 1) {
+            return new Response(
+              JSON.stringify({ ok: false, error: 'Ambiguous duplicate tab ID in active session' }),
+              { status: 400, headers: { 'content-type': 'application/json' } }
+            )
+          }
+
+          const liveTab = matchingTabs[0]
+          const matchingWorkspaces = currentWorkspaces.filter((workspace) => workspace && workspace.workspace_id === liveTab.workspace_id)
+          if (matchingWorkspaces.length !== 1) {
+            return new Response(
+              JSON.stringify({
+                ok: false,
+                error: matchingWorkspaces.length > 1
+                  ? 'Ambiguous duplicate workspace ID in active session'
+                  : 'Workspace not found for tab'
+              }),
+              { status: 400, headers: { 'content-type': 'application/json' } }
+            )
+          }
+          const liveWorkspace = matchingWorkspaces[0]
+
+          if (!Number.isFinite(liveTab.number) || !Number.isFinite(liveWorkspace.number)) {
+            return new Response(
+              JSON.stringify({ ok: false, error: 'Invalid non-finite tab or workspace number' }),
+              { status: 400, headers: { 'content-type': 'application/json' } }
+            )
+          }
+
+          const ownerMap = resolveWorkspaceOwnerTabs(currentTabs)
+          const isDefaultOwner = ownerMap.get(liveWorkspace.workspace_id) === liveTab.tab_id
+
+          let updatedOverrides: ITabPolicyOverrideRecord[]
+          try {
+            updatedOverrides = await pushService
+              .getTabPolicyStore()
+              .setTabOverride(liveWorkspace, liveTab, targetEnabled, isDefaultOwner)
+          } catch {
+            return new Response(
+              JSON.stringify({ ok: false, error: 'Failed to write tab policy store' }),
+              { status: 500, headers: { 'content-type': 'application/json' } }
+            )
+          }
+
+          const refreshedTabs = resolveEffectiveTabPolicy(currentWorkspaces, currentTabs, updatedOverrides)
           return new Response(
-            JSON.stringify({ ok: false, error: 'Failed to fetch authoritative snapshot' }),
-            { status: 502, headers: { 'content-type': 'application/json' } }
+            JSON.stringify({ ok: true, tabs: refreshedTabs }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
           )
+        } finally {
+          coordinator.releaseSharedTopology(topoClaim.token)
         }
-
-        const currentTabs = snapshot.tabs || []
-        const currentWorkspaces = snapshot.workspaces || []
-
-        const matchingTabs = currentTabs.filter((t) => t && t.tab_id === targetTabId)
-        if (matchingTabs.length === 0) {
-          return new Response(
-            JSON.stringify({ ok: false, error: 'Tab not found in active session' }),
-            { status: 404, headers: { 'content-type': 'application/json' } }
-          )
-        }
-        if (matchingTabs.length > 1) {
-          return new Response(
-            JSON.stringify({ ok: false, error: 'Ambiguous duplicate tab ID in active session' }),
-            { status: 400, headers: { 'content-type': 'application/json' } }
-          )
-        }
-
-        const liveTab = matchingTabs[0]
-        const liveWorkspace = currentWorkspaces.find((w) => w && w.workspace_id === liveTab.workspace_id)
-        if (!liveWorkspace) {
-          return new Response(
-            JSON.stringify({ ok: false, error: 'Workspace not found for tab' }),
-            { status: 400, headers: { 'content-type': 'application/json' } }
-          )
-        }
-
-        if (!Number.isFinite(liveTab.number) || !Number.isFinite(liveWorkspace.number)) {
-          return new Response(
-            JSON.stringify({ ok: false, error: 'Invalid non-finite tab or workspace number' }),
-            { status: 400, headers: { 'content-type': 'application/json' } }
-          )
-        }
-
-        const ownerMap = resolveWorkspaceOwnerTabs(currentTabs)
-        const isDefaultOwner = ownerMap.get(liveWorkspace.workspace_id) === liveTab.tab_id
-
-        let updatedOverrides: ITabPolicyOverrideRecord[]
-        try {
-          updatedOverrides = await pushService
-            .getTabPolicyStore()
-            .setTabOverride(liveWorkspace, liveTab, targetEnabled, isDefaultOwner)
-        } catch {
-          return new Response(
-            JSON.stringify({ ok: false, error: 'Failed to write tab policy store' }),
-            { status: 500, headers: { 'content-type': 'application/json' } }
-          )
-        }
-
-        const refreshedTabs = resolveEffectiveTabPolicy(currentWorkspaces, currentTabs, updatedOverrides)
-        return new Response(
-          JSON.stringify({ ok: true, tabs: refreshedTabs }),
-          { status: 200, headers: { 'content-type': 'application/json' } }
-        )
       }
 
       // WebSocket /api/events (strict-origin browser event transport)

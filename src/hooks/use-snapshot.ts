@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchSnapshot } from '@/services/api-client.ts'
 import type { IPane, ISnapshotResult, ISnapshotStatus } from '@/types/herdr.ts'
 import {
-  selectBestPaneForWorkspace,
-  selectFocusedPaneFromSnapshot
+  reconcileSnapshotSelection,
+  selectBestPaneForWorkspace
 } from '@/utils/workspace-helpers.ts'
 import { parseServerEventMessage } from '@/utils/event-stream.ts'
 import { bridgeStatusIsHealthy } from '@/utils/bridge-status.ts'
@@ -19,6 +19,7 @@ export interface IUseSnapshotReturn {
   setSelectedPaneId: (paneId: string, workspaceId?: string) => void
   selectWorkspace: (workspaceId: string) => void
   refreshSnapshot: () => Promise<boolean>
+  getSnapshot: () => ISnapshotResult | null
 }
 
 export const useSnapshot = (pollIntervalMs = 2000): IUseSnapshotReturn => {
@@ -41,87 +42,32 @@ export const useSnapshot = (pollIntervalMs = 2000): IUseSnapshotReturn => {
   const isFirstLoadRef = useRef(true)
   const isEventStreamHealthyRef = useRef(false)
 
-  const selectBestPane = useCallback((snap: ISnapshotResult): { paneId: string; workspaceId: string } | null => {
-    if (!snap.panes || snap.panes.length === 0) {
-      return null
-    }
-
-    // 1. Check if current selection is still valid and in selected workspace
-    const currentPane = snap.panes.find((p) => p.pane_id === selectedPaneIdRef.current)
-    if (currentPane) {
-      if (!selectedWorkspaceIdRef.current || currentPane.workspace_id === selectedWorkspaceIdRef.current) {
-        return { paneId: currentPane.pane_id, workspaceId: currentPane.workspace_id }
-      }
-    }
-
-    // 2. If workspace is selected, pick best pane in that workspace
-    if (selectedWorkspaceIdRef.current) {
-      const bestInWs = selectBestPaneForWorkspace(snap.panes, selectedWorkspaceIdRef.current, snap.focused_pane_id)
-      if (bestInWs) {
-        return { paneId: bestInWs.pane_id, workspaceId: bestInWs.workspace_id }
-      }
-    }
-
-    // 3. Initial/global preference: Herdr's authoritative focused workspace/tab/pane chain
-    const focusedPane = selectFocusedPaneFromSnapshot(snap)
-    if (focusedPane) {
-      return { paneId: focusedPane.pane_id, workspaceId: focusedPane.workspace_id }
-    }
-
-    // 4. Fall back to a blocked agent when Herdr exposes no focused target
-    const blockedPane = snap.panes.find((p) => p.agent_status === 'blocked')
-    if (blockedPane) {
-      return { paneId: blockedPane.pane_id, workspaceId: blockedPane.workspace_id }
-    }
-
-    // 5. First pane overall
-    const firstPane = snap.panes[0]
-    return { paneId: firstPane.pane_id, workspaceId: firstPane.workspace_id }
-  }, [])
-
   const applySnapshot = useCallback((data: ISnapshotResult) => {
     snapshotRef.current = data
     setSnapshot(data)
     setError(null)
 
-    if (!data.panes || data.panes.length === 0) {
+    if (!data.workspaces || data.workspaces.length === 0 || !data.panes || data.panes.length === 0) {
+      setSelectedWorkspaceIdState(null)
+      selectedWorkspaceIdRef.current = null
+      setSelectedPaneIdState(null)
+      selectedPaneIdRef.current = null
       setStatus('empty')
       return
     }
 
     setStatus('connected')
 
-    const currentWsId = selectedWorkspaceIdRef.current
-    const currentPaneId = selectedPaneIdRef.current
-    const currentPane = data.panes.find((p) => p.pane_id === currentPaneId)
-
-    if (currentWsId) {
-      // Reconcile: pane must belong to current workspace
-      if (!currentPane || currentPane.workspace_id !== currentWsId) {
-        const best = selectBestPaneForWorkspace(data.panes, currentWsId, data.focused_pane_id)
-        if (best) {
-          setSelectedPaneIdState(best.pane_id)
-          selectedPaneIdRef.current = best.pane_id
-        } else {
-          const globalBest = selectBestPane(data)
-          if (globalBest) {
-            setSelectedWorkspaceIdState(globalBest.workspaceId)
-            selectedWorkspaceIdRef.current = globalBest.workspaceId
-            setSelectedPaneIdState(globalBest.paneId)
-            selectedPaneIdRef.current = globalBest.paneId
-          }
-        }
-      }
-    } else {
-      const best = selectBestPane(data)
-      if (best) {
-        setSelectedWorkspaceIdState(best.workspaceId)
-        selectedWorkspaceIdRef.current = best.workspaceId
-        setSelectedPaneIdState(best.paneId)
-        selectedPaneIdRef.current = best.paneId
-      }
-    }
-  }, [selectBestPane])
+    const nextSelection = reconcileSnapshotSelection(
+      data,
+      selectedWorkspaceIdRef.current,
+      selectedPaneIdRef.current
+    )
+    setSelectedWorkspaceIdState(nextSelection.workspaceId)
+    selectedWorkspaceIdRef.current = nextSelection.workspaceId
+    setSelectedPaneIdState(nextSelection.paneId)
+    selectedPaneIdRef.current = nextSelection.paneId
+  }, [])
 
   const selectWorkspace = useCallback((workspaceId: string) => {
     setSelectedWorkspaceIdState(workspaceId)
@@ -177,6 +123,8 @@ export const useSnapshot = (pollIntervalMs = 2000): IUseSnapshotReturn => {
   const refreshSnapshot = useCallback(async (): Promise<boolean> => {
     return await loadSnapshot(false)
   }, [loadSnapshot])
+
+  const getSnapshot = useCallback((): ISnapshotResult | null => snapshotRef.current, [])
 
   // WebSocket Event Stream connection
   useEffect(() => {
@@ -286,6 +234,7 @@ export const useSnapshot = (pollIntervalMs = 2000): IUseSnapshotReturn => {
     setSelectedWorkspaceId: selectWorkspace,
     setSelectedPaneId: selectPane,
     selectWorkspace,
-    refreshSnapshot
+    refreshSnapshot,
+    getSnapshot
   }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
-import type { FC, FormEvent } from 'react'
+import type { FC, FormEvent, ReactNode } from 'react'
 import {
   AlertTriangle,
   Bell,
@@ -12,12 +12,19 @@ import {
   Loader2,
   Minus,
   Plus,
+  Trash2,
   X
 } from 'lucide-react'
 import type { IAgentExplainResult, IPane, IStrictActionRequest, ITab, IWorkspace } from '@/types/herdr.ts'
+import type { ILifecycleOperations } from '@/hooks/use-lifecycle-operations.ts'
 import { fetchAgentExplain, sendAction } from '@/services/api-client.ts'
 import { canSubmitNewTab, deriveTabCreateSourcePanes } from '@/utils/action-target.ts'
 import { initialNewTabState, newTabStateReducer, resolveInspectPaneListAction } from '@/utils/new-tab-state.ts'
+import {
+  freezeTabCloseConfirmation,
+  tabConfirmationChanged,
+  type ITabCloseConfirmation
+} from '@/utils/lifecycle-operations.ts'
 import { formatTabLabel, groupPanesByTab, isAgentPane } from '@/utils/workspace-helpers.ts'
 import { useTabNotificationPolicy } from '@/hooks/use-tab-notification-policy.ts'
 
@@ -28,10 +35,10 @@ export interface IPaneDrawerProps {
   panes: IPane[]
   selectedWorkspaceId: string | null
   selectedPaneId: string | null
-  onSelectWorkspace: (workspaceId: string) => void
   onSelectPane: (paneId: string, workspaceId: string) => void
   onClose: () => void
   onRefreshSnapshot?: () => Promise<boolean>
+  lifecycle: ILifecycleOperations
 }
 
 interface IExplainCacheEntry {
@@ -89,10 +96,10 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
   panes,
   selectedWorkspaceId,
   selectedPaneId,
-  onSelectWorkspace,
   onSelectPane,
   onClose,
-  onRefreshSnapshot
+  onRefreshSnapshot,
+  lifecycle
 }) => {
   const [expandedPaneId, setExpandedPaneId] = useState<string | null>(null)
   const [explainCache, setExplainCache] = useState<Record<string, IExplainCacheEntry>>({})
@@ -100,8 +107,15 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
   const activeRequestPaneIdRef = useRef<string | null>(null)
   const requestIdRef = useRef(0)
   const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+  const cancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const drawerRef = useRef<HTMLDivElement | null>(null)
-  const activeWorkspacePillRef = useRef<HTMLButtonElement | null>(null)
+  const handleCloseRef = useRef<() => void>(() => undefined)
+  const escapeHandlerRef = useRef<() => void>(() => undefined)
+  const initiatingControlRef = useRef<HTMLElement | null>(null)
+
+  const [lifecycleView, setLifecycleView] = useState<'list' | 'close-tab' | 'status'>('list')
+  const [tabConfirmation, setTabConfirmation] = useState<ITabCloseConfirmation | null>(null)
+  const [confirmationError, setConfirmationError] = useState<string | null>(null)
 
   // New Shell Tab state
   const [newTabState, dispatchNewTab] = useReducer(newTabStateReducer, initialNewTabState)
@@ -109,6 +123,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
   const [tabLabel, setTabLabel] = useState<string>('')
 
   const cwdChoices = deriveTabCreateSourcePanes(panes, selectedWorkspaceId || '', selectedPaneId)
+  const hasLifecycleGate = Boolean(lifecycle.ticket && lifecycle.ticket.phase !== 'rejected')
 
   // Default to currently selected pane if it belongs to Space, else deterministic first pane
   useEffect(() => {
@@ -133,20 +148,18 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
 
   useEffect(() => {
     if (!isOpen) return
-    const frame = requestAnimationFrame(() => closeButtonRef.current?.focus())
-    return () => cancelAnimationFrame(frame)
-  }, [isOpen])
-
-  useEffect(() => {
-    if (!isOpen || !selectedWorkspaceId) return
+    if (lifecycle.ticket && lifecycle.ticket.phase !== 'rejected') {
+      setLifecycleView('status')
+    }
     const frame = requestAnimationFrame(() => {
-      activeWorkspacePillRef.current?.scrollIntoView({
-        block: 'nearest',
-        inline: 'nearest'
-      })
+      if (lifecycleView === 'close-tab') {
+        cancelButtonRef.current?.focus()
+      } else {
+        closeButtonRef.current?.focus()
+      }
     })
     return () => cancelAnimationFrame(frame)
-  }, [isOpen, selectedWorkspaceId])
+  }, [isOpen, lifecycle.ticket?.phase, lifecycleView])
 
   // Escape and Tab/Shift+Tab focus containment inside modal drawer
   useEffect(() => {
@@ -156,7 +169,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
       if (e.key === 'Escape') {
         e.preventDefault()
         e.stopPropagation()
-        handleClose()
+        escapeHandlerRef.current()
         return
       }
 
@@ -224,7 +237,70 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
     setExpandedPaneId(null)
     setExplainCache({})
     dispatchNewTab({ type: 'CLOSE_DRAWER' })
+    setLifecycleView('list')
+    setConfirmationError(null)
     onClose()
+  }
+  handleCloseRef.current = handleClose
+
+  const beginLifecycleView = (view: 'close-tab', initiator: HTMLElement | null) => {
+    initiatingControlRef.current = initiator
+    setConfirmationError(null)
+    setLifecycleView(view)
+  }
+
+  const returnToList = () => {
+    setLifecycleView('list')
+    setConfirmationError(null)
+    requestAnimationFrame(() => initiatingControlRef.current?.focus())
+  }
+
+  escapeHandlerRef.current = () => {
+    if (lifecycle.isBusy) {
+      handleClose()
+      return
+    }
+    if (newTabState.view === 'new-tab') {
+      dispatchNewTab({ type: 'NAVIGATE_BACK' })
+      return
+    }
+    if (lifecycleView !== 'list') {
+      returnToList()
+      return
+    }
+    handleClose()
+  }
+
+  const handleConfirmTabClose = async () => {
+    if (!tabConfirmation || hasLifecycleGate) return
+    if (tabConfirmationChanged(tabConfirmation, panes)) {
+      const currentTab = tabs.find((tab) => tab.tab_id === tabConfirmation.tabId && tab.workspace_id === tabConfirmation.workspaceId)
+      setConfirmationError('Tab membership changed. Review the updated pane count, then confirm again.')
+      setTabConfirmation(currentTab ? freezeTabCloseConfirmation(currentTab, panes) : null)
+      return
+    }
+    const started = await lifecycle.dispatchLifecycle({
+      type: 'tab-close',
+      operationId: crypto.randomUUID(),
+      target: {
+        workspaceId: tabConfirmation.workspaceId,
+        tabId: tabConfirmation.tabId,
+        expected: tabConfirmation.expected
+      }
+    })
+    if (started.accepted) setLifecycleView('status')
+  }
+
+  const handleInspectLifecycle = async () => {
+    const refreshed = await onRefreshSnapshot?.()
+    if (refreshed === true && lifecycle.ticket?.phase === 'unknown') {
+      lifecycle.clearUnknownAfterRefresh()
+      setLifecycleView('list')
+      return
+    }
+    if (refreshed !== true) {
+      setConfirmationError('Snapshot refresh failed. The operation remains gated until inspection succeeds.')
+    }
   }
 
   const handleCreateTab = async (e: FormEvent) => {
@@ -301,6 +377,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
   if (!isOpen) return null
 
   const tabGroups = groupPanesByTab(tabs, panes, selectedWorkspaceId)
+  const canonicalTabCount = tabs.filter((tab) => tab.workspace_id === selectedWorkspaceId).length
 
   const getStatusBadgeClass = (status?: string) => {
     switch (status) {
@@ -317,7 +394,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
     }
   }
 
-  const getBasename = (pathStr?: string) => {
+  const getBasename = (pathStr?: string | null) => {
     if (!pathStr) return ''
     const parts = pathStr.split('/').filter(Boolean)
     return parts.pop() || pathStr
@@ -434,6 +511,119 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
     }
   }
 
+  const renderLifecycleShell = (title: string, body: ReactNode) => (
+    <div className="drawer-overlay" onClick={handleClose} role="presentation">
+      <div
+        id="tab-pane-drawer"
+        ref={drawerRef}
+        className="drawer-sheet drawer-sheet--new-tab"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
+        <div className="drawer-sheet__handle" />
+        <div className="drawer-sheet__header drawer-sheet__header--nav">
+          <button
+            type="button"
+            className="drawer-sheet__back-btn"
+            onClick={returnToList}
+            disabled={lifecycle.isBusy}
+            aria-label="Back to lifecycle actions"
+          >
+            <ChevronLeft size={18} aria-hidden="true" />
+            <span>Back</span>
+          </button>
+          <span className="drawer-sheet__title">{title}</span>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            className="drawer-sheet__close-btn"
+            onClick={handleClose}
+            aria-label={lifecycle.isBusy ? 'Close drawer; operation continues checking' : 'Close drawer'}
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        </div>
+        {body}
+      </div>
+    </div>
+  )
+
+  if (lifecycleView === 'status' && lifecycle.ticket) {
+    const ticket = lifecycle.ticket
+    const statusMessage = ticket.phase === 'pending'
+      ? 'Operation pending. You can close this drawer; it continues checking.'
+      : ticket.phase === 'unknown'
+        ? ticket.error || 'Outcome unknown. Refresh and inspect before another action.'
+        : ticket.phase === 'reconciliation-failed'
+          ? ticket.error || 'The server observed the action, but browser reconciliation was not confirmed.'
+          : ticket.phase === 'rejected'
+            ? ticket.error || 'The action was rejected.'
+            : ticket.error || 'Action observed. Refreshing and reconciling the active session.'
+    return renderLifecycleShell('Lifecycle Status', (
+      <div className="new-tab-form">
+        <div className="new-tab-form__body">
+          <div className={`new-tab-status ${ticket.phase === 'unknown' ? 'new-tab-status--unknown' : ticket.phase === 'rejected' || ticket.phase === 'reconciliation-failed' ? 'new-tab-status--error' : ''}`} role="status" aria-live="polite">
+            <div className="new-tab-status__content">
+              {(ticket.phase === 'pending' || ticket.phase === 'observed') && <Loader2 size={16} className="spin" aria-hidden="true" />}
+              {ticket.phase !== 'pending' && ticket.phase !== 'observed' && <AlertTriangle size={16} aria-hidden="true" />}
+              <span>{statusMessage}</span>
+            </div>
+          </div>
+          <div className="lifecycle-ticket-details">
+            <span>{ticket.type}</span>
+            <code>{ticket.operationId}</code>
+          </div>
+          {confirmationError && <div className="new-tab-status new-tab-status--error" role="alert">{confirmationError}</div>}
+        </div>
+        <div className="new-tab-form__footer lifecycle-form__actions">
+          {ticket.phase === 'unknown' && (
+            <button type="button" className="new-tab-submit-btn" onClick={handleInspectLifecycle}>
+              Refresh and inspect
+            </button>
+          )}
+          {ticket.phase === 'reconciliation-failed' && (
+            <button
+              type="button"
+              className="new-tab-submit-btn"
+              onClick={() => lifecycle.retryReconciliation(ticket.requestIdentity)}
+            >
+              Refresh and inspect
+            </button>
+          )}
+          {ticket.phase === 'rejected' && (
+            <button type="button" className="new-tab-submit-btn" onClick={returnToList}>
+              Return to actions
+            </button>
+          )}
+          {ticket.phase === 'pending' && (
+            <button type="button" className="lifecycle-cancel-btn" onClick={handleClose}>
+              Dismiss — operation continues
+            </button>
+          )}
+        </div>
+      </div>
+    ))
+  }
+
+  if (lifecycleView === 'close-tab' && tabConfirmation) {
+    return renderLifecycleShell('Close Tab', (
+      <div className="new-tab-form">
+        <div className="new-tab-form__body lifecycle-confirmation">
+          <p><strong>{tabConfirmation.label}</strong></p>
+          <code>{tabConfirmation.tabId}</code>
+          <p>This closes all {tabConfirmation.paneCount} panes in this Tab. Running contents may be interrupted, and unsaved work may be lost.</p>
+          {confirmationError && <div className="new-tab-status new-tab-status--error" role="alert">{confirmationError}</div>}
+        </div>
+        <div className="new-tab-form__footer lifecycle-form__actions">
+          <button ref={cancelButtonRef} type="button" className="lifecycle-cancel-btn" onClick={returnToList}>Cancel</button>
+          <button type="button" className="lifecycle-danger-btn" onClick={handleConfirmTabClose} disabled={lifecycle.isBusy}>Close Tab</button>
+        </div>
+      </div>
+    ))
+  }
+
   if (newTabState.view === 'new-tab') {
     const activeWs = workspaces.find((w) => w.workspace_id === selectedWorkspaceId)
     const activeWsLabel =
@@ -442,7 +632,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
     return (
       <div className="drawer-overlay" onClick={handleClose} role="presentation">
         <div
-          id="workspace-pane-drawer"
+          id="tab-pane-drawer"
           ref={drawerRef}
           className="drawer-sheet drawer-sheet--new-tab"
           onClick={(e) => e.stopPropagation()}
@@ -596,18 +786,18 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
   return (
     <div className="drawer-overlay" onClick={handleClose} role="presentation">
       <div
-        id="workspace-pane-drawer"
+        id="tab-pane-drawer"
         ref={drawerRef}
         className="drawer-sheet"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="Workspace and Pane Switcher"
+        aria-label="Tabs and Panes"
       >
         <div className="drawer-sheet__handle" />
 
         <div className="drawer-sheet__header">
-          <span className="drawer-sheet__title">Workspaces & Panes</span>
+          <span className="drawer-sheet__title">Tabs & Panes</span>
           <button
             ref={closeButtonRef}
             type="button"
@@ -617,29 +807,6 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
           >
             <X size={18} aria-hidden="true" />
           </button>
-        </div>
-
-        {/* Workspace Pills */}
-        <div className="drawer-sheet__workspaces-scroll">
-          {workspaces.map((ws) => {
-            const isWsSelected = ws.workspace_id === selectedWorkspaceId
-            return (
-              <button
-                key={ws.workspace_id}
-                ref={isWsSelected ? activeWorkspacePillRef : undefined}
-                type="button"
-                className={`ws-pill ${isWsSelected ? 'ws-pill--active' : ''}`}
-                onClick={() => onSelectWorkspace(ws.workspace_id)}
-                aria-pressed={isWsSelected}
-              >
-                <span className="ws-pill__label">{ws.label}</span>
-                <span className="ws-pill__count">{ws.pane_count}p</span>
-                {ws.agent_status === 'blocked' && (
-                  <span className="ws-pill__alert-dot" title="Has blocked agent" />
-                )}
-              </button>
-            )
-          })}
         </div>
 
         {/* Pane List Grouped by Tabs */}
@@ -724,6 +891,24 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                             <span className="tab-notify-switch__thumb" />
                           </span>
                         </button>
+                      )}
+                      {tab && canonicalTabCount > 1 && (
+                        <button
+                          type="button"
+                          className="tab-close-action"
+                          aria-label={`Close ${tabTitle}`}
+                          disabled={hasLifecycleGate}
+                          onClick={(event) => {
+                            setTabConfirmation(freezeTabCloseConfirmation(tab, panes))
+                            beginLifecycleView('close-tab', event.currentTarget)
+                          }}
+                        >
+                          <Trash2 size={14} aria-hidden="true" />
+                          <span>Close</span>
+                        </button>
+                      )}
+                      {tab && canonicalTabCount <= 1 && (
+                        <span className="tab-close-hint">Use Close Space for the last Tab</span>
                       )}
                     </div>
                   </div>

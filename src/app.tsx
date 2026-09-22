@@ -11,7 +11,7 @@ import QuestionView from '@/components/question-view.tsx'
 import PanelView from '@/components/panel-view.tsx'
 import HistoryView from '@/components/history-view.tsx'
 import PaneDrawer from '@/components/pane-drawer.tsx'
-import GlobalDrawer from '@/components/global-drawer.tsx'
+import SpaceDrawer from '@/components/space-drawer.tsx'
 import ThumbDeck from '@/components/thumb-deck.tsx'
 import PromptComposer from '@/components/prompt-composer.tsx'
 import { resolveSurfaceMode, type ISurfaceMode } from '@/utils/surface-mode.ts'
@@ -46,6 +46,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
     setSelectedWorkspaceId,
     setSelectedPaneId,
     refreshSnapshot,
+    lifecycle,
     push,
     viewportGeometry,
     drawerTriggerRef,
@@ -54,8 +55,8 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
   } = useOutletContext<IAppOutletContext>()
 
   const navigate = useNavigate()
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
-  const [isGlobalDrawerOpen, setIsGlobalDrawerOpen] = useState(false)
+  const [isTabDrawerOpen, setIsTabDrawerOpen] = useState(false)
+  const [isSpaceDrawerOpen, setIsSpaceDrawerOpen] = useState(false)
   const [isBusy, setIsBusy] = useState(false)
   const isBusyRef = useRef(isBusy)
   isBusyRef.current = isBusy
@@ -225,10 +226,15 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
 
   // Synchronize route workspaceId with selectedWorkspaceId
   useEffect(() => {
-    if (workspaceId && selectedWorkspaceId !== workspaceId) {
+    if (
+      status === 'connected' &&
+      workspaceId &&
+      snapshot?.workspaces.some((workspace) => workspace.workspace_id === workspaceId) &&
+      selectedWorkspaceId !== workspaceId
+    ) {
       setSelectedWorkspaceId(workspaceId)
     }
-  }, [workspaceId, selectedWorkspaceId, setSelectedWorkspaceId])
+  }, [snapshot, status, workspaceId, selectedWorkspaceId, setSelectedWorkspaceId])
 
   // Intentional focus restoration when returning from settings
   useEffect(() => {
@@ -416,34 +422,34 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
           ? refetchHistory
           : undefined
 
-  const handleOpenGlobalDrawer = () => {
+  const handleOpenSpaceDrawer = () => {
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur()
     }
-    setIsDrawerOpen(false)
-    setIsGlobalDrawerOpen(true)
+    setIsTabDrawerOpen(false)
+    setIsSpaceDrawerOpen(true)
   }
 
-  const handleCloseGlobalDrawer = () => {
-    setIsGlobalDrawerOpen(false)
+  const handleCloseSpaceDrawer = () => {
+    setIsSpaceDrawerOpen(false)
     requestAnimationFrame(() => menuTriggerRef?.current?.focus())
   }
 
-  const handleOpenDrawer = () => {
+  const handleOpenTabDrawer = () => {
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur()
     }
-    setIsGlobalDrawerOpen(false)
-    setIsDrawerOpen(true)
+    setIsSpaceDrawerOpen(false)
+    setIsTabDrawerOpen(true)
   }
 
-  const handleCloseDrawer = () => {
-    setIsDrawerOpen(false)
+  const handleCloseTabDrawer = () => {
+    setIsTabDrawerOpen(false)
     requestAnimationFrame(() => drawerTriggerRef.current?.focus())
   }
 
   const handleOpenSettings = () => {
-    setIsGlobalDrawerOpen(false)
+    setIsSpaceDrawerOpen(false)
     shouldRestoreMenuFocusRef.current = true
     navigate('/settings', { state: { appOwned: true } })
   }
@@ -492,12 +498,12 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
         status={status}
         activeWorkspace={activeWorkspace}
         activeTab={activeTab}
-        isGlobalDrawerOpen={isGlobalDrawerOpen}
+        isSpaceDrawerOpen={isSpaceDrawerOpen}
         menuTriggerRef={menuTriggerRef}
-        onOpenMenu={handleOpenGlobalDrawer}
-        isDrawerOpen={isDrawerOpen}
+        onOpenSpaces={handleOpenSpaceDrawer}
+        isTabDrawerOpen={isTabDrawerOpen}
         drawerTriggerRef={drawerTriggerRef}
-        onOpenDrawer={handleOpenDrawer}
+        onOpenTabs={handleOpenTabDrawer}
       />
 
       {/* Attention Horizon Alert */}
@@ -629,36 +635,43 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
         )}
       </footer>
 
-      {/* Global App Menu Drawer */}
-      <GlobalDrawer
-        isOpen={isGlobalDrawerOpen}
+      {/* Herdr-style Space Switcher */}
+      <SpaceDrawer
+        isOpen={isSpaceDrawerOpen}
         status={status}
         pushState={push.state}
-        onOpenSettings={handleOpenSettings}
-        onClose={handleCloseGlobalDrawer}
-      />
-
-      {/* Pane and Workspace Switcher Drawer */}
-      <PaneDrawer
-        isOpen={isDrawerOpen}
         workspaces={workspaces}
         tabs={tabs}
         panes={panes}
         selectedWorkspaceId={workspaceId}
-        selectedPaneId={selectedPaneId}
         onSelectWorkspace={(wsId) => {
           if (wsId !== workspaceId) {
             navigate('/spaces/' + encodeURIComponent(wsId))
           }
         }}
+        onOpenSettings={handleOpenSettings}
+        onClose={handleCloseSpaceDrawer}
+        onRefreshSnapshot={refreshSnapshot}
+        lifecycle={lifecycle}
+      />
+
+      {/* Active-Space Tab and Pane Switcher */}
+      <PaneDrawer
+        isOpen={isTabDrawerOpen}
+        workspaces={workspaces}
+        tabs={tabs}
+        panes={panes}
+        selectedWorkspaceId={workspaceId}
+        selectedPaneId={selectedPaneId}
         onSelectPane={(pId, wsId) => {
           if (wsId && wsId !== workspaceId) {
             navigate('/spaces/' + encodeURIComponent(wsId))
           }
           setSelectedPaneId(pId, wsId)
         }}
-        onClose={handleCloseDrawer}
+        onClose={handleCloseTabDrawer}
         onRefreshSnapshot={refreshSnapshot}
+        lifecycle={lifecycle}
       />
     </div>
   )

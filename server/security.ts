@@ -4,7 +4,8 @@ import type {
   IExpectedPaneMode,
   IPane,
   ISnapshotResult,
-  ITabCreateTargetIdentity
+  ITabCreateTargetIdentity,
+  IWorkspaceCreateSource
 } from './types.ts'
 
 export const ALLOWED_KEYS = new Set([
@@ -204,6 +205,39 @@ export const validateOwnerAuth = (
 export const VALID_EXPECTED_MODES = new Set(['agent', 'blocked-agent', 'shell'])
 export const CONSERVATIVE_TOKEN_REGEX = /^[a-zA-Z0-9_.:-]+$/
 export const CONTROL_CHARS_REGEX = /[\x00-\x1f\x7f]/
+// The action route accepts at most 4096 UTF-8 bytes; 64 IDs per list keeps
+// manifest cardinality explicitly bounded beneath that outer body-size guard.
+export const MAX_CLOSE_MANIFEST_IDS = 64
+
+const validateCloseManifestIds = (
+  value: unknown,
+  fieldName: string
+): IValidationResult<string[]> => {
+  if (!Array.isArray(value)) {
+    return { valid: false, error: `Missing or invalid expected "${fieldName}": must be an array` }
+  }
+  if (value.length > MAX_CLOSE_MANIFEST_IDS) {
+    return { valid: false, error: `Expected "${fieldName}" exceeds maximum of ${MAX_CLOSE_MANIFEST_IDS} IDs` }
+  }
+  const normalized: string[] = []
+  const seen = new Set<string>()
+  for (const item of value) {
+    if (typeof item !== 'string') {
+      return { valid: false, error: `Invalid expected "${fieldName}": every ID must be a string` }
+    }
+    const id = item.trim()
+    if (id.length === 0 || id.length > 128 || !CONSERVATIVE_TOKEN_REGEX.test(id)) {
+      return { valid: false, error: `Invalid expected "${fieldName}" ID: must be a safe literal token` }
+    }
+    if (seen.has(id)) {
+      return { valid: false, error: `Duplicate expected "${fieldName}" ID "${id}"` }
+    }
+    seen.add(id)
+    normalized.push(id)
+  }
+  normalized.sort()
+  return { valid: true, data: normalized }
+}
 
 export const validateActionRequest = (body: unknown): IValidationResult<IActionRequest> => {
   if (!body || typeof body !== 'object') {
@@ -213,8 +247,19 @@ export const validateActionRequest = (body: unknown): IValidationResult<IActionR
   const raw = body as Record<string, unknown>
   const type = raw.type
 
-  if (type !== 'prompt' && type !== 'keys' && type !== 'terminal-input' && type !== 'tab-create') {
-    return { valid: false, error: 'Action type must be "prompt", "keys", "terminal-input", or "tab-create"' }
+  if (
+    type !== 'prompt' &&
+    type !== 'keys' &&
+    type !== 'terminal-input' &&
+    type !== 'tab-create' &&
+    type !== 'workspace-create' &&
+    type !== 'workspace-close' &&
+    type !== 'tab-close'
+  ) {
+    return {
+      valid: false,
+      error: 'Action type must be "prompt", "keys", "terminal-input", "tab-create", "workspace-create", "workspace-close", or "tab-close"'
+    }
   }
 
   if (typeof raw.operationId !== 'string' || raw.operationId.trim().length === 0) {
@@ -225,11 +270,217 @@ export const validateActionRequest = (body: unknown): IValidationResult<IActionR
     return { valid: false, error: 'Invalid "operationId": must be a safe token (1-128 chars, alphanumeric, underscore, period, colon, hyphen)' }
   }
 
+  if (type === 'workspace-create') {
+    const allowedKeys = new Set(['type', 'operationId', 'label', 'source'])
+    for (const key of Object.keys(raw)) {
+      if (!allowedKeys.has(key)) {
+        return { valid: false, error: `Unsupported field "${key}" on workspace-create action` }
+      }
+    }
+
+    let label: string | undefined
+    if (Object.prototype.hasOwnProperty.call(raw, 'label')) {
+      if (typeof raw.label !== 'string') {
+        return { valid: false, error: 'Invalid "label": must be a string' }
+      }
+      const trimmedLabel = raw.label.trim()
+      if (trimmedLabel.length > 100 || CONTROL_CHARS_REGEX.test(trimmedLabel)) {
+        return { valid: false, error: 'label exceeds maximum length of 100 characters or contains control characters' }
+      }
+      label = trimmedLabel
+    }
+
+    let source: IWorkspaceCreateSource | undefined
+    if (Object.prototype.hasOwnProperty.call(raw, 'source')) {
+      if (!raw.source || typeof raw.source !== 'object' || Array.isArray(raw.source)) {
+        return { valid: false, error: 'Invalid "source": must be a non-null object when supplied' }
+      }
+      const rawSource = raw.source as Record<string, unknown>
+      const allowedSourceKeys = new Set(['workspaceId', 'paneId', 'terminalId'])
+      for (const key of Object.keys(rawSource)) {
+        if (!allowedSourceKeys.has(key)) {
+          return { valid: false, error: `Unsupported field "${key}" on workspace-create source` }
+        }
+      }
+
+      if (typeof rawSource.workspaceId !== 'string' || rawSource.workspaceId.trim().length === 0) {
+        return { valid: false, error: 'Missing or empty source "workspaceId"' }
+      }
+      const workspaceId = rawSource.workspaceId.trim()
+      if (workspaceId.length > 128 || !CONSERVATIVE_TOKEN_REGEX.test(workspaceId)) {
+        return { valid: false, error: 'Invalid source "workspaceId": must be a safe token' }
+      }
+
+      if (typeof rawSource.paneId !== 'string' || !PANE_ID_REGEX.test(rawSource.paneId.trim())) {
+        return { valid: false, error: 'Invalid source paneId: must match format "ws:p1"' }
+      }
+      const paneId = rawSource.paneId.trim()
+
+      if (typeof rawSource.terminalId !== 'string' || rawSource.terminalId.trim().length === 0) {
+        return { valid: false, error: 'Missing or empty source "terminalId"' }
+      }
+      const terminalId = rawSource.terminalId.trim()
+      if (terminalId.length > 128 || !CONSERVATIVE_TOKEN_REGEX.test(terminalId)) {
+        return { valid: false, error: 'Invalid source "terminalId": must be a safe token' }
+      }
+
+      source = { workspaceId, paneId, terminalId }
+    }
+
+    return {
+      valid: true,
+      data: {
+        type: 'workspace-create',
+        operationId,
+        ...(label !== undefined ? { label } : {}),
+        ...(source !== undefined ? { source } : {})
+      }
+    }
+  }
+
+  if (type === 'workspace-close') {
+    const allowedKeys = new Set(['type', 'operationId', 'target'])
+    for (const key of Object.keys(raw)) {
+      if (!allowedKeys.has(key)) {
+        return { valid: false, error: `Unsupported field "${key}" on workspace-close action` }
+      }
+    }
+
+    if (!raw.target || typeof raw.target !== 'object' || Array.isArray(raw.target)) {
+      return { valid: false, error: 'Missing or invalid "target" object' }
+    }
+    const rawTarget = raw.target as Record<string, unknown>
+    const allowedTargetKeys = new Set(['workspaceId', 'expected'])
+    for (const key of Object.keys(rawTarget)) {
+      if (!allowedTargetKeys.has(key)) {
+        return { valid: false, error: `Unsupported field "${key}" on workspace-close target` }
+      }
+    }
+
+    if (!rawTarget.expected || typeof rawTarget.expected !== 'object' || Array.isArray(rawTarget.expected)) {
+      return { valid: false, error: 'Missing or invalid workspace-close target "expected" object' }
+    }
+    const rawExpected = rawTarget.expected as Record<string, unknown>
+    const allowedExpectedKeys = new Set(['tabIds', 'paneIds'])
+    for (const key of Object.keys(rawExpected)) {
+      if (!allowedExpectedKeys.has(key)) {
+        return { valid: false, error: `Unsupported field "${key}" on workspace-close expected manifest` }
+      }
+    }
+    const tabIdsResult = validateCloseManifestIds(rawExpected.tabIds, 'tabIds')
+    if (!tabIdsResult.valid || !tabIdsResult.data) return { valid: false, error: tabIdsResult.error }
+    const paneIdsResult = validateCloseManifestIds(rawExpected.paneIds, 'paneIds')
+    if (!paneIdsResult.valid || !paneIdsResult.data) return { valid: false, error: paneIdsResult.error }
+
+    if (typeof rawTarget.workspaceId !== 'string' || rawTarget.workspaceId.trim().length === 0) {
+      return { valid: false, error: 'Missing or empty target "workspaceId"' }
+    }
+    const workspaceId = rawTarget.workspaceId.trim()
+    if (workspaceId.length > 128 || !CONSERVATIVE_TOKEN_REGEX.test(workspaceId)) {
+      return { valid: false, error: 'Invalid target "workspaceId": must be a safe token' }
+    }
+
+    return {
+      valid: true,
+      data: {
+        type: 'workspace-close',
+        operationId,
+        target: {
+          workspaceId,
+          expected: {
+            tabIds: tabIdsResult.data,
+            paneIds: paneIdsResult.data
+          }
+        }
+      }
+    }
+  }
+
+  if (type === 'tab-close') {
+    const allowedKeys = new Set(['type', 'operationId', 'target'])
+    for (const key of Object.keys(raw)) {
+      if (!allowedKeys.has(key)) {
+        return { valid: false, error: `Unsupported field "${key}" on tab-close action` }
+      }
+    }
+
+    if (!raw.target || typeof raw.target !== 'object' || Array.isArray(raw.target)) {
+      return { valid: false, error: 'Missing or invalid "target" object' }
+    }
+    const rawTarget = raw.target as Record<string, unknown>
+    const allowedTargetKeys = new Set(['workspaceId', 'tabId', 'expected'])
+    for (const key of Object.keys(rawTarget)) {
+      if (!allowedTargetKeys.has(key)) {
+        return { valid: false, error: `Unsupported field "${key}" on tab-close target` }
+      }
+    }
+
+    if (!rawTarget.expected || typeof rawTarget.expected !== 'object' || Array.isArray(rawTarget.expected)) {
+      return { valid: false, error: 'Missing or invalid tab-close target "expected" object' }
+    }
+    const rawExpected = rawTarget.expected as Record<string, unknown>
+    const allowedExpectedKeys = new Set(['paneIds'])
+    for (const key of Object.keys(rawExpected)) {
+      if (!allowedExpectedKeys.has(key)) {
+        return { valid: false, error: `Unsupported field "${key}" on tab-close expected manifest` }
+      }
+    }
+    const paneIdsResult = validateCloseManifestIds(rawExpected.paneIds, 'paneIds')
+    if (!paneIdsResult.valid || !paneIdsResult.data) return { valid: false, error: paneIdsResult.error }
+
+    if (typeof rawTarget.workspaceId !== 'string' || rawTarget.workspaceId.trim().length === 0) {
+      return { valid: false, error: 'Missing or empty target "workspaceId"' }
+    }
+    const workspaceId = rawTarget.workspaceId.trim()
+    if (workspaceId.length > 128 || !CONSERVATIVE_TOKEN_REGEX.test(workspaceId)) {
+      return { valid: false, error: 'Invalid target "workspaceId": must be a safe token' }
+    }
+
+    if (typeof rawTarget.tabId !== 'string' || rawTarget.tabId.trim().length === 0) {
+      return { valid: false, error: 'Missing or empty target "tabId"' }
+    }
+    const tabId = rawTarget.tabId.trim()
+    if (tabId.length > 128 || !CONSERVATIVE_TOKEN_REGEX.test(tabId)) {
+      return { valid: false, error: 'Invalid target "tabId": must be a safe token' }
+    }
+
+    return {
+      valid: true,
+      data: {
+        type: 'tab-close',
+        operationId,
+        target: {
+          workspaceId,
+          tabId,
+          expected: { paneIds: paneIdsResult.data }
+        }
+      }
+    }
+  }
+
+  if (type === 'tab-create') {
+    const allowedKeys = new Set(['type', 'operationId', 'workspaceId', 'target', 'label'])
+    for (const key of Object.keys(raw)) {
+      if (!allowedKeys.has(key)) {
+        return { valid: false, error: `Unsupported field "${key}" on tab-create action` }
+      }
+    }
+  }
+
   if (!raw.target || typeof raw.target !== 'object' || Array.isArray(raw.target)) {
     return { valid: false, error: 'Missing or invalid "target" object' }
   }
 
   const rawTarget = raw.target as Record<string, unknown>
+  if (type === 'tab-create') {
+    const allowedTargetKeys = new Set(['paneId', 'terminalId'])
+    for (const key of Object.keys(rawTarget)) {
+      if (!allowedTargetKeys.has(key)) {
+        return { valid: false, error: `Unsupported field "${key}" on tab-create target` }
+      }
+    }
+  }
+
   if (typeof rawTarget.paneId !== 'string' || !PANE_ID_REGEX.test(rawTarget.paneId.trim())) {
     return { valid: false, error: 'Invalid target paneId: must match format "ws:p1"' }
   }
@@ -438,15 +689,30 @@ export const verifyTargetAgainstSnapshot = (
   target: IActionTargetIdentity | ITabCreateTargetIdentity,
   options: { isTabCreate?: boolean; actionType?: string } = {}
 ): ITargetPreflightResult => {
-  const panes = snapshot.panes || []
-  const targetPane = panes.find((p) => p && p.pane_id === target.paneId)
-  if (!targetPane) {
+  if (!Array.isArray(snapshot.workspaces) || !Array.isArray(snapshot.tabs) || !Array.isArray(snapshot.panes)) {
+    return {
+      ok: false,
+      status: 502,
+      error: 'Authoritative snapshot is malformed: workspaces, tabs, and panes must be arrays'
+    }
+  }
+
+  const matchingPanes = snapshot.panes.filter((pane) => pane && pane.pane_id === target.paneId)
+  if (matchingPanes.length === 0) {
     return {
       ok: false,
       status: 404,
       error: `Pane "${target.paneId}" not found in active session`
     }
   }
+  if (matchingPanes.length !== 1) {
+    return {
+      ok: false,
+      status: 409,
+      error: `Ambiguous duplicate pane ID "${target.paneId}" in active session`
+    }
+  }
+  const targetPane = matchingPanes[0]
 
   if (targetPane.terminal_id !== target.terminalId) {
     return {
@@ -456,9 +722,18 @@ export const verifyTargetAgainstSnapshot = (
     }
   }
 
-  const derivedCwd = targetPane.foreground_cwd || targetPane.cwd
+  const foregroundCwd = typeof targetPane.foreground_cwd === 'string' ? targetPane.foreground_cwd.trim() : ''
+  const cwd = typeof targetPane.cwd === 'string' ? targetPane.cwd.trim() : ''
+  const derivedCwd = foregroundCwd || cwd || undefined
 
   if (options.isTabCreate) {
+    if (!derivedCwd) {
+      return {
+        ok: false,
+        status: 409,
+        error: `Source pane "${target.paneId}" has no usable current working directory`
+      }
+    }
     return { ok: true, pane: targetPane, derivedCwd }
   }
 

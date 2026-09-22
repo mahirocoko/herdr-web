@@ -192,7 +192,25 @@ describe('Router & Push Deep Link Contracts', () => {
     })
   })
 
-  describe('4. Push deep link derivation & privacy', () => {
+  describe('4. Zero-space and stale-route reconciliation source contracts', () => {
+    test('index exposes the shared New Space drawer path when no spaces exist', () => {
+      const source = fs.readFileSync(path.resolve(import.meta.dir, '../../app/routes/_index.tsx'), 'utf8')
+      expect(source).toContain('initialView="new-space"')
+      expect(source).toContain('No active Herdr workspaces or panes discovered.')
+      expect(source).toContain('lifecycle={lifecycle}')
+    })
+
+    test('root replaces stale Space routes and dashboard cannot resurrect a missing workspace', () => {
+      const root = fs.readFileSync(path.resolve(import.meta.dir, '../../app/root.tsx'), 'utf8')
+      const dashboard = fs.readFileSync(path.resolve(import.meta.dir, '../app.tsx'), 'utf8')
+      expect(root).toContain("navigate('/', { replace: true })")
+      expect(root).toContain('navigate(deriveSpacePath(fallbackId), { replace: true })')
+      expect(dashboard).toContain("status === 'connected'")
+      expect(dashboard).toContain('snapshot?.workspaces.some')
+    })
+  })
+
+  describe('5. Push deep link derivation & privacy', () => {
     test('createNeedsInputPayload and createDonePayload emit canonical /spaces/:id paths', () => {
       const needsInput = createNeedsInputPayload('ws-prod', 'Production')
       expect(needsInput.url).toBe('/spaces/ws-prod')

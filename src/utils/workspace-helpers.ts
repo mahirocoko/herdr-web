@@ -159,6 +159,48 @@ export const selectFocusedPaneFromSnapshot = (snapshot: ISnapshotResult): IPane 
  * snapshot agents matching pane_id or target.
  * Fails closed on any meaningful agent ownership evidence.
  */
+export interface IReconciledSelection {
+  workspaceId: string | null
+  paneId: string | null
+}
+
+export const reconcileSnapshotSelection = (
+  snapshot: ISnapshotResult,
+  currentWorkspaceId: string | null,
+  currentPaneId: string | null
+): IReconciledSelection => {
+  if (snapshot.workspaces.length === 0 || snapshot.panes.length === 0) {
+    return { workspaceId: null, paneId: null }
+  }
+
+  const currentWorkspaceExists = Boolean(
+    currentWorkspaceId && snapshot.workspaces.some((workspace) => workspace.workspace_id === currentWorkspaceId)
+  )
+  const currentPane = currentPaneId
+    ? snapshot.panes.find((pane) => pane.pane_id === currentPaneId)
+    : undefined
+
+  if (currentWorkspaceExists && currentPane?.workspace_id === currentWorkspaceId) {
+    return { workspaceId: currentWorkspaceId, paneId: currentPane.pane_id }
+  }
+
+  if (currentWorkspaceExists && currentWorkspaceId) {
+    const sameWorkspacePane = selectBestPaneForWorkspace(snapshot.panes, currentWorkspaceId, snapshot.focused_pane_id)
+    if (sameWorkspacePane) {
+      return { workspaceId: currentWorkspaceId, paneId: sameWorkspacePane.pane_id }
+    }
+  }
+
+  const focusedPane = selectFocusedPaneFromSnapshot(snapshot)
+  if (focusedPane) {
+    return { workspaceId: focusedPane.workspace_id, paneId: focusedPane.pane_id }
+  }
+
+  const blockedPane = snapshot.panes.find((pane) => pane.agent_status === 'blocked')
+  const fallbackPane = blockedPane || snapshot.panes[0]
+  return { workspaceId: fallbackPane.workspace_id, paneId: fallbackPane.pane_id }
+}
+
 export const isAgentPane = (
   pane?: Partial<IPane> | null,
   snapshotAgents?: any[] | null

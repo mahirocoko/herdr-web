@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router'
 import type { IAppOutletContext } from '../root.tsx'
+import SpaceDrawer from '@/components/space-drawer.tsx'
 import { selectFocusedPaneFromSnapshot } from '@/utils/workspace-helpers.ts'
 
 export const resolveAuthoritativeWorkspaceId = (
@@ -42,9 +43,13 @@ const IndexRoute = () => {
     snapshotError,
     selectedWorkspaceId,
     refreshSnapshot,
-    viewportGeometry
+    lifecycle,
+    push,
+    viewportGeometry,
+    menuTriggerRef
   } = useOutletContext<IAppOutletContext>()
   const navigate = useNavigate()
+  const [isNewSpaceOpen, setIsNewSpaceOpen] = useState(false)
 
   useEffect(() => {
     if (status !== 'connected' || !snapshot) return
@@ -90,10 +95,39 @@ const IndexRoute = () => {
       )}
 
       {status === 'empty' && (
-        <div className="system-banner system-banner--empty">
-          <span>No active Herdr workspaces or panes discovered.</span>
+        <div className="herdr-empty-canvas herdr-empty-canvas--actions">
+          <div className="system-banner system-banner--empty">
+            <span>No active Herdr workspaces or panes discovered.</span>
+          </div>
+          <button
+            ref={menuTriggerRef}
+            type="button"
+            className="system-banner__retry"
+            onClick={() => setIsNewSpaceOpen(true)}
+          >
+            New Space
+          </button>
         </div>
       )}
+
+      <SpaceDrawer
+        isOpen={isNewSpaceOpen}
+        initialView="new-space"
+        status={status}
+        pushState={push.state}
+        workspaces={snapshot?.workspaces || []}
+        tabs={snapshot?.tabs || []}
+        panes={snapshot?.panes || []}
+        selectedWorkspaceId={selectedWorkspaceId}
+        onSelectWorkspace={(workspaceId) => navigate('/spaces/' + encodeURIComponent(workspaceId))}
+        onOpenSettings={() => navigate('/settings', { state: { appOwned: true } })}
+        onClose={() => {
+          setIsNewSpaceOpen(false)
+          requestAnimationFrame(() => menuTriggerRef.current?.focus())
+        }}
+        onRefreshSnapshot={refreshSnapshot}
+        lifecycle={lifecycle}
+      />
     </div>
   )
 }
