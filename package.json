@@ -10,6 +10,7 @@
     "schema:sync": "bun scripts/sync-herdr-schema.ts",
     "schema:check": "bun scripts/sync-herdr-schema.ts --check",
     "test": "bun test",
+    "test:coverage": "bun scripts/check-coverage.ts",
     "test:live": "HERDR_LIVE_TEST=1 bun test",
     "typecheck": "react-router typegen && tsc --noEmit"
   },

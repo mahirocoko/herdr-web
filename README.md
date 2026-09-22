@@ -141,6 +141,9 @@ bun run dev
 # Run unit tests (no daemon required)
 bun test
 
+# Run the full suite with global coverage floors
+bun run test:coverage
+
 # Run live integration tests (requires Herdr daemon)
 bun run test:live
 

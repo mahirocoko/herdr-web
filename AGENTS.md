@@ -46,6 +46,7 @@ bun install
 bun run schema:sync
 bun run schema:check
 bun test
+bun run test:coverage
 bun run test:live
 bun run typecheck
 bun run build
@@ -53,7 +54,7 @@ bun run start
 bun run dev
 ```
 
-`bun test` must remain independent of a live Herdr daemon. Runtime integration belongs behind `HERDR_LIVE_TEST=1`.
+`bun test` and `bun run test:coverage` must remain independent of a live Herdr daemon. Runtime integration belongs behind `HERDR_LIVE_TEST=1`. Coverage uses repository-owned global floors because Bun 1.3.11's built-in threshold is per loaded file.
 
 ## Code Shape
 

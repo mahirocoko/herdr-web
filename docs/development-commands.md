@@ -26,12 +26,14 @@ bun run dev
 
 ```bash
 bun test
+bun run test:coverage
 bun run test:live
 bun run typecheck
 bun run build
 ```
 
 - `bun test`: deterministic tests; no Herdr daemon required.
+- `bun run test:coverage`: runs the deterministic suite with LCOV instrumentation and enforces global floors of 55% lines and 75% functions. The output lives in an isolated temporary directory and is removed after the check. Bun 1.3.11's built-in threshold is intentionally not used because it evaluates each loaded file rather than the global suite baseline.
 - `bun run test:live`: bounded checks against the current local Herdr runtime.
 - `bun run build`: production browser bundle served by the Bun server.
 
