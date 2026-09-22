@@ -460,7 +460,11 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
   // Fail-closed view when Space is not found in an authoritative snapshot
   if (status !== 'loading' && snapshot && !activeWorkspace) {
     return (
-      <div className="herdr-app" style={appStyle}>
+      <div
+        className="herdr-app"
+        style={appStyle}
+        data-keyboard-open={viewportGeometry?.isKeyboardOpen ? 'true' : undefined}
+      >
         <div className="system-banner system-banner--error" role="alert">
           <span>Space "{workspaceId}" not found in the active session.</span>
         </div>
@@ -478,7 +482,11 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
   }
 
   return (
-    <div className="herdr-app" style={appStyle}>
+    <div
+      className="herdr-app"
+      style={appStyle}
+      data-keyboard-open={viewportGeometry?.isKeyboardOpen ? 'true' : undefined}
+    >
       {/* Horizon Header */}
       <HorizonHeader
         status={status}

@@ -4,11 +4,54 @@ export interface IVisualViewportMetrics {
   offsetTop?: number
   offsetLeft?: number
   scale?: number
+  hasEditableFocus?: boolean
 }
 
 export interface IVisualViewportGeometry {
   height: number
   offsetTop: number
+  isKeyboardOpen: boolean
+}
+
+export interface ILayoutViewportHeightMetrics {
+  windowInnerHeight?: number
+  documentClientHeight?: number
+  visualHeight?: number
+  visualOffsetTop?: number
+}
+
+/**
+ * Minimum layout-minus-visual height reduction (in CSS pixels) required while an editable element
+ * has focus to classify the viewport reduction as an active software keyboard rather
+ * than browser URL bar/chrome expansion, subpixel fluctuations, or hardware keyboard accessory bars.
+ */
+export const KEYBOARD_MIN_HEIGHT_THRESHOLD_PX = 120
+
+/**
+ * Resolves a layout bound that cannot collapse above the visible viewport bottom.
+ * iOS Safari may shrink window.innerHeight while the keyboard also pans visualViewport,
+ * so using innerHeight alone can clamp a valid offsetTop back to zero.
+ */
+export const resolveLayoutViewportHeight = (
+  metrics: ILayoutViewportHeightMetrics
+): number => {
+  const finitePositive = (value: number | undefined): number => {
+    return typeof value === 'number' && Number.isFinite(value) && value > 0
+      ? value
+      : 0
+  }
+
+  const visualHeight = finitePositive(metrics.visualHeight)
+  const visualOffsetTop = typeof metrics.visualOffsetTop === 'number' &&
+    Number.isFinite(metrics.visualOffsetTop)
+    ? Math.max(0, metrics.visualOffsetTop)
+    : 0
+
+  return Math.max(
+    finitePositive(metrics.windowInnerHeight),
+    finitePositive(metrics.documentClientHeight),
+    visualHeight > 0 ? visualHeight + visualOffsetTop : 0
+  )
 }
 
 /**
@@ -19,6 +62,7 @@ export interface IVisualViewportGeometry {
  * Rounds and clamps visual height to layout height.
  * Clamps offsetTop to 0..(layoutHeight - height) so offsetTop + height cannot escape the layout viewport.
  * Sanitizes and rounds offset values to prevent subpixel jitter and negative bounds.
+ * Sets isKeyboardOpen to true only when an editable element has focus AND the height reduction is at least the threshold.
  */
 export const calculateVisibleViewportGeometry = (
   metrics: IVisualViewportMetrics | null | undefined,
@@ -79,9 +123,20 @@ export const calculateVisibleViewportGeometry = (
   const maxOffsetTop = Math.max(0, roundedLayout - height)
   const offsetTop = Math.min(maxOffsetTop, rawOffsetTop)
 
+  // Software keyboard detection: only when an editable element has focus AND layout height
+  // minus bounded visual height is at least the threshold.
+  // Note: offsetTop is deliberately not used for this reduction because Safari may pan
+  // the visual viewport downward while the software keyboard consumes layout height.
+  // Browser chrome alone, editable focus with hardware keyboard, and pinch zoom do not count.
+  const isKeyboardOpen = Boolean(
+    metrics.hasEditableFocus &&
+    (roundedLayout - height) >= KEYBOARD_MIN_HEIGHT_THRESHOLD_PX
+  )
+
   return {
     height,
-    offsetTop
+    offsetTop,
+    isKeyboardOpen
   }
 }
 

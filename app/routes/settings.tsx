@@ -31,7 +31,11 @@ const SettingsRoute = () => {
     : undefined
 
   return (
-    <div className="herdr-app" style={appStyle}>
+    <div
+      className="herdr-app"
+      style={appStyle}
+      data-keyboard-open={viewportGeometry?.isKeyboardOpen ? 'true' : undefined}
+    >
       <SettingsView push={push} onBack={handleBackFromSettings} />
     </div>
   )

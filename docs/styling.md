@@ -3,7 +3,7 @@
 ## Current Reality
 
 - Authored global CSS with semantic custom properties in `src/app.css`.
-- One continuous charcoal terminal workspace with near-black page chrome, elevated controls, safe-area insets, and a bounded `visualViewport` height/offset adapter over a `100dvh` fallback.
+- One continuous charcoal terminal workspace with near-black page chrome, elevated controls, safe-area insets, and a bounded `visualViewport` height/offset adapter over a `100dvh` fallback. The viewport meta keeps supported browsers in `resizes-visual` mode so this adapter remains the single keyboard-geometry owner.
 - xterm owns terminal paint; surrounding UI owns navigation, status, and actions.
 - Panel and History use bounded semantic line/token classes over exact React text children; they do not interpret ANSI or inject terminal markup.
 - The global header owns connection plus one compact workspace/tab selector; pane IDs remain in the drawer rather than the header. The canvas-owned surface toolbar stays separate and uses flat mode tabs, desktop-only scope metadata, and one fixed refresh/loading slot.
@@ -22,7 +22,10 @@
 - Surface views (`text-surface-view`, `history-view`, `question-view`, `terminal-canvas`) must support vertical scrolling without horizontal overflow in both portrait (390x844) and landscape (844x390) viewports. The 44px surface mode toggle must support horizontal scrolling without causing document or body overflow at 390px width.
 - Never trade terminal readability for decorative panels or repeated cards.
 - Keep terminal highlighting calm and structural: plain prose remains primary text, state colors require anchored terminal signals, and path/URL/ID tokenization must preserve every source character and newline.
-- Treat header, surface header, reading viewport, key deck, composer, keyboard, and safe-area geometry as one viewport system.
-- Keep the native keyboard OS-owned. Visual viewport changes may shrink or shift only the app reading geometry based on intended bounded layout calculations (physical mobile keyboard interactions remain human-device validated); pinch zoom must remain available and must not be classified as keyboard state.
+- Treat header, surface header, reading viewport, key deck, composer, keyboard, and safe-area geometry as one viewport system. Do not combine layout-viewport keyboard resizing with the app's `visualViewport` adapter.
+- Keep the native keyboard OS-owned. Visual viewport changes may shrink or shift only the app reading geometry based on intended bounded layout calculations. Classify the software keyboard only when an editable element has focus and the visual viewport has a meaningful height reduction; do not classify browser chrome, hardware-keyboard focus, or pinch zoom as keyboard state.
+- Resolve the layout bound from the largest valid `window.innerHeight`, document client height, or `visualViewport` bottom edge. iOS may shrink `innerHeight` while also panning the visual viewport; never let that combination clamp a real keyboard `offsetTop` back to zero.
+- Preserve the full `safe-area-inset-bottom` for the home indicator while the keyboard is closed. Suppress only the footer's bottom inset while the software keyboard is positively classified; drawers, settings, header, and horizontal safe areas keep their existing ownership.
+- Physical mobile keyboard interactions remain human-device validated; automated geometry and source guards do not prove iPhone Safari or standalone PWA behavior.
 
 The maintainer owns final visual acceptance. Technical checks do not prove product taste.

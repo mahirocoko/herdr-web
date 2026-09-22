@@ -65,7 +65,11 @@ const IndexRoute = () => {
     : undefined
 
   return (
-    <div className="herdr-app" style={appStyle}>
+    <div
+      className="herdr-app"
+      style={appStyle}
+      data-keyboard-open={viewportGeometry?.isKeyboardOpen ? 'true' : undefined}
+    >
       {status === 'loading' && (
         <div className="herdr-empty-canvas">
           <span>Loading Herdr session...</span>

@@ -85,3 +85,33 @@ describe('style-guards: loader spinner classes', () => {
     expect(cssContent).toContain('transform: translateX(14px)')
   })
 })
+
+describe('style-guards: iPhone keyboard viewport ownership', () => {
+  const readSource = (relativePath: string): string => {
+    return fs.readFileSync(path.resolve(import.meta.dir, relativePath), 'utf8')
+  }
+
+  it('keeps browser resize ownership on the visual viewport instead of the layout viewport', () => {
+    const rootContent = readSource('../../app/root.tsx')
+
+    expect(rootContent).toContain('interactive-widget=resizes-visual')
+    expect(rootContent).not.toContain('interactive-widget=resizes-content')
+  })
+
+  it('wires keyboard state through every visual viewport app shell consumer', () => {
+    const keyboardAttribute = "data-keyboard-open={viewportGeometry?.isKeyboardOpen ? 'true' : undefined}"
+
+    expect(readSource('../app.tsx')).toContain(keyboardAttribute)
+    expect(readSource('../../app/routes/_index.tsx')).toContain(keyboardAttribute)
+    expect(readSource('../../app/routes/settings.tsx')).toContain(keyboardAttribute)
+  })
+
+  it('suppresses only the footer safe-bottom inset while the software keyboard is open', () => {
+    const cssContent = readSource('../app.css')
+
+    expect(cssContent).toContain('--footer-safe-bottom: var(--safe-bottom);')
+    expect(cssContent).toContain(".herdr-app[data-keyboard-open='true']")
+    expect(cssContent).toContain('--footer-safe-bottom: 0px;')
+    expect(cssContent).toContain('padding-bottom: max(6px, var(--footer-safe-bottom));')
+  })
+})
