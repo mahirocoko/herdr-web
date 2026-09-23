@@ -1,3 +1,14 @@
+export interface IWorkspaceTokens {
+  mahiro_workspace_branch?: string
+  mahiro_workspace_git_status?: 'clean' | 'dirty'
+  mahiro_workspace_worktree?: string
+}
+
+export interface IWorkspaceWorktree {
+  repo_name: string
+  is_linked_worktree: boolean
+}
+
 export interface IWorkspace {
   workspace_id: string
   label: string
@@ -7,6 +18,8 @@ export interface IWorkspace {
   pane_count: number
   active_tab_id?: string
   focused: boolean
+  tokens?: IWorkspaceTokens
+  worktree?: IWorkspaceWorktree
 }
 
 export interface ITab {
@@ -33,7 +46,6 @@ export interface IPaneTokens {
   mahiro_sidebar_model?: string
   mahiro_sidebar_provider?: string
   mahiro_sidebar_q1_critical?: string
-  [key: string]: string | undefined
 }
 
 export interface IAgentSessionInfo {
@@ -61,7 +73,15 @@ export interface IPane {
   revision?: number
   scroll?: IPaneScroll
   tokens?: IPaneTokens
-  state_labels?: Record<string, string>
+}
+
+export interface ISnapshotAgent {
+  target?: string
+  pane_id?: string
+  agent_session?: {
+    value?: string
+    id?: string
+  }
 }
 
 export interface ISnapshotResult {
@@ -74,8 +94,7 @@ export interface ISnapshotResult {
   panes: IPane[]
   protocol: number
   version: string
-  layouts?: any[]
-  agents?: any[]
+  agents?: ISnapshotAgent[]
 }
 
 export type IExpectedPaneMode = 'agent' | 'blocked-agent' | 'shell'

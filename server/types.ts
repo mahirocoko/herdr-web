@@ -6,6 +6,17 @@ export interface IHerdrHealth {
   timestamp: string
 }
 
+export interface IWorkspaceTokens {
+  mahiro_workspace_branch?: string
+  mahiro_workspace_git_status?: 'clean' | 'dirty'
+  mahiro_workspace_worktree?: string
+}
+
+export interface IWorkspaceWorktree {
+  repo_name: string
+  is_linked_worktree: boolean
+}
+
 export interface IWorkspace {
   workspace_id: string
   label: string
@@ -15,6 +26,8 @@ export interface IWorkspace {
   pane_count: number
   active_tab_id?: string
   focused: boolean
+  tokens?: IWorkspaceTokens
+  worktree?: IWorkspaceWorktree
 }
 
 export interface ITab {
@@ -73,6 +86,14 @@ export interface IPane {
   state_labels?: Record<string, string>
 }
 
+export interface ISnapshotAgent {
+  target?: string
+  pane_id?: string
+  agent?: string
+  agent_session?: { id?: string; value?: string; [key: string]: any }
+  [key: string]: any
+}
+
 export interface ISnapshotResult {
   focused_workspace_id?: string
   focused_tab_id?: string
@@ -84,7 +105,7 @@ export interface ISnapshotResult {
   protocol: number
   version: string
   layouts?: any[]
-  agents?: any[]
+  agents?: ISnapshotAgent[]
 }
 
 export interface ISnapshotEnvelope {

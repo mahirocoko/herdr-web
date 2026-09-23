@@ -26,6 +26,10 @@ import {
   type IWorkspaceCloseConfirmation
 } from '@/utils/lifecycle-operations.ts'
 import {
+  formatWorkspaceAriaLabel,
+  formatWorkspaceSourceLine
+} from '@/utils/workspace-helpers.ts'
+import {
   getConnectionStatusLabel,
   getStatusDotClass
 } from '@/utils/connection-status.ts'
@@ -457,6 +461,8 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
             const isSelected = workspace.workspace_id === selectedWorkspaceId
             const label = workspace.label || `Space ${workspace.number}`
             const metadata = `${formatCount(workspace.tab_count, 'Tab')} · ${formatCount(workspace.pane_count, 'pane')}`
+            const sourceLine = formatWorkspaceSourceLine(workspace)
+            const ariaLabel = formatWorkspaceAriaLabel(workspace, label, metadata)
             return (
               <li key={workspace.workspace_id} className="space-drawer-list__item">
                 <button
@@ -468,11 +474,12 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
                     handleClose()
                   }}
                   aria-current={isSelected ? 'page' : undefined}
-                  aria-label={`${label}, ${workspace.agent_status || 'unknown'}, ${metadata}`}
+                  aria-label={ariaLabel}
                 >
                   <span className={`space-status-dot ${getWorkspaceStatusDotClass(workspace.agent_status)}`} aria-hidden="true" />
                   <span className="space-drawer-item__content">
                     <span className="space-drawer-item__label">{label}</span>
+                    {sourceLine && <span className="space-drawer-item__source">{sourceLine}</span>}
                     <span className="space-drawer-item__meta">{metadata}</span>
                   </span>
                   {isSelected && <Check size={16} className="space-drawer-item__check" aria-hidden="true" />}

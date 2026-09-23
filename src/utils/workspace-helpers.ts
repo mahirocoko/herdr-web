@@ -1,4 +1,4 @@
-import type { IPane, ISnapshotResult, ITab } from '@/types/herdr.ts'
+import type { IPane, ISnapshotResult, ITab, IWorkspace } from '@/types/herdr.ts'
 
 export interface ITabWithPanes {
   tab: ITab | null
@@ -236,4 +236,82 @@ export const isAgentPane = (
   }
 
   return false
+}
+
+/**
+ * Formats a compact source line from allowlisted workspace tokens:
+ * - Branch: mahiro_workspace_branch
+ * - Dirty marker: mahiro_workspace_git_status === 'dirty' -> ' *'
+ * - Linked worktree label: mahiro_workspace_worktree
+ *
+ * When metadata is absent, returns null so caller preserves counts-only anatomy.
+ */
+export const formatWorkspaceSourceLine = (
+  workspace?: Partial<IWorkspace> | null
+): string | null => {
+  if (!workspace) return null
+
+  const tokens = workspace.tokens
+  const branch = tokens?.mahiro_workspace_branch?.trim()
+  const isDirty = tokens?.mahiro_workspace_git_status === 'dirty'
+  const worktreeLabel = tokens?.mahiro_workspace_worktree?.trim()
+
+  const hasBranch = Boolean(branch && branch.length > 0)
+  const hasWorktree = Boolean(worktreeLabel && worktreeLabel.length > 0)
+
+  if (!hasBranch && !isDirty && !hasWorktree) {
+    return null
+  }
+
+  let branchPart = ''
+  if (hasBranch) {
+    branchPart = isDirty ? `${branch} *` : branch!
+  } else if (isDirty) {
+    branchPart = 'dirty *'
+  }
+
+  if (branchPart && hasWorktree) {
+    return `${branchPart} · ${worktreeLabel}`
+  }
+
+  if (branchPart) {
+    return branchPart
+  }
+
+  return worktreeLabel!
+}
+
+/**
+ * Formats an accessible aria-label for a Space item including projected source facts.
+ * When metadata is absent, returns the truthful counts-only format:
+ *   `${label}, ${workspace.agent_status || 'unknown'}, ${metadata}`
+ */
+export const formatWorkspaceAriaLabel = (
+  workspace: IWorkspace,
+  label: string,
+  metadata: string
+): string => {
+  const tokens = workspace.tokens
+  const branch = tokens?.mahiro_workspace_branch?.trim()
+  const isDirty = tokens?.mahiro_workspace_git_status === 'dirty'
+  const worktreeLabel = tokens?.mahiro_workspace_worktree?.trim()
+
+  const facts: string[] = []
+  if (branch && branch.length > 0) {
+    facts.push(isDirty ? `${branch} (dirty)` : branch)
+  } else if (isDirty) {
+    facts.push('dirty')
+  }
+
+  if (worktreeLabel && worktreeLabel.length > 0) {
+    facts.push(`worktree ${worktreeLabel}`)
+  }
+
+  const status = workspace.agent_status || 'unknown'
+
+  if (facts.length === 0) {
+    return `${label}, ${status}, ${metadata}`
+  }
+
+  return `${label}, ${status}, ${facts.join(', ')}, ${metadata}`
 }

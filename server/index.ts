@@ -27,7 +27,7 @@ import {
   validatePaneInSnapshot
 } from './herdr-adapter.ts'
 import { HerdrSocketError } from './herdr-socket.ts'
-import { getSharedSnapshotBridge } from './snapshot-bridge.ts'
+import { getSharedSnapshotBridge, SnapshotBridge } from './snapshot-bridge.ts'
 import { getSharedPushService } from './push/service.ts'
 import { loadPushConfig } from './push/config.ts'
 import {
@@ -46,6 +46,7 @@ import {
   type OperationCoordinator
 } from './operation-coordinator.ts'
 import { resolveNearestRepoCatalog } from './catalog.ts'
+import { projectBrowserSnapshot } from './snapshot-projection.ts'
 
 import {
   MAX_LEASE_DURATION_MS,
@@ -98,6 +99,7 @@ export interface ICreateServerOptions {
   deps?: {
     coordinator?: OperationCoordinator
     leaseManager?: TerminalControlLeaseManager
+    snapshotBridge?: SnapshotBridge
     fetchSnapshot?: (timeoutMs?: number) => Promise<ISnapshotResult>
     verifyTarget?: typeof verifyTargetAgainstSnapshot
     executePrompt?: (paneId: string, text: string) => Promise<any>
@@ -107,6 +109,7 @@ export interface ICreateServerOptions {
     executeWorkspaceCreate?: typeof executeWorkspaceCreate
     executeWorkspaceClose?: typeof executeWorkspaceClose
     executeTabClose?: typeof executeTabClose
+    projectBrowserSnapshot?: typeof projectBrowserSnapshot
   }
 }
 
@@ -231,7 +234,7 @@ export const createServer = (
   if (options.startPushBridge !== false && getTransportMode() !== 'cli') {
     const pushService = getSharedPushService()
     if (pushService.isEnabled()) {
-      const bridge = getSharedSnapshotBridge()
+      const bridge = options.deps?.snapshotBridge ?? getSharedSnapshotBridge()
       pushService.attachToBridge(bridge)
       bridge.start()
     }
@@ -258,8 +261,10 @@ export const createServer = (
       // GET /api/snapshot
       if (req.method === 'GET' && pathname === '/api/snapshot') {
         try {
-          const snapshot = await getHerdrSnapshot(5000)
-          return new Response(JSON.stringify({ ok: true, snapshot }), {
+          const fetchSnapshot = options.deps?.fetchSnapshot ?? getHerdrSnapshot
+          const snapshot = await fetchSnapshot(5000)
+          const projectFn = options.deps?.projectBrowserSnapshot ?? projectBrowserSnapshot
+          return new Response(JSON.stringify({ ok: true, snapshot: projectFn(snapshot) }), {
             status: 200,
             headers: { 'content-type': 'application/json' }
           })
@@ -1406,7 +1411,7 @@ export const createServer = (
     websocket: {
       open(ws) {
         if (ws.data.kind === 'events') {
-          const bridge = getSharedSnapshotBridge()
+          const bridge = options.deps?.snapshotBridge ?? getSharedSnapshotBridge()
           bridge.start()
           ws.data.closed = false
 
@@ -1414,14 +1419,15 @@ export const createServer = (
           ws.send(JSON.stringify({ type: 'status', status: bridge.getStatus() }))
 
           // Send current snapshot if available
+          const projectFn = options.deps?.projectBrowserSnapshot ?? projectBrowserSnapshot
           const currentSnap = bridge.getLatestSnapshot()
           if (currentSnap) {
-            ws.send(JSON.stringify({ type: 'snapshot', data: currentSnap }))
+            ws.send(JSON.stringify({ type: 'snapshot', data: projectFn(currentSnap) }))
           }
 
           const unsubSnapshot = bridge.onSnapshot((snapshot) => {
             if (!ws.data.closed && ws.readyState === 1) {
-              ws.send(JSON.stringify({ type: 'snapshot', data: snapshot }))
+              ws.send(JSON.stringify({ type: 'snapshot', data: projectFn(snapshot) }))
             }
           })
 

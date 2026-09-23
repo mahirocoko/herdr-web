@@ -127,7 +127,8 @@ The snapshot bridge maintains an efficient, shared event-driven invalidation loo
 - **WebSocket `/api/events`**:
   - Strict-origin check enforces same-origin or authorized Tailnet host.
   - Discriminated union in `server/index.ts` ensures terminal close cleanup never attempts process kills on event connections.
-  - Broadcasts `{ type: 'status', status }` and `{ type: 'snapshot', data }`.
+  - Broadcasts `{ type: 'status', status }` and `{ type: 'snapshot', data }`, where snapshot data is strictly projected through `projectBrowserSnapshot`.
+  - Server-side browser snapshot projection at HTTP `/api/snapshot` and WebSocket `/api/events` boundaries ensures minimal payloads, fresh allowlisted objects, and zero leakage of unknown fields, `layouts`, `state_labels`, raw token maps, Letta identity tokens, or worktree paths/path-like labels.
 - **`useSnapshot` Lifecycle**:
   - Initial HTTP `fetchSnapshot()` provides immediate bootstrap on mount.
   - WebSocket `/api/events` connects and becomes the primary real-time snapshot source.

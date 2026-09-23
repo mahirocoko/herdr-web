@@ -935,6 +935,7 @@ html, body {
 }
 
 .space-drawer-item__label,
+.space-drawer-item__source,
 .space-drawer-item__meta {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -946,6 +947,12 @@ html, body {
   font-family: var(--font-mono);
   font-size: 15px;
   font-weight: 500;
+}
+
+.space-drawer-item__source {
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
 }
 
 .space-drawer-item__meta {
