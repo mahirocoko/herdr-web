@@ -587,8 +587,8 @@
 }
 
 /* --------------------------------------------------------------------------
-   8. Sheet / Dialog Recipes (.ui-sheet, .ui-dialog)
-   Genuine Base UI Dialog: Portal, Backdrop, Popup, Title, Description, Close
+   8. Sheet / Drawer Recipes (.ui-sheet)
+   Base UI Drawer: Portal, Backdrop, Viewport, Popup, Content, Title, Description, Close
    -------------------------------------------------------------------------- */
 .ui-sheet__backdrop {
   position: fixed;
@@ -596,23 +596,51 @@
   background-color: var(--color-bg-overlay);
   backdrop-filter: blur(2px);
   z-index: var(--ui-layer-backdrop);
+  opacity: calc(1 - var(--drawer-swipe-progress, 0));
   transition: opacity 200ms ease;
 }
 
+.ui-sheet__backdrop[data-swiping] {
+  transition-duration: 0ms;
+}
+
+.ui-sheet__backdrop[data-starting-style],
+.ui-sheet__backdrop[data-ending-style] {
+  opacity: 0;
+}
+
 .ui-sheet__backdrop[data-open] {
-  opacity: 1;
+  opacity: calc(1 - var(--drawer-swipe-progress, 0));
 }
 
 .ui-sheet__backdrop[data-closed] {
   opacity: 0;
 }
 
+/* Drawer Viewport (.ui-sheet__viewport) */
+.ui-sheet__viewport {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ui-layer-sheet);
+  display: flex;
+  outline: none;
+}
+
+.ui-sheet__viewport--bottom {
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+}
+
+.ui-sheet__viewport--left {
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: stretch;
+}
+
 /* Bottom Sheet (.ui-sheet--bottom) */
 .ui-sheet--bottom {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  width: 100%;
   max-height: 85vh;
   display: flex;
   flex-direction: column;
@@ -624,15 +652,25 @@
   outline: none;
   overflow: hidden;
   box-sizing: border-box;
-  animation: ui-sheet-slide-up 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translateY(var(--drawer-swipe-movement-y, 0px));
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  touch-action: auto;
+  will-change: transform;
+}
+
+.ui-sheet--bottom[data-swiping] {
+  transition-duration: 0ms;
+  animation: none !important;
+}
+
+.ui-sheet--bottom[data-starting-style],
+.ui-sheet--bottom[data-ending-style] {
+  transform: translateY(100%);
 }
 
 /* Left Space Sheet (.ui-sheet--left) */
 .ui-sheet--left {
-  position: fixed;
-  top: 0;
-  bottom: 0;
-  left: 0;
+  height: 100%;
   width: 320px;
   max-width: 85vw;
   display: flex;
@@ -644,24 +682,40 @@
   outline: none;
   overflow: hidden;
   box-sizing: border-box;
-  animation: ui-sheet-slide-right 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translateX(var(--drawer-swipe-movement-x, 0px));
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  touch-action: auto;
+  will-change: transform;
 }
 
-@keyframes ui-sheet-slide-up {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
-  }
+.ui-sheet--left[data-swiping] {
+  transition-duration: 0ms;
+  animation: none !important;
 }
 
-@keyframes ui-sheet-slide-right {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(0);
+.ui-sheet--left[data-starting-style],
+.ui-sheet--left[data-ending-style] {
+  transform: translateX(-100%);
+}
+
+/* Drawer Content (.ui-sheet__content) */
+.ui-sheet__content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  max-height: inherit;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-sheet__backdrop,
+  .ui-sheet--bottom,
+  .ui-sheet--left {
+    transition: none !important;
+    animation: none !important;
   }
 }
 
@@ -1039,4 +1093,101 @@
   background: var(--color-bg-surface);
   color: var(--color-text-tertiary);
   border: 1px solid var(--color-border-subtle);
+}
+
+/* --------------------------------------------------------------------------
+   12. Menu Recipes (.ui-menu)
+   -------------------------------------------------------------------------- */
+.ui-menu__positioner {
+  z-index: 1000;
+  outline: none;
+}
+
+.ui-menu__popup {
+  min-width: 220px;
+  background-color: var(--color-bg-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md, 8px);
+  padding: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm, 13px);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.ui-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm, 6px);
+  color: var(--color-text-primary);
+  font-size: var(--fs-sm, 13px);
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+  box-sizing: border-box;
+  text-decoration: none;
+  background: transparent;
+  border: none;
+  text-align: left;
+}
+
+.ui-menu__item[data-highlighted],
+.ui-menu__item:hover:not([data-disabled]) {
+  background-color: var(--color-bg-hover);
+  color: var(--color-text-strong);
+}
+
+.ui-menu__item[data-disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ui-menu__item--danger {
+  color: var(--color-status-blocked);
+}
+
+.ui-menu__item--danger[data-highlighted],
+.ui-menu__item--danger:hover:not([data-disabled]) {
+  background-color: rgba(255, 123, 112, 0.12);
+  color: var(--color-status-blocked);
+}
+
+.ui-menu__item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+
+.ui-menu__item-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.ui-menu__item-title {
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.ui-menu__item-subtext {
+  font-size: var(--fs-2xs, 11px);
+  color: var(--color-text-tertiary);
+  line-height: 1.2;
+}
+
+.ui-menu__separator {
+  height: 1px;
+  background-color: var(--color-border-subtle);
+  margin: 4px 0;
 }

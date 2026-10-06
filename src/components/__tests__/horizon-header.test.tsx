@@ -11,7 +11,7 @@ describe('HorizonHeader context ownership and responsive markup', () => {
     onOpenTabs: () => {},
   }
 
-  it('retains selected pane, workspace, Tab and folder context in the desktop branch', () => {
+  it('shows the current Space title and retains desktop Tab and folder context', () => {
     const html = renderToStaticMarkup(
       <HorizonHeader
         {...common}
@@ -47,10 +47,10 @@ describe('HorizonHeader context ownership and responsive markup', () => {
         onRefresh={() => {}}
       />,
     )
-    expect(html).toContain('context-title-text header-mobile-only')
-    expect(html).toContain('Mahiro Code')
-    expect(html).toContain('context-title-text header-desktop-only')
-    expect(html).toContain('Agent One')
+    expect(html).toContain('class="context-title-text">Project</span>')
+    expect(html).not.toContain('Mahiro Code')
+    expect(html).not.toContain('surface-tab-stream')
+    expect(html).toContain('surface-tab-history')
     expect(html).toContain('context-sub header-desktop-only')
     expect(html).toContain('Project')
     expect(html).toContain('Open Tabs and Panes')
@@ -82,7 +82,7 @@ describe('HorizonHeader context ownership and responsive markup', () => {
         }}
       />,
     )
-    expect(shell).toContain('Shell')
+    expect(shell).toContain('class="context-title-text">Select Workspace</span>')
     expect(shell).toContain('>terminal</span>')
   })
 })

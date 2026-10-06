@@ -392,11 +392,11 @@ export const SidebarRoster: FC<ISidebarRosterProps> = ({
           variant="ghost"
           className="space-drawer-settings"
           onClick={onOpenSettings}
-          aria-label="Open push notification settings"
+          aria-label="Open settings"
         >
-          <span>Push Notifications</span>
+          <span>Settings</span>
           <span className="space-drawer-settings__status">
-            <span>{pushState === 'active' ? 'Active' : 'Off'}</span>
+            <span>{pushState === 'active' ? 'Push active' : 'Push off'}</span>
             <ChevronRight size={16} aria-hidden="true" />
           </span>
         </Button>

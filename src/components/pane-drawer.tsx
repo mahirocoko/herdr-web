@@ -72,7 +72,8 @@ export interface IPaneDrawerProps {
   onClose: () => void
   onRefreshSnapshot?: () => Promise<boolean>
   lifecycle: ILifecycleOperations
-  initialView?: 'list' | 'new-tab'
+  initialView?: 'list' | 'new-tab' | 'close-tab' | 'status'
+  initialTargetTabId?: string | null
 }
 
 interface IExplainCacheEntry {
@@ -122,6 +123,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
   onRefreshSnapshot,
   lifecycle,
   initialView = 'list',
+  initialTargetTabId,
 }) => {
   const [expandedPaneId, setExpandedPaneId] = useState<string | null>(null)
   const [explainCache, setExplainCache] = useState<
@@ -133,6 +135,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
   const closeButtonRef = useRef<HTMLButtonElement | null>(null)
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const initiatingControlRef = useRef<HTMLElement | null>(null)
+  const initializedIntentRef = useRef<string | null>(null)
 
   const [lifecycleView, setLifecycleView] = useState<
     'list' | 'close-tab' | 'status'
@@ -152,11 +155,52 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
   const [tabLabel, setTabLabel] = useState<string>('')
 
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen) {
+      initializedIntentRef.current = null
+      return
+    }
+    if (lifecycle.ticket && lifecycle.ticket.phase !== 'rejected') {
+      setLifecycleView('status')
+      return
+    }
+
+    // Capture an opening intent once: polling must not re-freeze confirmation
+    // membership or reopen a subview after the user cancels/backtracks.
+    const intentKey = `${initialView}:${initialTargetTabId ?? ''}`
+    if (initializedIntentRef.current === intentKey) return
+    initializedIntentRef.current = intentKey
+
     if (initialView === 'new-tab') {
       dispatchNewTab({ type: 'OPEN_NEW_TAB' })
+      setLifecycleView('list')
+    } else if (initialView === 'close-tab') {
+      const targetTab = initialTargetTabId
+        ? tabs.find(
+            (t) =>
+              t.tab_id === initialTargetTabId &&
+              (!selectedWorkspaceId || t.workspace_id === selectedWorkspaceId),
+          )
+        : null
+      if (targetTab) {
+        setTabConfirmation(freezeTabCloseConfirmation(targetTab, panes))
+        setLifecycleView('close-tab')
+      } else {
+        setLifecycleView('list')
+      }
+    } else if (initialView === 'status') {
+      setLifecycleView('status')
+    } else {
+      setLifecycleView('list')
     }
-  }, [initialView, isOpen])
+  }, [
+    initialTargetTabId,
+    initialView,
+    isOpen,
+    lifecycle.ticket?.phase,
+    panes,
+    selectedWorkspaceId,
+    tabs,
+  ])
 
   const cwdChoices = deriveTabCreateSourcePanes(
     panes,
@@ -235,6 +279,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
     setExplainCache({})
     dispatchNewTab({ type: 'CLOSE_DRAWER' })
     setLifecycleView('list')
+    setTabConfirmation(null)
     setConfirmationError(null)
     onClose()
   }
@@ -250,6 +295,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
 
   const returnToList = () => {
     setLifecycleView('list')
+    setTabConfirmation(null)
     setConfirmationError(null)
     requestAnimationFrame(() => initiatingControlRef.current?.focus())
   }
@@ -541,8 +587,6 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
           lifecycleView === 'close-tab' ? cancelButtonRef : closeButtonRef
         }
       >
-        <div className="drawer-sheet__handle" />
-
         {lifecycleView === 'status' && lifecycle.ticket && (
           <>
             <SheetHeader className="drawer-sheet__header drawer-sheet__header--nav">

@@ -1,13 +1,21 @@
+import { createContext, useContext } from 'react'
 import type { ComponentPropsWithRef, FC, ReactNode } from 'react'
-import { Dialog } from '@base-ui/react/dialog'
+import { Drawer } from '@base-ui/react/drawer'
 
 export type SheetSide = 'bottom' | 'left'
+
+interface ISheetContext {
+  side: SheetSide
+}
+
+const SheetContext = createContext<ISheetContext>({ side: 'bottom' })
 
 export interface ISheetProps {
   open?: boolean
   defaultOpen?: boolean
   onOpenChange?: (open: boolean) => void
   modal?: boolean | 'trap-focus'
+  side?: SheetSide
   children?: ReactNode
 }
 
@@ -16,17 +24,22 @@ export const Sheet: FC<ISheetProps> = ({
   defaultOpen,
   onOpenChange,
   modal = true,
+  side = 'bottom',
   children,
 }) => {
+  const swipeDirection = side === 'left' ? 'left' : 'down'
   return (
-    <Dialog.Root
+    <Drawer.Root
       open={open}
       defaultOpen={defaultOpen}
       onOpenChange={(isOpen) => onOpenChange?.(isOpen)}
       modal={modal}
+      swipeDirection={swipeDirection}
     >
-      {children}
-    </Dialog.Root>
+      <SheetContext.Provider value={{ side }}>
+        {children}
+      </SheetContext.Provider>
+    </Drawer.Root>
   )
 }
 
@@ -40,9 +53,9 @@ export const SheetTrigger: FC<ISheetTriggerProps> = ({
   ...props
 }) => {
   return (
-    <Dialog.Trigger className={className} {...props}>
+    <Drawer.Trigger className={className} {...props}>
       {children}
-    </Dialog.Trigger>
+    </Drawer.Trigger>
   )
 }
 
@@ -50,13 +63,13 @@ export interface ISheetContentProps extends ComponentPropsWithRef<'div'> {
   side?: SheetSide
   children?: ReactNode
   'aria-label'?: string
-  initialFocus?: Dialog.Popup.Props['initialFocus']
-  finalFocus?: Dialog.Popup.Props['finalFocus']
-  container?: Dialog.Portal.Props['container']
+  initialFocus?: Drawer.Popup.Props['initialFocus']
+  finalFocus?: Drawer.Popup.Props['finalFocus']
+  container?: Drawer.Portal.Props['container']
 }
 
 export const SheetContent: FC<ISheetContentProps> = ({
-  side = 'bottom',
+  side: propSide,
   className = '',
   children,
   'aria-label': ariaLabel,
@@ -65,26 +78,39 @@ export const SheetContent: FC<ISheetContentProps> = ({
   container,
   ...props
 }) => {
+  const context = useContext(SheetContext)
+  const side = propSide ?? context.side ?? 'bottom'
   const sideClass = side === 'left' ? 'ui-sheet--left' : 'ui-sheet--bottom'
   const combinedClassName = `${sideClass} ${className}`.trim()
   const backdropClass =
     side === 'left'
       ? 'ui-sheet__backdrop side-drawer-overlay'
       : 'ui-sheet__backdrop drawer-overlay'
+  const viewportClass =
+    side === 'left'
+      ? 'ui-sheet__viewport ui-sheet__viewport--left'
+      : 'ui-sheet__viewport ui-sheet__viewport--bottom'
 
   return (
-    <Dialog.Portal container={container}>
-      <Dialog.Backdrop className={backdropClass} />
-      <Dialog.Popup
-        className={combinedClassName}
-        aria-label={ariaLabel}
-        initialFocus={initialFocus}
-        finalFocus={finalFocus}
-        {...props}
-      >
-        {children}
-      </Dialog.Popup>
-    </Dialog.Portal>
+    <Drawer.Portal container={container}>
+      <Drawer.Backdrop className={backdropClass} />
+      <Drawer.Viewport className={viewportClass}>
+        <Drawer.Popup
+          className={combinedClassName}
+          aria-label={ariaLabel}
+          initialFocus={initialFocus}
+          finalFocus={finalFocus}
+          {...props}
+        >
+          {side === 'bottom' && (
+            <div className="drawer-sheet__handle" aria-hidden="true" />
+          )}
+          <Drawer.Content className="ui-sheet__content">
+            {children}
+          </Drawer.Content>
+        </Drawer.Popup>
+      </Drawer.Viewport>
+    </Drawer.Portal>
   )
 }
 
@@ -114,9 +140,9 @@ export const SheetTitle: FC<ISheetTitleProps> = ({
   ...props
 }) => {
   return (
-    <Dialog.Title className={`ui-sheet__title ${className}`.trim()} {...props}>
+    <Drawer.Title className={`ui-sheet__title ${className}`.trim()} {...props}>
       {children}
-    </Dialog.Title>
+    </Drawer.Title>
   )
 }
 
@@ -130,12 +156,12 @@ export const SheetDescription: FC<ISheetDescriptionProps> = ({
   ...props
 }) => {
   return (
-    <Dialog.Description
+    <Drawer.Description
       className={`ui-sheet__description ${className}`.trim()}
       {...props}
     >
       {children}
-    </Dialog.Description>
+    </Drawer.Description>
   )
 }
 
@@ -149,9 +175,9 @@ export const SheetClose: FC<ISheetCloseProps> = ({
   ...props
 }) => {
   return (
-    <Dialog.Close className={className} {...props}>
+    <Drawer.Close className={className} {...props}>
       {children}
-    </Dialog.Close>
+    </Drawer.Close>
   )
 }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FC } from 'react'
 import { useNavigate, useOutletContext } from 'react-router'
 import { usePaneRead } from '@/hooks/use-pane-read.ts'
@@ -71,8 +71,11 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [isSpaceDrawerModalOpen, setIsSpaceDrawerModalOpen] = useState(false)
   const [tabDrawerInitialView, setTabDrawerInitialView] = useState<
-    'list' | 'new-tab'
+    'list' | 'new-tab' | 'close-tab' | 'status'
   >('list')
+  const [tabDrawerTargetTabId, setTabDrawerTargetTabId] = useState<
+    string | null
+  >(null)
   const [spaceDrawerInitialView, setSpaceDrawerInitialView] = useState<
     'list' | 'new-space' | 'close-space'
   >('list')
@@ -315,7 +318,20 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
 
   const activeWorkspace =
     workspaces.find((w) => w.workspace_id === workspaceId) || null
-  const activeTab = tabs.find((t) => t.tab_id === selectedPane?.tab_id) || null
+  const activeTab = useMemo(() => {
+    if (!selectedPane?.tab_id) return null
+    return (
+      tabs.find(
+        (t) =>
+          t.tab_id === selectedPane.tab_id &&
+          (!workspaceId || t.workspace_id === workspaceId),
+      ) || null
+    )
+  }, [selectedPane?.tab_id, tabs, workspaceId])
+  const activeSpaceTabs = useMemo(() => {
+    return tabs.filter((t) => t.workspace_id === workspaceId)
+  }, [tabs, workspaceId])
+  const isLastTabInSpace = activeSpaceTabs.length <= 1
   const blockedPanes = panes.filter((p) => p.agent_status === 'blocked')
   const isSelectedPaneBlocked = selectedPane?.agent_status === 'blocked'
 
@@ -533,12 +549,14 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
     }
     setIsSpaceDrawerOpen(false)
     setTabDrawerInitialView('list')
+    setTabDrawerTargetTabId(null)
     setIsTabDrawerOpen(true)
   }, [])
 
   const handleCloseTabDrawer = useCallback(() => {
     setIsTabDrawerOpen(false)
     setTabDrawerInitialView('list')
+    setTabDrawerTargetTabId(null)
     requestAnimationFrame(() => drawerTriggerRef.current?.focus())
   }, [drawerTriggerRef])
 
@@ -548,6 +566,27 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
     }
     setIsSpaceDrawerOpen(false)
     setTabDrawerInitialView('new-tab')
+    setTabDrawerTargetTabId(null)
+    setIsTabDrawerOpen(true)
+  }, [])
+
+  const handleOpenCloseTab = useCallback((targetTabId: string) => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
+    }
+    setIsSpaceDrawerOpen(false)
+    setTabDrawerInitialView('close-tab')
+    setTabDrawerTargetTabId(targetTabId)
+    setIsTabDrawerOpen(true)
+  }, [])
+
+  const handleOpenLifecycleStatus = useCallback(() => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
+    }
+    setIsSpaceDrawerOpen(false)
+    setTabDrawerInitialView('status')
+    setTabDrawerTargetTabId(null)
     setIsTabDrawerOpen(true)
   }, [])
 
@@ -674,7 +713,15 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
         onOpenSearch={() => setIsSearchOpen(true)}
-        onOpenSettings={handleOpenSettings}
+        onNewShellTab={handleOpenNewTab}
+        onCloseCurrentTab={() => {
+          if (activeTab) {
+            handleOpenCloseTab(activeTab.tab_id)
+          }
+        }}
+        onReviewOperation={handleOpenLifecycleStatus}
+        isLastTab={isLastTabInSpace}
+        lifecycleTicket={lifecycle.ticket}
         viewMode={viewMode}
         onSelectMode={setViewMode}
         isBlocked={isSelectedPaneBlocked}
@@ -860,8 +907,12 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
         </div>
       </div>
 
-      {/* Mobile Navigation Drawer Sheet (Canonical Base UI Dialog Sheet) */}
-      <Sheet open={isSpaceDrawerOpen} onOpenChange={setIsSpaceDrawerOpen}>
+      {/* Mobile Navigation Drawer Sheet (Base UI Drawer Sheet) */}
+      <Sheet
+        side="left"
+        open={isSpaceDrawerOpen}
+        onOpenChange={setIsSpaceDrawerOpen}
+      >
         <SheetContent
           id="workspace-drawer"
           side="left"
@@ -873,7 +924,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
         </SheetContent>
       </Sheet>
 
-      {/* Modal Dialog Sheet for Space Lifecycle Actions (New Space, Close Space, Status) */}
+      {/* Modal Drawer Sheet for Space Lifecycle Actions (New Space, Close Space, Status) */}
       <SpaceDrawer
         isOpen={isSpaceDrawerModalOpen}
         status={status}
@@ -913,6 +964,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
         onRefreshSnapshot={refreshSnapshot}
         lifecycle={lifecycle}
         initialView={tabDrawerInitialView}
+        initialTargetTabId={tabDrawerTargetTabId}
       />
 
       {/* Navigation Search Sheet (Search Spaces, Tabs, Panes across snapshot) */}
