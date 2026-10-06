@@ -105,7 +105,7 @@ describe('style-guards: portaled modal layer ownership', () => {
       expect(block?.[1]).not.toMatch(/z-index\s*:|background(?:-color)?\s*:/)
     }
     expect(recipes).toContain('z-index: var(--ui-layer-backdrop)')
-    expect(recipes.match(/z-index: var\(--ui-layer-sheet\)/g)).toHaveLength(2)
+    expect(recipes.match(/z-index: var\(--ui-layer-sheet\)/g)).toHaveLength(3)
     expect(recipes).toContain('z-index: var(--ui-layer-popover)')
   })
 })

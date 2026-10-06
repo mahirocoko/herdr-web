@@ -160,7 +160,6 @@ const AttentionHorizon: FC<IAttentionHorizonProps> = ({
           className="drawer-sheet attention-queue-sheet"
           aria-label="Attention Queue"
         >
-          <div className="drawer-sheet__handle" />
 
           <SheetHeader className="drawer-sheet__header">
             <SheetTitle className="drawer-sheet__title">

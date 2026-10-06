@@ -282,6 +282,7 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
 
   return (
     <Sheet
+      side="left"
       open={isOpen}
       onOpenChange={(open) => {
         if (!open) {

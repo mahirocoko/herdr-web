@@ -2,7 +2,6 @@ import type { FC, RefObject } from 'react'
 import {
   ChevronDown,
   Columns,
-  Ellipsis,
   HelpCircle,
   History,
   Layers,
@@ -14,9 +13,16 @@ import {
   Terminal,
   X,
 } from 'lucide-react'
-import type { IPane, ISnapshotStatus, ITab, IWorkspace } from '@/types/herdr.ts'
+import type {
+  IPane,
+  ISnapshotStatus,
+  ITab,
+  IWorkspace,
+} from '@/types/herdr.ts'
+import type { ILifecycleTicket } from '@/utils/lifecycle-operations.ts'
 import { formatTabLabel, isAgentPane } from '@/utils/workspace-helpers.ts'
 import Button from '@/components/ui/button.tsx'
+import TabActionsMenu from '@/components/tab-actions-menu.tsx'
 import {
   getConnectionStatusLabel,
   getStatusDotClass,
@@ -41,12 +47,16 @@ export interface IHorizonHeaderProps {
   onToggleSidebar?: () => void
   onOpenSearch?: () => void
   onOpenPalette?: () => void
-  onOpenSettings?: () => void
   viewMode?: ISurfaceMode
   onSelectMode?: (mode: ISurfaceMode) => void
   isBlocked?: boolean
   isLoading?: boolean
   onRefresh?: () => void
+  onNewShellTab?: () => void
+  onCloseCurrentTab?: () => void
+  onReviewOperation?: () => void
+  isLastTab?: boolean
+  lifecycleTicket?: ILifecycleTicket | null
 }
 
 const MODE_LABELS: Record<ISurfaceMode, string> = {
@@ -61,16 +71,6 @@ const MODE_ICONS: Record<ISurfaceMode, typeof Terminal> = {
   panel: Columns,
   history: History,
   stream: Terminal,
-}
-
-const displayPaneTitle = (pane?: IPane | null): string => {
-  if (!pane) return ''
-  return (
-    pane.title ||
-    pane.terminal_title_stripped ||
-    pane.terminal_title ||
-    pane.pane_id
-  )
 }
 
 const cwdBasename = (cwd?: string | null): string => {
@@ -94,14 +94,20 @@ const HorizonHeader: FC<IHorizonHeaderProps> = ({
   onToggleSidebar,
   onOpenSearch,
   onOpenPalette,
-  onOpenSettings,
   viewMode,
   onSelectMode,
   isBlocked = false,
   isLoading = false,
   onRefresh,
+  onNewShellTab,
+  onCloseCurrentTab,
+  onReviewOperation,
+  isLastTab = false,
+  lifecycleTicket,
 }) => {
-  const availableModes = getAvailableSurfaceModes(isBlocked)
+  const availableModes = getAvailableSurfaceModes(isBlocked).filter(
+    (mode) => mode !== 'stream',
+  )
 
   return (
     <header className="app-header horizon-header is-zoned">
@@ -175,12 +181,11 @@ const HorizonHeader: FC<IHorizonHeaderProps> = ({
               <Terminal size={18} />
             )}
           </span>
-          <span className="context-title-text header-mobile-only">
-            Mahiro Code
-          </span>
-          <span className="context-title-text header-desktop-only">
-            {displayPaneTitle(selectedPane) ||
-              (activeWorkspace ? activeWorkspace.label : 'Select Workspace')}
+          <span className="context-title-text">
+            {activeWorkspace?.label ||
+              (activeWorkspace
+                ? `Space ${activeWorkspace.number}`
+                : 'Select Workspace')}
           </span>
         </div>
 
@@ -298,17 +303,14 @@ const HorizonHeader: FC<IHorizonHeaderProps> = ({
         )}
 
         <div className="header-more">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="icon-button header-more-button"
-            onClick={onOpenSettings || onOpenTabs}
-            aria-label="More actions"
-            title="More actions"
-          >
-            <Ellipsis size={18} aria-hidden="true" />
-          </Button>
+          <TabActionsMenu
+            activeTab={activeTab}
+            isLastTab={isLastTab}
+            lifecycleTicket={lifecycleTicket}
+            onNewShellTab={onNewShellTab}
+            onCloseCurrentTab={onCloseCurrentTab}
+            onReviewOperation={onReviewOperation}
+          />
         </div>
       </div>
     </header>

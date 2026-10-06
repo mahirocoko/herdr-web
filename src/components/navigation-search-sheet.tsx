@@ -485,7 +485,6 @@ export const NavigationSearchSheet: FC<INavigationSearchSheetProps> = ({
         aria-label="Navigation search"
         finalFocus={triggerRef}
       >
-        <div className="drawer-sheet__handle" />
 
         <SheetHeader className="drawer-sheet__header">
           <SheetTitle className="drawer-sheet__title">

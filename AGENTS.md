@@ -16,7 +16,7 @@
 - The browser never sees the Unix socket path or raw Herdr socket methods.
 - Upstream Herdr checkout remains strictly read-only evidence.
 - Web Push subsystem (`server/push/`) evaluates authoritative snapshot diffs to send fixed `Needs input` / `Done` copy plus a bounded Space label via standard VAPID `web-push` (first canonical tab in each Space is enabled by default, with explicit live Tab overrides supported via `push-tab-policy.json` and `/api/push/tab-policy`). Push routes enforce strict origin validation and require `Tailscale-User-Login` matching configured `ownerLogin` (with loopback development exception). Push is disabled truthfully in CLI transport mode.
-- Dedicated `/settings` SPA route provides push management and subscription diagnostics without cluttering the main terminal command header (navigated via App Menu).
+- Dedicated `/settings` SPA route provides push management and subscription diagnostics without cluttering the main terminal command header (navigated via Sidebar settings footer).
 
 ## Read First
 

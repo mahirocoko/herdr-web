@@ -420,7 +420,6 @@ const InteractionPickerSheet: FC<IInteractionPickerSheetProps> = ({
         className="drawer-sheet interaction-picker-sheet"
         aria-label="Quick Commands and Custom Actions"
       >
-        <div className="drawer-sheet__handle" />
 
         <SheetHeader className="drawer-sheet__header">
           <div className="drawer-sheet__title-group">
