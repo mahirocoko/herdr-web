@@ -4,18 +4,22 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal as TerminalIcon, Square } from 'lucide-react'
 import '@xterm/xterm/css/xterm.css'
+import Button from '@/components/ui/button.tsx'
 import { useTerminalStream } from '@/hooks/use-terminal-stream.ts'
-import { formatRemainingTime, useTerminalControl } from '@/hooks/use-terminal-control.ts'
+import {
+  formatRemainingTime,
+  useTerminalControl,
+} from '@/hooks/use-terminal-control.ts'
 import {
   clampTerminalDimensions,
   debounce,
   haveDimensionsChanged,
-  type ITerminalDimensions
+  type ITerminalDimensions,
 } from '@/utils/terminal-geometry.ts'
 import {
   resolveControlledPaneIdentity,
   resolveTerminalControlConnectionPane,
-  type ITerminalControlOwnership
+  type ITerminalControlOwnership,
 } from '@/utils/terminal-control-ownership.ts'
 
 export type TerminalMode = 'observer' | 'control'
@@ -26,7 +30,10 @@ export interface ITerminalCanvasProps {
   cols?: number
   rows?: number
   onControlActiveChange?: (isActive: boolean) => void
-  onControlOwnershipChange?: (ownership: ITerminalControlOwnership, paneId?: string) => void
+  onControlOwnershipChange?: (
+    ownership: ITerminalControlOwnership,
+    paneId?: string,
+  ) => void
 }
 
 const TerminalCanvas: FC<ITerminalCanvasProps> = ({
@@ -35,7 +42,7 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
   cols = 80,
   rows = 24,
   onControlActiveChange,
-  onControlOwnershipChange
+  onControlOwnershipChange,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const terminalRef = useRef<Terminal | null>(null)
@@ -53,12 +60,12 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
       const targetPane = resolveControlledPaneIdentity(
         controlledPaneIdRef.current,
         paneId,
-        overridePaneId
+        overridePaneId,
       )
       onControlOwnershipChangeRef.current?.(ownership, targetPane)
       onControlActiveChangeRef.current?.(ownership !== 'idle')
     },
-    [paneId]
+    [paneId],
   )
 
   const [mode, setMode] = useState<TerminalMode>('observer')
@@ -66,7 +73,7 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
 
   const [dimensions, setDimensions] = useState<ITerminalDimensions>({
     cols,
-    rows
+    rows,
   })
   const dimensionsRef = useRef<ITerminalDimensions>(dimensions)
   dimensionsRef.current = dimensions
@@ -81,43 +88,49 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
   const {
     connectionState: streamConnectionState,
     lastError: streamLastError,
-    reconnect: reconnectStream
+    reconnect: reconnectStream,
   } = useTerminalStream({
     paneId: mode === 'observer' ? paneId : null,
     cols: dimensions.cols,
     rows: dimensions.rows,
-    onData: handleData
+    onData: handleData,
   })
 
   const handleControlReady = useCallback(() => {
     notifyOwnership('active')
   }, [notifyOwnership])
 
-  const handleControlClosed = useCallback((reason?: string) => {
-    setMode('observer')
-    notifyOwnership('releasing')
-    if (reason && reason !== 'Released by user' && reason !== 'detached') {
-      setControlNotice(`Control closed: ${reason}`)
-    }
-  }, [notifyOwnership])
+  const handleControlClosed = useCallback(
+    (reason?: string) => {
+      setMode('observer')
+      notifyOwnership('releasing')
+      if (reason && reason !== 'Released by user' && reason !== 'detached') {
+        setControlNotice(`Control closed: ${reason}`)
+      }
+    },
+    [notifyOwnership],
+  )
 
-  const handleControlError = useCallback((error: string) => {
-    setMode('observer')
-    notifyOwnership('releasing')
-    setControlNotice(`Control error: ${error}`)
-  }, [notifyOwnership])
+  const handleControlError = useCallback(
+    (error: string) => {
+      setMode('observer')
+      notifyOwnership('releasing')
+      setControlNotice(`Control error: ${error}`)
+    },
+    [notifyOwnership],
+  )
 
   // Control mode hook: active only in control mode
   const {
     state: controlState,
     remainingSeconds,
     sendInput,
-    release: releaseControl
+    release: releaseControl,
   } = useTerminalControl({
     paneId: resolveTerminalControlConnectionPane(
       mode,
       isAgentPane,
-      controlledPaneIdRef.current
+      controlledPaneIdRef.current,
     ),
     enabled: mode === 'control' && !isAgentPane,
     cols: dimensions.cols,
@@ -125,7 +138,7 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
     onData: handleData,
     onReady: handleControlReady,
     onClosed: handleControlClosed,
-    onError: handleControlError
+    onError: handleControlError,
   })
 
   // Measure actual cols and rows from xterm FitAddon
@@ -151,7 +164,8 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
       cursorBlink: false,
       disableStdin: true,
       convertEol: true,
-      fontFamily: 'ui-monospace, SFMono-Regular, "Geist Mono", "JetBrains Mono", Menlo, Consolas, monospace',
+      fontFamily:
+        'ui-monospace, SFMono-Regular, "Geist Mono", "JetBrains Mono", Menlo, Consolas, monospace',
       fontSize: 12.5,
       lineHeight: 1.25,
       theme: {
@@ -174,8 +188,8 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
         brightBlue: '#3b82f6',
         brightMagenta: '#a855f7',
         brightCyan: '#06b6d4',
-        brightWhite: '#ffffff'
-      }
+        brightWhite: '#ffffff',
+      },
     })
 
     const fitAddon = new FitAddon()
@@ -285,12 +299,20 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
 
   return (
     <div className="terminal-canvas-wrapper">
-      <div className="terminal-canvas__scope-bar" role="status" aria-live="polite">
+      <div
+        className="terminal-canvas__scope-bar"
+        role="status"
+        aria-live="polite"
+      >
         <div className="terminal-canvas__scope-info">
           {mode === 'observer' ? (
             <>
-              <span className="terminal-canvas__scope-tag">Observer · viewport only</span>
-              <span className="terminal-canvas__scope-desc">May omit source panel/scrollback</span>
+              <span className="terminal-canvas__scope-tag">
+                Observer · viewport only
+              </span>
+              <span className="terminal-canvas__scope-desc">
+                May omit source panel/scrollback
+              </span>
               {controlNotice && (
                 <span className="terminal-canvas__scope-notice" role="alert">
                   {controlNotice}
@@ -322,24 +344,34 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
                 </span>
               )}
               {streamConnectionState === 'reconnecting' && (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="compact"
                   className="terminal-scope-badge terminal-scope-badge--reconnecting"
                   onClick={reconnectStream}
                   aria-label="Reconnecting stream. Tap to retry now"
                 >
                   Reconnecting (tap to retry)
-                </button>
+                </Button>
               )}
               {streamConnectionState === 'error' && (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="compact"
                   className="terminal-scope-badge terminal-scope-badge--error"
                   onClick={reconnectStream}
-                  aria-label={streamLastError ? `Stream error: ${streamLastError}. Tap to retry` : 'Stream disconnected. Tap to retry'}
+                  aria-label={
+                    streamLastError
+                      ? `Stream error: ${streamLastError}. Tap to retry`
+                      : 'Stream disconnected. Tap to retry'
+                  }
                 >
-                  {streamLastError ? `Error: ${streamLastError}` : 'Disconnected (tap to retry)'}
-                </button>
+                  {streamLastError
+                    ? `Error: ${streamLastError}`
+                    : 'Disconnected (tap to retry)'}
+                </Button>
               )}
               {streamConnectionState === 'connected' && (
                 <span className="terminal-scope-badge terminal-scope-badge--live">
@@ -349,15 +381,17 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
 
               {/* Take Control button: rendered only for non-agent panes */}
               {!isAgentPane && paneId && (
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="sm"
                   className="terminal-scope-btn terminal-scope-btn--control"
                   onClick={handleTakeControl}
                   aria-label="Take shell control of active pane"
                 >
                   <TerminalIcon size={14} aria-hidden="true" />
                   <span>Take Control</span>
-                </button>
+                </Button>
               )}
             </>
           )}
@@ -369,15 +403,17 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
                   <span className="terminal-scope-badge terminal-scope-badge--connecting">
                     Connecting...
                   </span>
-                  <button
+                  <Button
                     type="button"
+                    variant="danger"
+                    size="sm"
                     className="terminal-scope-btn terminal-scope-btn--release"
                     onClick={handleReleaseControl}
                     aria-label="Cancel control connection"
                   >
                     <Square size={14} aria-hidden="true" />
                     <span>Cancel</span>
-                  </button>
+                  </Button>
                 </>
               )}
 
@@ -386,15 +422,17 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
                   <span className="terminal-scope-badge terminal-scope-badge--control">
                     ● Active
                   </span>
-                  <button
+                  <Button
                     type="button"
+                    variant="danger"
+                    size="sm"
                     className="terminal-scope-btn terminal-scope-btn--release"
                     onClick={handleReleaseControl}
                     aria-label="Release shell control and return to observer mode"
                   >
                     <Square size={14} aria-hidden="true" />
                     <span>Release</span>
-                  </button>
+                  </Button>
                 </>
               )}
             </>

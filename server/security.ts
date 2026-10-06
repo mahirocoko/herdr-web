@@ -5,19 +5,12 @@ import type {
   IPane,
   ISnapshotResult,
   ITabCreateTargetIdentity,
-  IWorkspaceCreateSource
+  IWorkspaceCreateSource,
 } from './types.ts'
 
-export const ALLOWED_KEYS = new Set([
-  'esc',
-  'tab',
-  'enter',
-  'ctrl+c',
-  'up',
-  'down',
-  'left',
-  'right'
-])
+import { CANONICAL_TERMINAL_KEYS } from '../src/utils/terminal-keys.ts'
+
+export const ALLOWED_KEYS = new Set<string>(CANONICAL_TERMINAL_KEYS)
 
 export const ALLOWED_LOCAL_HOSTS = new Set([
   '127.0.0.1:8787',
@@ -25,7 +18,7 @@ export const ALLOWED_LOCAL_HOSTS = new Set([
   '127.0.0.1:5173',
   'localhost:5173',
   '127.0.0.1',
-  'localhost'
+  'localhost',
 ])
 
 export const PANE_ID_REGEX = /^[a-zA-Z0-9_-]+:[a-zA-Z0-9_-]+$/
@@ -51,18 +44,23 @@ export const isHostAllowed = (hostHeader?: string | null): boolean => {
 export const APPROVED_DEV_APP_PORTS = new Set(['8787', '5173'])
 export const APPROVED_LOOPBACK_HOSTNAMES = new Set(['127.0.0.1', 'localhost'])
 
-export const parseHostAndPort = (hostStr: string): { hostname: string; port: string } => {
+export const parseHostAndPort = (
+  hostStr: string,
+): { hostname: string; port: string } => {
   const colonIndex = hostStr.lastIndexOf(':')
   if (colonIndex !== -1) {
     return {
       hostname: hostStr.slice(0, colonIndex),
-      port: hostStr.slice(colonIndex + 1)
+      port: hostStr.slice(colonIndex + 1),
     }
   }
   return { hostname: hostStr, port: '' }
 }
 
-export const isOriginAllowed = (originHeader?: string | null, hostHeader?: string | null): boolean => {
+export const isOriginAllowed = (
+  originHeader?: string | null,
+  hostHeader?: string | null,
+): boolean => {
   if (!originHeader || !hostHeader) return false
   try {
     const originUrl = new URL(originHeader)
@@ -87,10 +85,12 @@ export const isOriginAllowed = (originHeader?: string | null, hostHeader?: strin
     const hostParsed = parseHostAndPort(cleanHost)
     const originParsed = parseHostAndPort(originHost)
 
-    const isHostApprovedLoopback = APPROVED_LOOPBACK_HOSTNAMES.has(hostParsed.hostname) &&
+    const isHostApprovedLoopback =
+      APPROVED_LOOPBACK_HOSTNAMES.has(hostParsed.hostname) &&
       APPROVED_DEV_APP_PORTS.has(hostParsed.port)
 
-    const isOriginApprovedLoopback = APPROVED_LOOPBACK_HOSTNAMES.has(originParsed.hostname) &&
+    const isOriginApprovedLoopback =
+      APPROVED_LOOPBACK_HOSTNAMES.has(originParsed.hostname) &&
       APPROVED_DEV_APP_PORTS.has(originParsed.port)
 
     if (isHostApprovedLoopback && isOriginApprovedLoopback) {
@@ -103,7 +103,10 @@ export const isOriginAllowed = (originHeader?: string | null, hostHeader?: strin
   }
 }
 
-export const isApprovedLoopback = (hostHeader?: string | null, originHeader?: string | null): boolean => {
+export const isApprovedLoopback = (
+  hostHeader?: string | null,
+  originHeader?: string | null,
+): boolean => {
   if (!hostHeader || !originHeader) return false
   try {
     const originUrl = new URL(originHeader)
@@ -111,7 +114,9 @@ export const isApprovedLoopback = (hostHeader?: string | null, originHeader?: st
     const originParsed = parseHostAndPort(originUrl.host.toLowerCase().trim())
 
     const isHostLoopback = APPROVED_LOOPBACK_HOSTNAMES.has(hostParsed.hostname)
-    const isOriginLoopback = APPROVED_LOOPBACK_HOSTNAMES.has(originParsed.hostname)
+    const isOriginLoopback = APPROVED_LOOPBACK_HOSTNAMES.has(
+      originParsed.hostname,
+    )
 
     if (!isHostLoopback || !isOriginLoopback) {
       return false
@@ -156,50 +161,78 @@ export const validateOwnerAuth = (
   hostHeader?: string | null,
   originHeader?: string | null,
   configuredOwnerLogin?: string,
-  options: IOwnerAuthOptions = {}
+  options: IOwnerAuthOptions = {},
 ): IOwnerAuthResult => {
   const requireOrigin = options.requireOrigin ?? true
 
   // 1. Origin and Host checks
   if (originHeader) {
     if (!isOriginAllowed(originHeader, hostHeader)) {
-      return { allowed: false, status: 403, error: 'Forbidden: origin not authorized' }
+      return {
+        allowed: false,
+        status: 403,
+        error: 'Forbidden: origin not authorized',
+      }
     }
   } else if (requireOrigin) {
-    return { allowed: false, status: 403, error: 'Forbidden: origin not authorized' }
+    return {
+      allowed: false,
+      status: 403,
+      error: 'Forbidden: origin not authorized',
+    }
   }
 
   if (!isHostAllowed(hostHeader)) {
-    return { allowed: false, status: 403, error: 'Forbidden: host not authorized' }
+    return {
+      allowed: false,
+      status: 403,
+      error: 'Forbidden: host not authorized',
+    }
   }
 
   const cleanHost = (hostHeader || '').toLowerCase().trim()
   const hostname = cleanHost.split(':')[0]
   const isTailnetHost = hostname.endsWith('.ts.net')
-  const tailscaleLogin = req.headers.get('tailscale-user-login')?.trim().toLowerCase()
+  const tailscaleLogin = req.headers
+    .get('tailscale-user-login')
+    ?.trim()
+    .toLowerCase()
 
   // 2. Tailnet production requirements
   if (isTailnetHost || tailscaleLogin !== undefined) {
     if (!configuredOwnerLogin || configuredOwnerLogin.trim().length === 0) {
-      return { allowed: false, status: 500, error: 'Server misconfigured: owner login not set' }
+      return {
+        allowed: false,
+        status: 500,
+        error: 'Server misconfigured: owner login not set',
+      }
     }
 
     const expectedLogin = configuredOwnerLogin.trim().toLowerCase()
     if (!tailscaleLogin || tailscaleLogin !== expectedLogin) {
-      return { allowed: false, status: 403, error: 'Forbidden: Tailnet user not authorized' }
+      return {
+        allowed: false,
+        status: 403,
+        error: 'Forbidden: Tailnet user not authorized',
+      }
     }
 
     return { allowed: true, status: 200 }
   }
 
   // 3. Loopback dev exception: allowed strictly when host and origin are approved loopback
-  const effectiveOrigin = originHeader || (hostHeader ? `http://${hostHeader}` : null)
+  const effectiveOrigin =
+    originHeader || (hostHeader ? `http://${hostHeader}` : null)
   if (isApprovedLoopback(hostHeader, effectiveOrigin)) {
     return { allowed: true, status: 200 }
   }
 
   // Non-loopback, non-tailnet or unverified origin
-  return { allowed: false, status: 403, error: 'Forbidden: unauthorized network context' }
+  return {
+    allowed: false,
+    status: 403,
+    error: 'Forbidden: unauthorized network context',
+  }
 }
 
 export const VALID_EXPECTED_MODES = new Set(['agent', 'blocked-agent', 'shell'])
@@ -211,26 +244,45 @@ export const MAX_CLOSE_MANIFEST_IDS = 64
 
 const validateCloseManifestIds = (
   value: unknown,
-  fieldName: string
+  fieldName: string,
 ): IValidationResult<string[]> => {
   if (!Array.isArray(value)) {
-    return { valid: false, error: `Missing or invalid expected "${fieldName}": must be an array` }
+    return {
+      valid: false,
+      error: `Missing or invalid expected "${fieldName}": must be an array`,
+    }
   }
   if (value.length > MAX_CLOSE_MANIFEST_IDS) {
-    return { valid: false, error: `Expected "${fieldName}" exceeds maximum of ${MAX_CLOSE_MANIFEST_IDS} IDs` }
+    return {
+      valid: false,
+      error: `Expected "${fieldName}" exceeds maximum of ${MAX_CLOSE_MANIFEST_IDS} IDs`,
+    }
   }
   const normalized: string[] = []
   const seen = new Set<string>()
   for (const item of value) {
     if (typeof item !== 'string') {
-      return { valid: false, error: `Invalid expected "${fieldName}": every ID must be a string` }
+      return {
+        valid: false,
+        error: `Invalid expected "${fieldName}": every ID must be a string`,
+      }
     }
     const id = item.trim()
-    if (id.length === 0 || id.length > 128 || !CONSERVATIVE_TOKEN_REGEX.test(id)) {
-      return { valid: false, error: `Invalid expected "${fieldName}" ID: must be a safe literal token` }
+    if (
+      id.length === 0 ||
+      id.length > 128 ||
+      !CONSERVATIVE_TOKEN_REGEX.test(id)
+    ) {
+      return {
+        valid: false,
+        error: `Invalid expected "${fieldName}" ID: must be a safe literal token`,
+      }
     }
     if (seen.has(id)) {
-      return { valid: false, error: `Duplicate expected "${fieldName}" ID "${id}"` }
+      return {
+        valid: false,
+        error: `Duplicate expected "${fieldName}" ID "${id}"`,
+      }
     }
     seen.add(id)
     normalized.push(id)
@@ -239,7 +291,9 @@ const validateCloseManifestIds = (
   return { valid: true, data: normalized }
 }
 
-export const validateActionRequest = (body: unknown): IValidationResult<IActionRequest> => {
+export const validateActionRequest = (
+  body: unknown,
+): IValidationResult<IActionRequest> => {
   if (!body || typeof body !== 'object') {
     return { valid: false, error: 'Request body must be a JSON object' }
   }
@@ -258,23 +312,34 @@ export const validateActionRequest = (body: unknown): IValidationResult<IActionR
   ) {
     return {
       valid: false,
-      error: 'Action type must be "prompt", "keys", "terminal-input", "tab-create", "workspace-create", "workspace-close", or "tab-close"'
+      error:
+        'Action type must be "prompt", "keys", "terminal-input", "tab-create", "workspace-create", "workspace-close", or "tab-close"',
     }
   }
 
-  if (typeof raw.operationId !== 'string' || raw.operationId.trim().length === 0) {
+  if (
+    typeof raw.operationId !== 'string' ||
+    raw.operationId.trim().length === 0
+  ) {
     return { valid: false, error: 'Missing or empty "operationId"' }
   }
   const operationId = raw.operationId.trim()
   if (operationId.length > 128 || !CONSERVATIVE_TOKEN_REGEX.test(operationId)) {
-    return { valid: false, error: 'Invalid "operationId": must be a safe token (1-128 chars, alphanumeric, underscore, period, colon, hyphen)' }
+    return {
+      valid: false,
+      error:
+        'Invalid "operationId": must be a safe token (1-128 chars, alphanumeric, underscore, period, colon, hyphen)',
+    }
   }
 
   if (type === 'workspace-create') {
     const allowedKeys = new Set(['type', 'operationId', 'label', 'source'])
     for (const key of Object.keys(raw)) {
       if (!allowedKeys.has(key)) {
-        return { valid: false, error: `Unsupported field "${key}" on workspace-create action` }
+        return {
+          valid: false,
+          error: `Unsupported field "${key}" on workspace-create action`,
+        }
       }
     }
 
@@ -285,43 +350,81 @@ export const validateActionRequest = (body: unknown): IValidationResult<IActionR
       }
       const trimmedLabel = raw.label.trim()
       if (trimmedLabel.length > 100 || CONTROL_CHARS_REGEX.test(trimmedLabel)) {
-        return { valid: false, error: 'label exceeds maximum length of 100 characters or contains control characters' }
+        return {
+          valid: false,
+          error:
+            'label exceeds maximum length of 100 characters or contains control characters',
+        }
       }
       label = trimmedLabel
     }
 
     let source: IWorkspaceCreateSource | undefined
     if (Object.prototype.hasOwnProperty.call(raw, 'source')) {
-      if (!raw.source || typeof raw.source !== 'object' || Array.isArray(raw.source)) {
-        return { valid: false, error: 'Invalid "source": must be a non-null object when supplied' }
+      if (
+        !raw.source ||
+        typeof raw.source !== 'object' ||
+        Array.isArray(raw.source)
+      ) {
+        return {
+          valid: false,
+          error: 'Invalid "source": must be a non-null object when supplied',
+        }
       }
       const rawSource = raw.source as Record<string, unknown>
       const allowedSourceKeys = new Set(['workspaceId', 'paneId', 'terminalId'])
       for (const key of Object.keys(rawSource)) {
         if (!allowedSourceKeys.has(key)) {
-          return { valid: false, error: `Unsupported field "${key}" on workspace-create source` }
+          return {
+            valid: false,
+            error: `Unsupported field "${key}" on workspace-create source`,
+          }
         }
       }
 
-      if (typeof rawSource.workspaceId !== 'string' || rawSource.workspaceId.trim().length === 0) {
+      if (
+        typeof rawSource.workspaceId !== 'string' ||
+        rawSource.workspaceId.trim().length === 0
+      ) {
         return { valid: false, error: 'Missing or empty source "workspaceId"' }
       }
       const workspaceId = rawSource.workspaceId.trim()
-      if (workspaceId.length > 128 || !CONSERVATIVE_TOKEN_REGEX.test(workspaceId)) {
-        return { valid: false, error: 'Invalid source "workspaceId": must be a safe token' }
+      if (
+        workspaceId.length > 128 ||
+        !CONSERVATIVE_TOKEN_REGEX.test(workspaceId)
+      ) {
+        return {
+          valid: false,
+          error: 'Invalid source "workspaceId": must be a safe token',
+        }
       }
 
-      if (typeof rawSource.paneId !== 'string' || !PANE_ID_REGEX.test(rawSource.paneId.trim())) {
-        return { valid: false, error: 'Invalid source paneId: must match format "ws:p1"' }
+      if (
+        typeof rawSource.paneId !== 'string' ||
+        !PANE_ID_REGEX.test(rawSource.paneId.trim())
+      ) {
+        return {
+          valid: false,
+          error: 'Invalid source paneId: must match format "ws:p1"',
+        }
       }
       const paneId = rawSource.paneId.trim()
 
-      if (typeof rawSource.terminalId !== 'string' || rawSource.terminalId.trim().length === 0) {
+      if (
+        typeof rawSource.terminalId !== 'string' ||
+        rawSource.terminalId.trim().length === 0
+      ) {
         return { valid: false, error: 'Missing or empty source "terminalId"' }
       }
       const terminalId = rawSource.terminalId.trim()
-      if (terminalId.length > 128 || !CONSERVATIVE_TOKEN_REGEX.test(terminalId)) {
-        return { valid: false, error: 'Invalid source "terminalId": must be a safe token' }
+      if (
+        terminalId.length > 128 ||
+        !CONSERVATIVE_TOKEN_REGEX.test(terminalId)
+      ) {
+        return {
+          valid: false,
+          error: 'Invalid source "terminalId": must be a safe token',
+        }
       }
 
       source = { workspaceId, paneId, terminalId }
@@ -333,8 +436,8 @@ export const validateActionRequest = (body: unknown): IValidationResult<IActionR
         type: 'workspace-create',
         operationId,
         ...(label !== undefined ? { label } : {}),
-        ...(source !== undefined ? { source } : {})
-      }
+        ...(source !== undefined ? { source } : {}),
+      },
     }
   }
 
@@ -342,42 +445,76 @@ export const validateActionRequest = (body: unknown): IValidationResult<IActionR
     const allowedKeys = new Set(['type', 'operationId', 'target'])
     for (const key of Object.keys(raw)) {
       if (!allowedKeys.has(key)) {
-        return { valid: false, error: `Unsupported field "${key}" on workspace-close action` }
+        return {
+          valid: false,
+          error: `Unsupported field "${key}" on workspace-close action`,
+        }
       }
     }
 
-    if (!raw.target || typeof raw.target !== 'object' || Array.isArray(raw.target)) {
+    if (
+      !raw.target ||
+      typeof raw.target !== 'object' ||
+      Array.isArray(raw.target)
+    ) {
       return { valid: false, error: 'Missing or invalid "target" object' }
     }
     const rawTarget = raw.target as Record<string, unknown>
     const allowedTargetKeys = new Set(['workspaceId', 'expected'])
     for (const key of Object.keys(rawTarget)) {
       if (!allowedTargetKeys.has(key)) {
-        return { valid: false, error: `Unsupported field "${key}" on workspace-close target` }
+        return {
+          valid: false,
+          error: `Unsupported field "${key}" on workspace-close target`,
+        }
       }
     }
 
-    if (!rawTarget.expected || typeof rawTarget.expected !== 'object' || Array.isArray(rawTarget.expected)) {
-      return { valid: false, error: 'Missing or invalid workspace-close target "expected" object' }
+    if (
+      !rawTarget.expected ||
+      typeof rawTarget.expected !== 'object' ||
+      Array.isArray(rawTarget.expected)
+    ) {
+      return {
+        valid: false,
+        error: 'Missing or invalid workspace-close target "expected" object',
+      }
     }
     const rawExpected = rawTarget.expected as Record<string, unknown>
     const allowedExpectedKeys = new Set(['tabIds', 'paneIds'])
     for (const key of Object.keys(rawExpected)) {
       if (!allowedExpectedKeys.has(key)) {
-        return { valid: false, error: `Unsupported field "${key}" on workspace-close expected manifest` }
+        return {
+          valid: false,
+          error: `Unsupported field "${key}" on workspace-close expected manifest`,
+        }
       }
     }
     const tabIdsResult = validateCloseManifestIds(rawExpected.tabIds, 'tabIds')
-    if (!tabIdsResult.valid || !tabIdsResult.data) return { valid: false, error: tabIdsResult.error }
-    const paneIdsResult = validateCloseManifestIds(rawExpected.paneIds, 'paneIds')
-    if (!paneIdsResult.valid || !paneIdsResult.data) return { valid: false, error: paneIdsResult.error }
+    if (!tabIdsResult.valid || !tabIdsResult.data)
+      return { valid: false, error: tabIdsResult.error }
+    const paneIdsResult = validateCloseManifestIds(
+      rawExpected.paneIds,
+      'paneIds',
+    )
+    if (!paneIdsResult.valid || !paneIdsResult.data)
+      return { valid: false, error: paneIdsResult.error }
 
-    if (typeof rawTarget.workspaceId !== 'string' || rawTarget.workspaceId.trim().length === 0) {
+    if (
+      typeof rawTarget.workspaceId !== 'string' ||
+      rawTarget.workspaceId.trim().length === 0
+    ) {
       return { valid: false, error: 'Missing or empty target "workspaceId"' }
     }
     const workspaceId = rawTarget.workspaceId.trim()
-    if (workspaceId.length > 128 || !CONSERVATIVE_TOKEN_REGEX.test(workspaceId)) {
-      return { valid: false, error: 'Invalid target "workspaceId": must be a safe token' }
+    if (
+      workspaceId.length > 128 ||
+      !CONSERVATIVE_TOKEN_REGEX.test(workspaceId)
+    ) {
+      return {
+        valid: false,
+        error: 'Invalid target "workspaceId": must be a safe token',
+      }
     }
 
     return {
@@ -389,10 +526,10 @@ export const validateActionRequest = (body: unknown): IValidationResult<IActionR
           workspaceId,
           expected: {
             tabIds: tabIdsResult.data,
-            paneIds: paneIdsResult.data
-          }
-        }
-      }
+            paneIds: paneIdsResult.data,
+          },
+        },
+      },
     }
   }
 
@@ -400,48 +537,87 @@ export const validateActionRequest = (body: unknown): IValidationResult<IActionR
     const allowedKeys = new Set(['type', 'operationId', 'target'])
     for (const key of Object.keys(raw)) {
       if (!allowedKeys.has(key)) {
-        return { valid: false, error: `Unsupported field "${key}" on tab-close action` }
+        return {
+          valid: false,
+          error: `Unsupported field "${key}" on tab-close action`,
+        }
       }
     }
 
-    if (!raw.target || typeof raw.target !== 'object' || Array.isArray(raw.target)) {
+    if (
+      !raw.target ||
+      typeof raw.target !== 'object' ||
+      Array.isArray(raw.target)
+    ) {
       return { valid: false, error: 'Missing or invalid "target" object' }
     }
     const rawTarget = raw.target as Record<string, unknown>
     const allowedTargetKeys = new Set(['workspaceId', 'tabId', 'expected'])
     for (const key of Object.keys(rawTarget)) {
       if (!allowedTargetKeys.has(key)) {
-        return { valid: false, error: `Unsupported field "${key}" on tab-close target` }
+        return {
+          valid: false,
+          error: `Unsupported field "${key}" on tab-close target`,
+        }
       }
     }
 
-    if (!rawTarget.expected || typeof rawTarget.expected !== 'object' || Array.isArray(rawTarget.expected)) {
-      return { valid: false, error: 'Missing or invalid tab-close target "expected" object' }
+    if (
+      !rawTarget.expected ||
+      typeof rawTarget.expected !== 'object' ||
+      Array.isArray(rawTarget.expected)
+    ) {
+      return {
+        valid: false,
+        error: 'Missing or invalid tab-close target "expected" object',
+      }
     }
     const rawExpected = rawTarget.expected as Record<string, unknown>
     const allowedExpectedKeys = new Set(['paneIds'])
     for (const key of Object.keys(rawExpected)) {
       if (!allowedExpectedKeys.has(key)) {
-        return { valid: false, error: `Unsupported field "${key}" on tab-close expected manifest` }
+        return {
+          valid: false,
+          error: `Unsupported field "${key}" on tab-close expected manifest`,
+        }
       }
     }
-    const paneIdsResult = validateCloseManifestIds(rawExpected.paneIds, 'paneIds')
-    if (!paneIdsResult.valid || !paneIdsResult.data) return { valid: false, error: paneIdsResult.error }
+    const paneIdsResult = validateCloseManifestIds(
+      rawExpected.paneIds,
+      'paneIds',
+    )
+    if (!paneIdsResult.valid || !paneIdsResult.data)
+      return { valid: false, error: paneIdsResult.error }
 
-    if (typeof rawTarget.workspaceId !== 'string' || rawTarget.workspaceId.trim().length === 0) {
+    if (
+      typeof rawTarget.workspaceId !== 'string' ||
+      rawTarget.workspaceId.trim().length === 0
+    ) {
       return { valid: false, error: 'Missing or empty target "workspaceId"' }
     }
     const workspaceId = rawTarget.workspaceId.trim()
-    if (workspaceId.length > 128 || !CONSERVATIVE_TOKEN_REGEX.test(workspaceId)) {
-      return { valid: false, error: 'Invalid target "workspaceId": must be a safe token' }
+    if (
+      workspaceId.length > 128 ||
+      !CONSERVATIVE_TOKEN_REGEX.test(workspaceId)
+    ) {
+      return {
+        valid: false,
+        error: 'Invalid target "workspaceId": must be a safe token',
+      }
     }
 
-    if (typeof rawTarget.tabId !== 'string' || rawTarget.tabId.trim().length === 0) {
+    if (
+      typeof rawTarget.tabId !== 'string' ||
+      rawTarget.tabId.trim().length === 0
+    ) {
       return { valid: false, error: 'Missing or empty target "tabId"' }
     }
     const tabId = rawTarget.tabId.trim()
     if (tabId.length > 128 || !CONSERVATIVE_TOKEN_REGEX.test(tabId)) {
-      return { valid: false, error: 'Invalid target "tabId": must be a safe token' }
+      return {
+        valid: false,
+        error: 'Invalid target "tabId": must be a safe token',
+      }
     }
 
     return {
@@ -452,22 +628,35 @@ export const validateActionRequest = (body: unknown): IValidationResult<IActionR
         target: {
           workspaceId,
           tabId,
-          expected: { paneIds: paneIdsResult.data }
+          expected: { paneIds: paneIdsResult.data },
+        },
+      },
+    }
+  }
+
+  if (type === 'tab-create') {
+    const allowedKeys = new Set([
+      'type',
+      'operationId',
+      'workspaceId',
+      'target',
+      'label',
+    ])
+    for (const key of Object.keys(raw)) {
+      if (!allowedKeys.has(key)) {
+        return {
+          valid: false,
+          error: `Unsupported field "${key}" on tab-create action`,
         }
       }
     }
   }
 
-  if (type === 'tab-create') {
-    const allowedKeys = new Set(['type', 'operationId', 'workspaceId', 'target', 'label'])
-    for (const key of Object.keys(raw)) {
-      if (!allowedKeys.has(key)) {
-        return { valid: false, error: `Unsupported field "${key}" on tab-create action` }
-      }
-    }
-  }
-
-  if (!raw.target || typeof raw.target !== 'object' || Array.isArray(raw.target)) {
+  if (
+    !raw.target ||
+    typeof raw.target !== 'object' ||
+    Array.isArray(raw.target)
+  ) {
     return { valid: false, error: 'Missing or invalid "target" object' }
   }
 
@@ -476,30 +665,52 @@ export const validateActionRequest = (body: unknown): IValidationResult<IActionR
     const allowedTargetKeys = new Set(['paneId', 'terminalId'])
     for (const key of Object.keys(rawTarget)) {
       if (!allowedTargetKeys.has(key)) {
-        return { valid: false, error: `Unsupported field "${key}" on tab-create target` }
+        return {
+          valid: false,
+          error: `Unsupported field "${key}" on tab-create target`,
+        }
       }
     }
   }
 
-  if (typeof rawTarget.paneId !== 'string' || !PANE_ID_REGEX.test(rawTarget.paneId.trim())) {
-    return { valid: false, error: 'Invalid target paneId: must match format "ws:p1"' }
+  if (
+    typeof rawTarget.paneId !== 'string' ||
+    !PANE_ID_REGEX.test(rawTarget.paneId.trim())
+  ) {
+    return {
+      valid: false,
+      error: 'Invalid target paneId: must match format "ws:p1"',
+    }
   }
   const paneId = rawTarget.paneId.trim()
 
-  if (typeof rawTarget.terminalId !== 'string' || rawTarget.terminalId.trim().length === 0) {
+  if (
+    typeof rawTarget.terminalId !== 'string' ||
+    rawTarget.terminalId.trim().length === 0
+  ) {
     return { valid: false, error: 'Missing or empty target "terminalId"' }
   }
   const terminalId = rawTarget.terminalId.trim()
   if (terminalId.length > 128 || !CONSERVATIVE_TOKEN_REGEX.test(terminalId)) {
-    return { valid: false, error: 'Invalid target "terminalId": must be a safe token (1-128 chars, alphanumeric, underscore, period, colon, hyphen)' }
+    return {
+      valid: false,
+      error:
+        'Invalid target "terminalId": must be a safe token (1-128 chars, alphanumeric, underscore, period, colon, hyphen)',
+    }
   }
 
   if (type === 'tab-create') {
-    if (typeof raw.workspaceId !== 'string' || raw.workspaceId.trim().length === 0) {
+    if (
+      typeof raw.workspaceId !== 'string' ||
+      raw.workspaceId.trim().length === 0
+    ) {
       return { valid: false, error: 'Missing or empty "workspaceId"' }
     }
     const workspaceId = raw.workspaceId.trim()
-    if (workspaceId.length > 128 || !CONSERVATIVE_TOKEN_REGEX.test(workspaceId)) {
+    if (
+      workspaceId.length > 128 ||
+      !CONSERVATIVE_TOKEN_REGEX.test(workspaceId)
+    ) {
       return { valid: false, error: 'Invalid "workspaceId" format' }
     }
 
@@ -510,7 +721,11 @@ export const validateActionRequest = (body: unknown): IValidationResult<IActionR
       }
       const trimmedLabel = raw.label.trim()
       if (trimmedLabel.length > 100 || CONTROL_CHARS_REGEX.test(trimmedLabel)) {
-        return { valid: false, error: 'label exceeds maximum length of 100 characters or contains control characters' }
+        return {
+          valid: false,
+          error:
+            'label exceeds maximum length of 100 characters or contains control characters',
+        }
       }
       label = trimmedLabel
     }
@@ -523,26 +738,47 @@ export const validateActionRequest = (body: unknown): IValidationResult<IActionR
         workspaceId,
         target: {
           paneId,
-          terminalId
+          terminalId,
         },
-        ...(label !== undefined ? { label } : {})
-      }
+        ...(label !== undefined ? { label } : {}),
+      },
     }
   }
 
-  if (typeof rawTarget.expectedMode !== 'string' || !VALID_EXPECTED_MODES.has(rawTarget.expectedMode)) {
-    return { valid: false, error: 'Invalid or missing target "expectedMode": must be "agent", "blocked-agent", or "shell"' }
+  if (
+    typeof rawTarget.expectedMode !== 'string' ||
+    !VALID_EXPECTED_MODES.has(rawTarget.expectedMode)
+  ) {
+    return {
+      valid: false,
+      error:
+        'Invalid or missing target "expectedMode": must be "agent", "blocked-agent", or "shell"',
+    }
   }
   const expectedMode = rawTarget.expectedMode as IExpectedPaneMode
 
   let agentSessionId: string | undefined
-  if (rawTarget.agentSessionId !== undefined && rawTarget.agentSessionId !== null) {
+  if (
+    rawTarget.agentSessionId !== undefined &&
+    rawTarget.agentSessionId !== null
+  ) {
     if (typeof rawTarget.agentSessionId !== 'string') {
-      return { valid: false, error: 'Invalid target "agentSessionId": must be a string' }
+      return {
+        valid: false,
+        error: 'Invalid target "agentSessionId": must be a string',
+      }
     }
     const trimmedSession = rawTarget.agentSessionId.trim()
-    if (trimmedSession.length === 0 || trimmedSession.length > 256 || !CONSERVATIVE_TOKEN_REGEX.test(trimmedSession)) {
-      return { valid: false, error: 'Invalid target "agentSessionId": must be a safe token (1-256 chars, alphanumeric, underscore, period, colon, hyphen)' }
+    if (
+      trimmedSession.length === 0 ||
+      trimmedSession.length > 256 ||
+      !CONSERVATIVE_TOKEN_REGEX.test(trimmedSession)
+    ) {
+      return {
+        valid: false,
+        error:
+          'Invalid target "agentSessionId": must be a safe token (1-256 chars, alphanumeric, underscore, period, colon, hyphen)',
+      }
     }
     agentSessionId = trimmedSession
   }
@@ -551,21 +787,24 @@ export const validateActionRequest = (body: unknown): IValidationResult<IActionR
     paneId,
     terminalId,
     expectedMode,
-    ...(agentSessionId !== undefined ? { agentSessionId } : {})
+    ...(agentSessionId !== undefined ? { agentSessionId } : {}),
   }
 
   if (type === 'prompt') {
     if (expectedMode !== 'agent') {
       return {
         valid: false,
-        error: `Action type "prompt" requires target expectedMode "agent", received "${expectedMode}"`
+        error: `Action type "prompt" requires target expectedMode "agent", received "${expectedMode}"`,
       }
     }
     if (typeof raw.text !== 'string' || raw.text.trim().length === 0) {
       return { valid: false, error: 'Prompt text must be a non-empty string' }
     }
     if (raw.text.length > 4096) {
-      return { valid: false, error: 'Prompt text exceeds maximum length of 4096 characters' }
+      return {
+        valid: false,
+        error: 'Prompt text exceeds maximum length of 4096 characters',
+      }
     }
     return {
       valid: true,
@@ -573,8 +812,8 @@ export const validateActionRequest = (body: unknown): IValidationResult<IActionR
         type: 'prompt',
         operationId,
         target,
-        text: raw.text
-      }
+        text: raw.text,
+      },
     }
   }
 
@@ -582,14 +821,20 @@ export const validateActionRequest = (body: unknown): IValidationResult<IActionR
     if (expectedMode !== 'blocked-agent' && expectedMode !== 'shell') {
       return {
         valid: false,
-        error: `Action type "terminal-input" requires target expectedMode "blocked-agent" or "shell", received "${expectedMode}"`
+        error: `Action type "terminal-input" requires target expectedMode "blocked-agent" or "shell", received "${expectedMode}"`,
       }
     }
     if (typeof raw.text !== 'string' || raw.text.trim().length === 0) {
-      return { valid: false, error: 'Terminal input text must be a non-empty string' }
+      return {
+        valid: false,
+        error: 'Terminal input text must be a non-empty string',
+      }
     }
     if (raw.text.length > 4096) {
-      return { valid: false, error: 'Terminal input text exceeds maximum length of 4096 characters' }
+      return {
+        valid: false,
+        error: 'Terminal input text exceeds maximum length of 4096 characters',
+      }
     }
     return {
       valid: true,
@@ -597,17 +842,23 @@ export const validateActionRequest = (body: unknown): IValidationResult<IActionR
         type: 'terminal-input',
         operationId,
         target,
-        text: raw.text
-      }
+        text: raw.text,
+      },
     }
   }
 
   if (type === 'keys') {
     if (!Array.isArray(raw.keys) || raw.keys.length === 0) {
-      return { valid: false, error: 'Keys must be a non-empty array of strings' }
+      return {
+        valid: false,
+        error: 'Keys must be a non-empty array of strings',
+      }
     }
     if (raw.keys.length > 16) {
-      return { valid: false, error: 'Keys array exceeds maximum size of 16 keys' }
+      return {
+        valid: false,
+        error: 'Keys array exceeds maximum size of 16 keys',
+      }
     }
     const cleanKeys: string[] = []
     for (const k of raw.keys) {
@@ -616,7 +867,10 @@ export const validateActionRequest = (body: unknown): IValidationResult<IActionR
       }
       const lower = k.toLowerCase().trim()
       if (!ALLOWED_KEYS.has(lower)) {
-        return { valid: false, error: `Unauthorized key: "${k}". Allowed keys: ${Array.from(ALLOWED_KEYS).join(', ')}` }
+        return {
+          valid: false,
+          error: `Unauthorized key: "${k}". Allowed keys: ${Array.from(ALLOWED_KEYS).join(', ')}`,
+        }
       }
       cleanKeys.push(lower)
     }
@@ -626,8 +880,8 @@ export const validateActionRequest = (body: unknown): IValidationResult<IActionR
         type: 'keys',
         operationId,
         target,
-        keys: cleanKeys
-      }
+        keys: cleanKeys,
+      },
     }
   }
 
@@ -641,7 +895,7 @@ export const validateActionRequest = (body: unknown): IValidationResult<IActionR
  */
 export const isAgentPane = (
   pane?: Partial<IPane> | null,
-  snapshotAgents?: any[] | null
+  snapshotAgents?: any[] | null,
 ): boolean => {
   if (!pane) return false
 
@@ -659,14 +913,23 @@ export const isAgentPane = (
 
   // 3. pane.agent_session (truthy check for session presence)
   const agentSession = (pane as any).agent_session
-  if (agentSession !== undefined && agentSession !== null && agentSession !== false && agentSession !== '') {
+  if (
+    agentSession !== undefined &&
+    agentSession !== null &&
+    agentSession !== false &&
+    agentSession !== ''
+  ) {
     return true
   }
 
   // 4. snapshot agents matching pane_id or target
-  if (pane.pane_id && Array.isArray(snapshotAgents) && snapshotAgents.length > 0) {
+  if (
+    pane.pane_id &&
+    Array.isArray(snapshotAgents) &&
+    snapshotAgents.length > 0
+  ) {
     const hasMatchingAgent = snapshotAgents.some(
-      (a) => a && (a.target === pane.pane_id || a.pane_id === pane.pane_id)
+      (a) => a && (a.target === pane.pane_id || a.pane_id === pane.pane_id),
     )
     if (hasMatchingAgent) {
       return true
@@ -687,29 +950,36 @@ export interface ITargetPreflightResult {
 export const verifyTargetAgainstSnapshot = (
   snapshot: ISnapshotResult,
   target: IActionTargetIdentity | ITabCreateTargetIdentity,
-  options: { isTabCreate?: boolean; actionType?: string } = {}
+  options: { isTabCreate?: boolean; actionType?: string } = {},
 ): ITargetPreflightResult => {
-  if (!Array.isArray(snapshot.workspaces) || !Array.isArray(snapshot.tabs) || !Array.isArray(snapshot.panes)) {
+  if (
+    !Array.isArray(snapshot.workspaces) ||
+    !Array.isArray(snapshot.tabs) ||
+    !Array.isArray(snapshot.panes)
+  ) {
     return {
       ok: false,
       status: 502,
-      error: 'Authoritative snapshot is malformed: workspaces, tabs, and panes must be arrays'
+      error:
+        'Authoritative snapshot is malformed: workspaces, tabs, and panes must be arrays',
     }
   }
 
-  const matchingPanes = snapshot.panes.filter((pane) => pane && pane.pane_id === target.paneId)
+  const matchingPanes = snapshot.panes.filter(
+    (pane) => pane && pane.pane_id === target.paneId,
+  )
   if (matchingPanes.length === 0) {
     return {
       ok: false,
       status: 404,
-      error: `Pane "${target.paneId}" not found in active session`
+      error: `Pane "${target.paneId}" not found in active session`,
     }
   }
   if (matchingPanes.length !== 1) {
     return {
       ok: false,
       status: 409,
-      error: `Ambiguous duplicate pane ID "${target.paneId}" in active session`
+      error: `Ambiguous duplicate pane ID "${target.paneId}" in active session`,
     }
   }
   const targetPane = matchingPanes[0]
@@ -718,11 +988,14 @@ export const verifyTargetAgainstSnapshot = (
     return {
       ok: false,
       status: 409,
-      error: `Terminal replacement detected: pane "${target.paneId}" terminal is "${targetPane.terminal_id ?? ''}", expected "${target.terminalId}"`
+      error: `Terminal replacement detected: pane "${target.paneId}" terminal is "${targetPane.terminal_id ?? ''}", expected "${target.terminalId}"`,
     }
   }
 
-  const foregroundCwd = typeof targetPane.foreground_cwd === 'string' ? targetPane.foreground_cwd.trim() : ''
+  const foregroundCwd =
+    typeof targetPane.foreground_cwd === 'string'
+      ? targetPane.foreground_cwd.trim()
+      : ''
   const cwd = typeof targetPane.cwd === 'string' ? targetPane.cwd.trim() : ''
   const derivedCwd = foregroundCwd || cwd || undefined
 
@@ -731,7 +1004,7 @@ export const verifyTargetAgainstSnapshot = (
       return {
         ok: false,
         status: 409,
-        error: `Source pane "${target.paneId}" has no usable current working directory`
+        error: `Source pane "${target.paneId}" has no usable current working directory`,
       }
     }
     return { ok: true, pane: targetPane, derivedCwd }
@@ -741,14 +1014,18 @@ export const verifyTargetAgainstSnapshot = (
 
   const paneAgentSession = targetPane.agent_session
   const agents = snapshot.agents || []
-  const owningAgent = agents.find((a: any) => a && (a.target === target.paneId || a.pane_id === target.paneId))
+  const owningAgent = agents.find(
+    (a: any) =>
+      a && (a.target === target.paneId || a.pane_id === target.paneId),
+  )
 
   // Canonical agent ownership evidence (identical to Terminal Control)
   const isAgent = isAgentPane(targetPane, snapshot.agents)
 
   let computedMode: IExpectedPaneMode
   if (isAgent) {
-    computedMode = targetPane.agent_status === 'blocked' ? 'blocked-agent' : 'agent'
+    computedMode =
+      targetPane.agent_status === 'blocked' ? 'blocked-agent' : 'agent'
   } else {
     computedMode = 'shell'
   }
@@ -757,23 +1034,30 @@ export const verifyTargetAgainstSnapshot = (
     return {
       ok: false,
       status: 409,
-      error: `Expected mode mismatch: expected "${actionTarget.expectedMode}", but pane is currently "${computedMode}"`
+      error: `Expected mode mismatch: expected "${actionTarget.expectedMode}", but pane is currently "${computedMode}"`,
     }
   }
 
-  if (options.actionType === 'prompt' && actionTarget.expectedMode !== 'agent') {
+  if (
+    options.actionType === 'prompt' &&
+    actionTarget.expectedMode !== 'agent'
+  ) {
     return {
       ok: false,
       status: 409,
-      error: `Action type "prompt" requires expectedMode "agent", received "${actionTarget.expectedMode}"`
+      error: `Action type "prompt" requires expectedMode "agent", received "${actionTarget.expectedMode}"`,
     }
   }
 
-  if (options.actionType === 'terminal-input' && actionTarget.expectedMode !== 'blocked-agent' && actionTarget.expectedMode !== 'shell') {
+  if (
+    options.actionType === 'terminal-input' &&
+    actionTarget.expectedMode !== 'blocked-agent' &&
+    actionTarget.expectedMode !== 'shell'
+  ) {
     return {
       ok: false,
       status: 409,
-      error: `Action type "terminal-input" requires expectedMode "blocked-agent" or "shell", received "${actionTarget.expectedMode}"`
+      error: `Action type "terminal-input" requires expectedMode "blocked-agent" or "shell", received "${actionTarget.expectedMode}"`,
     }
   }
 
@@ -783,20 +1067,23 @@ export const verifyTargetAgainstSnapshot = (
     owningAgent?.agent_session?.value ??
     owningAgent?.agent_session?.id
 
-  if (actionTarget.expectedMode === 'agent' || actionTarget.expectedMode === 'blocked-agent') {
+  if (
+    actionTarget.expectedMode === 'agent' ||
+    actionTarget.expectedMode === 'blocked-agent'
+  ) {
     if (authoritativeSessionId) {
       if (!actionTarget.agentSessionId) {
         return {
           ok: false,
           status: 409,
-          error: `Missing required agentSessionId for pane "${actionTarget.paneId}": pane has active session "${authoritativeSessionId}"`
+          error: `Missing required agentSessionId for pane "${actionTarget.paneId}": pane has active session "${authoritativeSessionId}"`,
         }
       }
       if (actionTarget.agentSessionId !== authoritativeSessionId) {
         return {
           ok: false,
           status: 409,
-          error: `Agent session replacement detected: expected "${actionTarget.agentSessionId}", got "${authoritativeSessionId}"`
+          error: `Agent session replacement detected: expected "${actionTarget.agentSessionId}", got "${authoritativeSessionId}"`,
         }
       }
     } else {
@@ -804,7 +1091,7 @@ export const verifyTargetAgainstSnapshot = (
         return {
           ok: false,
           status: 409,
-          error: `Agent session mismatch: caller specified "${actionTarget.agentSessionId}", but pane has no active session`
+          error: `Agent session mismatch: caller specified "${actionTarget.agentSessionId}", but pane has no active session`,
         }
       }
     }
@@ -814,7 +1101,7 @@ export const verifyTargetAgainstSnapshot = (
       return {
         ok: false,
         status: 409,
-        error: `Agent session mismatch: caller specified agentSessionId for shell pane`
+        error: `Agent session mismatch: caller specified agentSessionId for shell pane`,
       }
     }
   }
@@ -822,11 +1109,19 @@ export const verifyTargetAgainstSnapshot = (
   return { ok: true, pane: targetPane, derivedCwd }
 }
 
-export const ALLOWED_PANE_READ_SOURCES = new Set(['detection', 'visible', 'recent-unwrapped'])
+export const ALLOWED_PANE_READ_SOURCES = new Set([
+  'detection',
+  'visible',
+  'recent-unwrapped',
+])
 
 export const validatePaneReadParams = (
-  url: URL
-): IValidationResult<{ pane: string; source: 'detection' | 'visible' | 'recent-unwrapped'; lines?: number }> => {
+  url: URL,
+): IValidationResult<{
+  pane: string
+  source: 'detection' | 'visible' | 'recent-unwrapped'
+  lines?: number
+}> => {
   const pane = url.searchParams.get('pane')
   if (!pane || !PANE_ID_REGEX.test(pane.trim())) {
     return { valid: false, error: 'Invalid or missing "pane" query param' }
@@ -837,7 +1132,7 @@ export const validatePaneReadParams = (
   if (!ALLOWED_PANE_READ_SOURCES.has(sourceClean)) {
     return {
       valid: false,
-      error: `Invalid source: "${rawSource}". Allowed sources: ${Array.from(ALLOWED_PANE_READ_SOURCES).join(', ')}`
+      error: `Invalid source: "${rawSource}". Allowed sources: ${Array.from(ALLOWED_PANE_READ_SOURCES).join(', ')}`,
     }
   }
 
@@ -846,7 +1141,10 @@ export const validatePaneReadParams = (
   if (rawLines) {
     const parsed = parseInt(rawLines, 10)
     if (isNaN(parsed) || parsed < 1 || parsed > 1000) {
-      return { valid: false, error: 'lines must be an integer between 1 and 1000' }
+      return {
+        valid: false,
+        error: 'lines must be an integer between 1 and 1000',
+      }
     }
     lines = parsed
   }
@@ -856,12 +1154,14 @@ export const validatePaneReadParams = (
     data: {
       pane: pane.trim(),
       source: sourceClean as 'detection' | 'visible' | 'recent-unwrapped',
-      lines
-    }
+      lines,
+    },
   }
 }
 
-export const validateTerminalParams = (url: URL): IValidationResult<{ pane: string; cols: number; rows: number }> => {
+export const validateTerminalParams = (
+  url: URL,
+): IValidationResult<{ pane: string; cols: number; rows: number }> => {
   const pane = url.searchParams.get('pane')
   if (!pane || !PANE_ID_REGEX.test(pane.trim())) {
     return { valid: false, error: 'Invalid or missing "pane" query param' }
@@ -876,7 +1176,10 @@ export const validateTerminalParams = (url: URL): IValidationResult<{ pane: stri
   if (rawCols) {
     const parsed = parseInt(rawCols, 10)
     if (isNaN(parsed) || parsed < 20 || parsed > 500) {
-      return { valid: false, error: 'cols must be an integer between 20 and 500' }
+      return {
+        valid: false,
+        error: 'cols must be an integer between 20 and 500',
+      }
     }
     cols = parsed
   }
@@ -884,7 +1187,10 @@ export const validateTerminalParams = (url: URL): IValidationResult<{ pane: stri
   if (rawRows) {
     const parsed = parseInt(rawRows, 10)
     if (isNaN(parsed) || parsed < 5 || parsed > 200) {
-      return { valid: false, error: 'rows must be an integer between 5 and 200' }
+      return {
+        valid: false,
+        error: 'rows must be an integer between 5 and 200',
+      }
     }
     rows = parsed
   }
@@ -894,13 +1200,13 @@ export const validateTerminalParams = (url: URL): IValidationResult<{ pane: stri
     data: {
       pane: pane.trim(),
       cols,
-      rows
-    }
+      rows,
+    },
   }
 }
 
 export const validateAgentExplainParams = (
-  url: URL
+  url: URL,
 ): IValidationResult<{ pane: string }> => {
   const keys = Array.from(url.searchParams.keys())
   if (!url.searchParams.has('pane')) {
@@ -913,13 +1219,16 @@ export const validateAgentExplainParams = (
 
   const pane = url.searchParams.get('pane')
   if (!pane || !PANE_ID_REGEX.test(pane.trim())) {
-    return { valid: false, error: 'Invalid "pane" query param: must match format "ws:p1"' }
+    return {
+      valid: false,
+      error: 'Invalid "pane" query param: must match format "ws:p1"',
+    }
   }
 
   return {
     valid: true,
     data: {
-      pane: pane.trim()
-    }
+      pane: pane.trim(),
+    },
   }
 }

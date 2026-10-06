@@ -53,6 +53,7 @@ This document describes the transport architecture of Herdr Web, migrating from 
 ## 3. Schema Ownership & Sync (`scripts/sync-herdr-schema.ts`)
 
 The repository owns its generated protocol constants and tracked JSON schema without introducing external code-generation dependencies:
+
 - `bun run schema:sync`: Invokes `herdr api schema --json` and writes:
   - `server/generated/herdr-schema.json`: Complete tracked JSON schema.
   - `server/generated/protocol.ts`: Constant exports for `HERDR_TRACKED_PROTOCOL = 22` and `HERDR_TRACKED_SCHEMA_VERSION = 1`.
@@ -62,6 +63,7 @@ The repository owns its generated protocol constants and tracked JSON schema wit
 ## 4. Transport Adapter & Fallback (`server/herdr-adapter.ts`)
 
 The transport adapter provides a unified interface selected by `HERDR_TRANSPORT`:
+
 - **Default (`socket`)**:
   - `health`: Raw `ping` over Unix socket.
   - `snapshot`: Raw `session.snapshot` over Unix socket.
@@ -98,6 +100,7 @@ The transport adapter provides a unified interface selected by `HERDR_TRANSPORT`
 ## 5. Event-Driven Snapshot Bridge (`server/snapshot-bridge.ts`)
 
 The snapshot bridge maintains an efficient, shared event-driven invalidation loop for all connected browser clients:
+
 - **Subscriptions**: Opens one dedicated Unix socket connection with `events.subscribe` for global lifecycle events plus one `{ type: 'pane.agent_status_changed', pane_id }` subscription for every current pane. Output content and terminal byte subscriptions are strictly excluded.
 - **Sequence**:
   1. Fetches a preflight `session.snapshot` to discover the exact pane-ID set.
@@ -226,8 +229,8 @@ The snapshot bridge maintains an efficient, shared event-driven invalidation loo
   - Root owns the lifecycle ticket and reconciliation attempt. Pending/unknown/reconciliation-failed states gate new lifecycle mutations across Drawer and route lifetime. A successful explicit inspection can reopen intent without replaying the old mutation; observed create selection requires exact refreshed returned IDs and a current origin fence.
 - **Agent Status Semantics**:
   - `session.snapshot` is the canonical owner. Herdr Web validates and republishes status without recomputation.
-  - Pane `agent_status` is the effective pane state. Tab and Space `agent_status` are Herdr attention aggregates with precedence `blocked > unseen idle (public done) > working > seen idle > unknown`; therefore a Space can truthfully aggregate to `done` while another Tab is `working`.
-  - UI must not describe aggregate fields as “any agent working.” Attention Horizon remains pane-based, Tab/Pane strings are rendered directly, and the Spaces sheet maps each exact upstream Space aggregate to a distinct status dot without deriving a separate activity state.
+  - Pane `agent_status` is the effective pane state. Tab and Space `agent_status` are Herdr attention aggregates with precedence `blocked > unseen idle (public done) > working > seen idle > unknown`; therefore a Space can truthfully aggregate to `done` while another Tab is `working`. Raw snapshot DTOs, wire schema, socket protocol, push notifications, and action targets preserve native attention semantics without alteration.
+  - UI must not describe aggregate fields as “any agent working.” For browser UI presentation, Herdr Web computes a pure derived Activity view (`blocked > working > done > idle > unknown`) from leaf panes (`src/utils/activity-status.ts`) across navigation consumers (Space/Tab compact indicators, Pane plain word + indicator, rotating Working spinner with static reduced-motion equivalent), displaying current activity truthfully while preserving native attention in tooltips and accessible labels (`Activity: ... (Native attention: ...)`).
 - **Command & Interaction Catalog (`server/catalog.ts`)**:
   - Inert draft fill commands: catalog items are non-executable suggestions designed for local client selection and input-draft filling, never automated execution without user confirmation.
   - `GET /api/interactions/catalog?pane=...&terminalId=...`: Requires both `pane` and `terminalId`, preflights against authoritative snapshot, and rejects missing or replaced terminal IDs (HTTP 409). Never accepts an arbitrary `?cwd`.

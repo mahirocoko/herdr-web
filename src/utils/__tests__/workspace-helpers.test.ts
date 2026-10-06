@@ -3,8 +3,9 @@ import type { IPane, ISnapshotResult } from '@/types/herdr.ts'
 import {
   formatTabLabel,
   groupPanesByTab,
+  selectBestPaneForTab,
   selectBestPaneForWorkspace,
-  selectFocusedPaneFromSnapshot
+  selectFocusedPaneFromSnapshot,
 } from '../workspace-helpers.ts'
 
 describe('workspace-helpers: selectBestPaneForWorkspace', () => {
@@ -15,7 +16,7 @@ describe('workspace-helpers: selectBestPaneForWorkspace', () => {
       tab_id: 'w1:t1',
       cwd: '/tmp',
       focused: false,
-      agent_status: 'idle'
+      agent_status: 'idle',
     },
     {
       pane_id: 'w1:p2',
@@ -23,7 +24,7 @@ describe('workspace-helpers: selectBestPaneForWorkspace', () => {
       tab_id: 'w1:t1',
       cwd: '/tmp',
       focused: true,
-      agent_status: 'working'
+      agent_status: 'working',
     },
     {
       pane_id: 'w1:p3',
@@ -31,7 +32,7 @@ describe('workspace-helpers: selectBestPaneForWorkspace', () => {
       tab_id: 'w1:t1',
       cwd: '/tmp',
       focused: false,
-      agent_status: 'blocked'
+      agent_status: 'blocked',
     },
     {
       pane_id: 'w2:p1',
@@ -39,7 +40,7 @@ describe('workspace-helpers: selectBestPaneForWorkspace', () => {
       tab_id: 'w2:t1',
       cwd: '/tmp',
       focused: false,
-      agent_status: 'working'
+      agent_status: 'working',
     },
     {
       pane_id: 'w2:p2',
@@ -47,8 +48,8 @@ describe('workspace-helpers: selectBestPaneForWorkspace', () => {
       tab_id: 'w2:t1',
       cwd: '/tmp',
       focused: true,
-      agent_status: 'working'
-    }
+      agent_status: 'working',
+    },
   ]
 
   test('prioritizes blocked pane in workspace over focused and normal panes', () => {
@@ -74,7 +75,7 @@ describe('workspace-helpers: selectBestPaneForWorkspace', () => {
         tab_id: 'w3:t1',
         cwd: '/tmp',
         focused: false,
-        agent_status: 'idle'
+        agent_status: 'idle',
       },
       {
         pane_id: 'w3:p2',
@@ -82,8 +83,8 @@ describe('workspace-helpers: selectBestPaneForWorkspace', () => {
         tab_id: 'w3:t1',
         cwd: '/tmp',
         focused: false,
-        agent_status: 'idle'
-      }
+        agent_status: 'idle',
+      },
     ]
     const selected = selectBestPaneForWorkspace(unFocusedPanes, 'w3')
     expect(selected?.pane_id).toBe('w3:p1')
@@ -97,12 +98,28 @@ describe('workspace-helpers: selectBestPaneForWorkspace', () => {
 
 describe('workspace-helpers: formatTabLabel', () => {
   test('returns formatted tab label when label is present', () => {
-    const tab: any = { tab_id: 't1', workspace_id: 'w1', label: 'editor', number: 1, pane_count: 1, focused: false, agent_status: 'idle' }
+    const tab: any = {
+      tab_id: 't1',
+      workspace_id: 'w1',
+      label: 'editor',
+      number: 1,
+      pane_count: 1,
+      focused: false,
+      agent_status: 'idle',
+    }
     expect(formatTabLabel(tab)).toBe('Tab · editor')
   })
 
   test('falls back to tab number when label is empty', () => {
-    const tab: any = { tab_id: 't1', workspace_id: 'w1', label: '', number: 2, pane_count: 1, focused: false, agent_status: 'idle' }
+    const tab: any = {
+      tab_id: 't1',
+      workspace_id: 'w1',
+      label: '',
+      number: 2,
+      pane_count: 1,
+      focused: false,
+      agent_status: 'idle',
+    }
     expect(formatTabLabel(tab)).toBe('Tab 2')
   })
 
@@ -125,7 +142,7 @@ describe('workspace-helpers: selectFocusedPaneFromSnapshot', () => {
         tab_count: 2,
         pane_count: 2,
         active_tab_id: 'w1:t2',
-        focused: false
+        focused: false,
       },
       {
         workspace_id: 'w2',
@@ -135,19 +152,64 @@ describe('workspace-helpers: selectFocusedPaneFromSnapshot', () => {
         tab_count: 1,
         pane_count: 1,
         active_tab_id: 'w2:t1',
-        focused: true
-      }
+        focused: true,
+      },
     ],
     tabs: [
-      { tab_id: 'w1:t1', workspace_id: 'w1', label: 'first', number: 1, pane_count: 1, focused: false, agent_status: 'idle' },
-      { tab_id: 'w1:t2', workspace_id: 'w1', label: 'second', number: 2, pane_count: 1, focused: true, agent_status: 'working' },
-      { tab_id: 'w2:t1', workspace_id: 'w2', label: 'other', number: 1, pane_count: 1, focused: false, agent_status: 'blocked' }
+      {
+        tab_id: 'w1:t1',
+        workspace_id: 'w1',
+        label: 'first',
+        number: 1,
+        pane_count: 1,
+        focused: false,
+        agent_status: 'idle',
+      },
+      {
+        tab_id: 'w1:t2',
+        workspace_id: 'w1',
+        label: 'second',
+        number: 2,
+        pane_count: 1,
+        focused: true,
+        agent_status: 'working',
+      },
+      {
+        tab_id: 'w2:t1',
+        workspace_id: 'w2',
+        label: 'other',
+        number: 1,
+        pane_count: 1,
+        focused: false,
+        agent_status: 'blocked',
+      },
     ],
     panes: [
-      { pane_id: 'w1:p1', workspace_id: 'w1', tab_id: 'w1:t1', cwd: '/tmp', focused: false, agent_status: 'idle' },
-      { pane_id: 'w1:p2', workspace_id: 'w1', tab_id: 'w1:t2', cwd: '/tmp', focused: true, agent_status: 'working' },
-      { pane_id: 'w2:p1', workspace_id: 'w2', tab_id: 'w2:t1', cwd: '/tmp', focused: false, agent_status: 'blocked' }
-    ]
+      {
+        pane_id: 'w1:p1',
+        workspace_id: 'w1',
+        tab_id: 'w1:t1',
+        cwd: '/tmp',
+        focused: false,
+        agent_status: 'idle',
+      },
+      {
+        pane_id: 'w1:p2',
+        workspace_id: 'w1',
+        tab_id: 'w1:t2',
+        cwd: '/tmp',
+        focused: true,
+        agent_status: 'working',
+      },
+      {
+        pane_id: 'w2:p1',
+        workspace_id: 'w2',
+        tab_id: 'w2:t1',
+        cwd: '/tmp',
+        focused: false,
+        agent_status: 'blocked',
+      },
+    ],
   })
 
   test('uses the explicit focused pane before other focus signals', () => {
@@ -200,17 +262,76 @@ describe('workspace-helpers: selectFocusedPaneFromSnapshot', () => {
 
 describe('workspace-helpers: groupPanesByTab', () => {
   const tabs: any[] = [
-    { tab_id: 't2', workspace_id: 'w1', label: 'second', number: 2, pane_count: 1, focused: false, agent_status: 'working' },
-    { tab_id: 't1', workspace_id: 'w1', label: 'first', number: 1, pane_count: 2, focused: true, agent_status: 'idle' },
-    { tab_id: 't3', workspace_id: 'w2', label: 'other-ws', number: 1, pane_count: 1, focused: false, agent_status: 'idle' }
+    {
+      tab_id: 't2',
+      workspace_id: 'w1',
+      label: 'second',
+      number: 2,
+      pane_count: 1,
+      focused: false,
+      agent_status: 'working',
+    },
+    {
+      tab_id: 't1',
+      workspace_id: 'w1',
+      label: 'first',
+      number: 1,
+      pane_count: 2,
+      focused: true,
+      agent_status: 'idle',
+    },
+    {
+      tab_id: 't3',
+      workspace_id: 'w2',
+      label: 'other-ws',
+      number: 1,
+      pane_count: 1,
+      focused: false,
+      agent_status: 'idle',
+    },
   ]
 
   const panes: any[] = [
-    { pane_id: 'w1:p1', workspace_id: 'w1', tab_id: 't1', cwd: '/tmp', focused: true, agent_status: 'idle' },
-    { pane_id: 'w1:p2', workspace_id: 'w1', tab_id: 't1', cwd: '/tmp', focused: false, agent_status: 'idle' },
-    { pane_id: 'w1:p3', workspace_id: 'w1', tab_id: 't2', cwd: '/tmp', focused: false, agent_status: 'working' },
-    { pane_id: 'w1:p4_orphan', workspace_id: 'w1', tab_id: 't_missing', cwd: '/tmp', focused: false, agent_status: 'unknown' },
-    { pane_id: 'w2:p1', workspace_id: 'w2', tab_id: 't3', cwd: '/tmp', focused: false, agent_status: 'idle' }
+    {
+      pane_id: 'w1:p1',
+      workspace_id: 'w1',
+      tab_id: 't1',
+      cwd: '/tmp',
+      focused: true,
+      agent_status: 'idle',
+    },
+    {
+      pane_id: 'w1:p2',
+      workspace_id: 'w1',
+      tab_id: 't1',
+      cwd: '/tmp',
+      focused: false,
+      agent_status: 'idle',
+    },
+    {
+      pane_id: 'w1:p3',
+      workspace_id: 'w1',
+      tab_id: 't2',
+      cwd: '/tmp',
+      focused: false,
+      agent_status: 'working',
+    },
+    {
+      pane_id: 'w1:p4_orphan',
+      workspace_id: 'w1',
+      tab_id: 't_missing',
+      cwd: '/tmp',
+      focused: false,
+      agent_status: 'unknown',
+    },
+    {
+      pane_id: 'w2:p1',
+      workspace_id: 'w2',
+      tab_id: 't3',
+      cwd: '/tmp',
+      focused: false,
+      agent_status: 'idle',
+    },
   ]
 
   test('groups panes under tabs ordered by tab number', () => {
@@ -220,7 +341,7 @@ describe('workspace-helpers: groupPanesByTab', () => {
     // t1 has number 1
     expect(groups[0].tab?.tab_id).toBe('t1')
     expect(groups[0].panes.length).toBe(2)
-    expect(groups[0].panes.map(p => p.pane_id)).toEqual(['w1:p1', 'w1:p2'])
+    expect(groups[0].panes.map((p) => p.pane_id)).toEqual(['w1:p1', 'w1:p2'])
 
     // t2 has number 2
     expect(groups[1].tab?.tab_id).toBe('t2')
@@ -239,5 +360,81 @@ describe('workspace-helpers: groupPanesByTab', () => {
     expect(groups[0].tab?.tab_id).toBe('t3')
     expect(groups[0].panes.length).toBe(1)
     expect(groups[0].panes[0].pane_id).toBe('w2:p1')
+  })
+})
+
+describe('workspace-helpers: selectBestPaneForTab', () => {
+  const testPanes: IPane[] = [
+    {
+      pane_id: 'ws1:t1:p1',
+      workspace_id: 'ws1',
+      tab_id: 't1',
+      cwd: '/tmp',
+      focused: false,
+      agent_status: 'idle',
+    },
+    {
+      pane_id: 'ws1:t1:p2',
+      workspace_id: 'ws1',
+      tab_id: 't1',
+      cwd: '/tmp',
+      focused: false,
+      agent_status: 'blocked',
+    },
+    {
+      pane_id: 'ws1:t1:p3',
+      workspace_id: 'ws1',
+      tab_id: 't1',
+      cwd: '/tmp',
+      focused: true,
+      agent_status: 'idle',
+    },
+    {
+      pane_id: 'ws1:t2:p1',
+      workspace_id: 'ws1',
+      tab_id: 't2',
+      cwd: '/tmp',
+      focused: true,
+      agent_status: 'blocked',
+    },
+  ]
+
+  test('preserves currentPaneId if it belongs to target tab', () => {
+    const pane = selectBestPaneForTab(
+      testPanes,
+      't1',
+      'ws1',
+      'ws1:t1:p3',
+      'ws1:t1:p2',
+    )
+    expect(pane?.pane_id).toBe('ws1:t1:p3')
+  })
+
+  test('prioritizes blocked pane in tab when currentPaneId does not belong to tab', () => {
+    const pane = selectBestPaneForTab(
+      testPanes,
+      't1',
+      'ws1',
+      'other:pane',
+      'ws1:t1:p3',
+    )
+    expect(pane?.pane_id).toBe('ws1:t1:p2')
+  })
+
+  test('prioritizes focused pane in tab when no pane is blocked and currentPaneId not in tab', () => {
+    const unblocked = testPanes.filter((p) => p.pane_id !== 'ws1:t1:p2')
+    const pane = selectBestPaneForTab(unblocked, 't1', 'ws1', 'other:pane')
+    expect(pane?.pane_id).toBe('ws1:t1:p3')
+  })
+
+  test('never falls back to another tab even if that other tab has a blocked pane', () => {
+    const t2Only = testPanes.filter((p) => p.tab_id === 't2')
+    const pane = selectBestPaneForTab(t2Only, 't1', 'ws1')
+    expect(pane).toBeNull()
+  })
+
+  test('returns null when tab has no panes', () => {
+    const pane = selectBestPaneForTab(testPanes, 't_empty', 'ws1')
+    expect(pane).toBeNull()
   })
 })

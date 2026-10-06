@@ -2,18 +2,24 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import type { FC, FormEvent, KeyboardEvent } from 'react'
 import { Loader2, SendHorizontal, SquareTerminal } from 'lucide-react'
 import {
+  COMPOSER_MIN_HEIGHT,
   calculateComposerHeight,
   evaluateComposerKey,
   resolveDraftAfterSubmit,
-  type ActionResultStatus
+  type ActionResultStatus,
 } from '@/utils/prompt-composer.ts'
 import type { IExpectedPaneMode } from '@/types/herdr.ts'
 import { applyDraftAction } from '@/utils/interaction-picker.ts'
-import InteractionPickerSheet from './interaction-picker-sheet.tsx'
+import InteractionPickerSheet, {
+  type IPickerSheetTab,
+} from './interaction-picker-sheet.tsx'
+import Button from '@/components/ui/button.tsx'
+import Textarea from '@/components/ui/textarea.tsx'
 
 export interface IPromptComposerProps {
   paneId: string | null
   terminalId?: string | null
+  workspaceId?: string | null
   agentName?: string
   isBlocked?: boolean
   hasAgent?: boolean
@@ -23,13 +29,18 @@ export interface IPromptComposerProps {
   hasValidTarget?: boolean
   error?: string | null
   onSubmitText: (text: string) => Promise<ActionResultStatus | void>
+  onSendKeys?: (keys: string[]) => void
   draftText?: string
   onDraftChange?: (text: string) => void
+  isPickerOpen?: boolean
+  onPickerOpenChange?: (open: boolean) => void
+  pickerInitialTab?: IPickerSheetTab
 }
 
 const PromptComposer: FC<IPromptComposerProps> = ({
   paneId,
   terminalId,
+  workspaceId,
   agentName,
   isBlocked = false,
   hasAgent = true,
@@ -39,17 +50,23 @@ const PromptComposer: FC<IPromptComposerProps> = ({
   hasValidTarget = true,
   error,
   onSubmitText,
+  onSendKeys,
   draftText,
-  onDraftChange
+  onDraftChange,
+  isPickerOpen,
+  onPickerOpenChange,
+  pickerInitialTab,
 }) => {
   const effectiveMode: IExpectedPaneMode =
     expectedMode ?? (isBlocked ? 'blocked-agent' : hasAgent ? 'agent' : 'shell')
   const effectiveIsBlocked = effectiveMode === 'blocked-agent'
-  const effectiveHasAgent = effectiveMode === 'agent' || effectiveMode === 'blocked-agent'
+  const effectiveHasAgent =
+    effectiveMode === 'agent' || effectiveMode === 'blocked-agent'
 
   const [internalText, setInternalText] = useState('')
   const isControlled = draftText !== undefined
   const text = isControlled ? draftText : internalText
+  const isComposingRef = useRef(false)
 
   const setText = (updater: string | ((prev: string) => string)) => {
     const nextVal = typeof updater === 'function' ? updater(text) : updater
@@ -63,8 +80,19 @@ const PromptComposer: FC<IPromptComposerProps> = ({
   const paneGenerationRef = useRef<number>(0)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const quickTriggerRef = useRef<HTMLButtonElement | null>(null)
-  const isComposingRef = useRef(false)
-  const [isPickerOpen, setIsPickerOpen] = useState(false)
+  const isControlledPicker = isPickerOpen !== undefined
+  const [internalPickerOpen, setInternalPickerOpen] = useState(false)
+  const effectivePickerOpen = isControlledPicker
+    ? isPickerOpen
+    : internalPickerOpen
+
+  const setPickerOpen = (open: boolean) => {
+    if (isControlledPicker) {
+      onPickerOpenChange?.(open)
+    } else {
+      setInternalPickerOpen(open)
+    }
+  }
 
   // Track a monotonically increasing pane-generation whenever paneId changes, including A -> B -> A
   if (paneId !== prevPaneIdRef.current) {
@@ -76,10 +104,19 @@ const PromptComposer: FC<IPromptComposerProps> = ({
   useLayoutEffect(() => {
     const el = textareaRef.current
     if (!el) return
-    el.style.height = 'auto'
-    const targetHeight = calculateComposerHeight(el.scrollHeight)
-    el.style.height = `${targetHeight}px`
-    el.style.overflowY = el.scrollHeight > 132 ? 'auto' : 'hidden'
+    const resizeTextarea = () => {
+      el.style.height = 'auto'
+      const minHeight = Math.max(
+        Number.parseFloat(window.getComputedStyle(el).minHeight) || 0,
+        COMPOSER_MIN_HEIGHT,
+      )
+      const targetHeight = calculateComposerHeight(el.scrollHeight, minHeight)
+      el.style.height = `${targetHeight}px`
+      el.style.overflowY = el.scrollHeight > targetHeight ? 'auto' : 'hidden'
+    }
+    resizeTextarea()
+    window.addEventListener('resize', resizeTextarea)
+    return () => window.removeEventListener('resize', resizeTextarea)
   }, [text, paneId])
 
   const focusTextareaAtEnd = () => {
@@ -99,7 +136,8 @@ const PromptComposer: FC<IPromptComposerProps> = ({
 
     const trimmed = text.trim()
     // Prevent duplicate submission while already sending or empty or disabled target
-    if (!trimmed || !paneId || !hasValidTarget || isBusy || isControlActive) return
+    if (!trimmed || !paneId || !hasValidTarget || isBusy || isControlActive)
+      return
 
     const submittedPaneId = paneId
     const submittedGeneration = paneGenerationRef.current
@@ -118,8 +156,8 @@ const PromptComposer: FC<IPromptComposerProps> = ({
             currentPaneId,
             submittedPaneId,
             currentGeneration,
-            submittedGeneration
-          )
+            submittedGeneration,
+          ),
         )
       }
     } catch {
@@ -135,7 +173,8 @@ const PromptComposer: FC<IPromptComposerProps> = ({
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    const isComposing = e.nativeEvent.isComposing || e.keyCode === 229 || isComposingRef.current
+    const isComposing =
+      e.nativeEvent.isComposing || e.keyCode === 229 || isComposingRef.current
     const trimmed = text.trim()
     const decision = evaluateComposerKey(
       e.key,
@@ -144,7 +183,7 @@ const PromptComposer: FC<IPromptComposerProps> = ({
       trimmed.length,
       isBusy,
       !paneId || !hasValidTarget || isControlActive,
-      e.keyCode
+      e.keyCode,
     )
 
     if (decision.shouldPreventDefault) {
@@ -178,10 +217,15 @@ const PromptComposer: FC<IPromptComposerProps> = ({
   // Textarea is disabled only when there is no pane selected or no valid target identity.
   const isInputDisabled = !paneId || !hasValidTarget || isControlActive
   const isSubmitDisabled = isInputDisabled || isBusy || text.trim().length === 0
-  const isQuickDisabled = !paneId || !terminalId || !hasValidTarget || isBusy || isControlActive
+  const isQuickDisabled =
+    !paneId || !terminalId || !hasValidTarget || isBusy || isControlActive
 
   const pickerMode: 'agent' | 'shell' = effectiveHasAgent ? 'agent' : 'shell'
-  const subtleRoleTag = effectiveIsBlocked ? 'Answer · agent' : effectiveHasAgent ? 'Prompt · agent' : 'Shell · pane'
+  const subtleRoleTag = effectiveIsBlocked
+    ? 'Answer · agent'
+    : effectiveHasAgent
+      ? 'Prompt · agent'
+      : 'Shell · pane'
 
   return (
     <div className="prompt-composer">
@@ -192,21 +236,8 @@ const PromptComposer: FC<IPromptComposerProps> = ({
       )}
 
       <form className="prompt-composer__form" onSubmit={handleSubmit}>
-        {/* Quick Commands Trigger Inline Left */}
-        <button
-          ref={quickTriggerRef}
-          type="button"
-          className="prompt-composer__quick-btn"
-          onClick={() => setIsPickerOpen(true)}
-          disabled={isQuickDisabled}
-          aria-label="Quick Commands"
-          title="Quick Commands"
-        >
-          <SquareTerminal size={18} aria-hidden="true" />
-        </button>
-
         <div className="prompt-composer__input-wrapper">
-          <textarea
+          <Textarea
             ref={textareaRef}
             id="herdr-prompt-input"
             name="prompt"
@@ -228,41 +259,70 @@ const PromptComposer: FC<IPromptComposerProps> = ({
           />
         </div>
 
-        <button
-          type="submit"
-          className="prompt-composer__submit-btn"
-          disabled={isSubmitDisabled}
-          aria-label="Send input"
-        >
-          {isBusy ? (
-            <Loader2 size={18} className="prompt-composer__spinner spin" aria-hidden="true" />
-          ) : (
-            <SendHorizontal size={18} aria-hidden="true" />
-          )}
-        </button>
+        <div className="prompt-composer__toolbar">
+          <div className="prompt-composer__controls-left">
+            <Button
+              ref={quickTriggerRef}
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="prompt-composer__quick-btn"
+              onClick={() => setPickerOpen(true)}
+              disabled={isQuickDisabled}
+              aria-label="Quick Commands"
+              title="Quick Commands"
+            >
+              <SquareTerminal size={18} aria-hidden="true" />
+            </Button>
+          </div>
+
+          <div className="prompt-composer__controls-right">
+            <Button
+              type="submit"
+              variant="default"
+              size="icon"
+              className="prompt-composer__submit-btn"
+              disabled={isSubmitDisabled}
+              aria-label="Send input"
+            >
+              {isBusy ? (
+                <Loader2
+                  size={18}
+                  className="prompt-composer__spinner spin"
+                  aria-hidden="true"
+                />
+              ) : (
+                <SendHorizontal size={18} aria-hidden="true" />
+              )}
+            </Button>
+          </div>
+        </div>
       </form>
 
       {/* Quick Commands Interaction Picker Sheet */}
-      {isPickerOpen && (
+      {effectivePickerOpen && (
         <InteractionPickerSheet
-          isOpen={isPickerOpen}
+          isOpen={effectivePickerOpen}
           paneId={paneId}
           terminalId={terminalId || null}
+          workspaceId={workspaceId}
           mode={pickerMode}
           existingDraft={text}
-          onFillDraft={(val) => {
+          initialTab={pickerInitialTab || 'commands'}
+          onFillDraft={(val: string) => {
             setText(val)
             focusTextareaAtEnd()
           }}
-          onReplaceDraft={(val) => {
+          onReplaceDraft={(val: string) => {
             setText(val)
             focusTextareaAtEnd()
           }}
-          onAppendDraft={(val) => {
+          onAppendDraft={(val: string) => {
             setText((cur) => applyDraftAction(cur, val, 'append'))
             focusTextareaAtEnd()
           }}
-          onClose={() => setIsPickerOpen(false)}
+          onSendKeys={onSendKeys}
+          onClose={() => setPickerOpen(false)}
           triggerRef={quickTriggerRef}
         />
       )}

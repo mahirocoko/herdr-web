@@ -28,7 +28,7 @@
 
 - **[Bun](https://bun.sh)**: `1.3.11` or repo-compatible. Required for package management, runtime, and tests; Node.js and Deno are not runtime targets.
 - **[Herdr](https://github.com/ogulcancelik/herdr)**: `0.9.1` running locally with tracked protocol 22 (`schema_version: 1`).
-- **Tailscale** *(optional)*: For private remote access via host-managed Tailscale Serve.
+- **Tailscale** _(optional)_: For private remote access via host-managed Tailscale Serve.
 - **Platform Scope**: Current host and runtime target is macOS with an active local Herdr Unix domain socket. Other host platforms are not established.
 
 ## Quick Start
@@ -60,26 +60,28 @@ Open **`http://127.0.0.1:8787`**.
 
 Herdr Web organizes an active Herdr session into canonical tabs across four dedicated reading surfaces:
 
-| Surface | Best For | Behavior & Source |
-| :--- | :--- | :--- |
-| **Panel** | Full screen source reading | Source snapshot preserving whitespace, wrapping, semantic highlighting, auto-follow, and scroll position (`/api/pane/read?source=visible`, 1000ms polling). Default for running/idle panes. |
-| **History** | Plain-text scrollback | Bounded scrollback up to 1000 unwrapped rows (`/api/pane/read?source=recent-unwrapped&lines=1000`, 2000ms polling), text selection, and jump control. |
-| **Question** | Long agent questions & choices | Detection snapshot preventing truncation on multi-line questions and choices (`/api/pane/read?source=detection`, 2000ms polling). Default for blocked panes. |
-| **Stream** | Low-latency live progress | Real-time ANSI observer streaming from `herdr terminal session observe` into `@xterm/xterm`. Viewport observer only; not full panel or scrollback. |
+| Surface      | Best For                       | Behavior & Source                                                                                                                                                                           |
+| :----------- | :----------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Panel**    | Full screen source reading     | Source snapshot preserving whitespace, wrapping, semantic highlighting, auto-follow, and scroll position (`/api/pane/read?source=visible`, 1000ms polling). Default for running/idle panes. |
+| **History**  | Plain-text scrollback          | Bounded scrollback up to 1000 unwrapped rows (`/api/pane/read?source=recent-unwrapped&lines=1000`, 2000ms polling), text selection, and jump control.                                       |
+| **Question** | Long agent questions & choices | Detection snapshot preventing truncation on multi-line questions and choices (`/api/pane/read?source=detection`, 2000ms polling). Default for blocked panes.                                |
+| **Stream**   | Low-latency live progress      | Real-time ANSI observer streaming from `herdr terminal session observe` into `@xterm/xterm`. Viewport observer only; not full panel or scrollback.                                          |
 
 For polling and bridge lifecycle internals, see [Transport Architecture](docs/transport-architecture.md).
 
 ### Key Capabilities
 
 - **Attention Queue & Horizon**: Banner appears when an agent is `blocked`. Direct "Jump" navigates to a single blocked pane, while an accessible queue sheet lists multiple blocked panes deterministically (current space first, then workspace number, tab number, pane ID).
-- **Mobile Prompt Dock & Terminal Rail**: Touch composer with a six-key terminal rail (`ESC`, `TAB`, `CTRL+C`, `ENTER`, `↑`, `↓`) and IME safety. Viewport integration shrinks canvas as virtual keyboards emerge without resetting drafts.
-- **Quick Commands**: Opens an interaction sheet fetching `.herdr/commands.json` shortcuts from the target repo. Fills drafts inertly (Replace, Append, Cancel)—never auto-executes.
+- **Mobile Prompt Dock & Terminal Rail**: Touch composer with IME safety and a configurable terminal rail. The default six keys (`ESC`, `TAB`, `CTRL+C`, `ENTER`, `↑`, `↓`) remain available alongside editing/full presets drawn from 19 verified native keys. Viewport integration shrinks canvas as virtual keyboards emerge without resetting drafts.
+- **Browser-Local Custom Actions**: Create, edit, pin, and delete draft-fill or validated terminal-key actions in the Commands & Keys sheet. Personal actions and rail choices persist in this browser, globally or for the selected Space; they do not sync between devices or edit the read-only repository catalog. Draft-fill still requires explicit Send. Storage is UTF-8 byte-bounded to 32 KiB; unsupported native keys such as `delete` remain rejected.
+- **Command Picker & Navigation Search**: The prompt composer triggers an interaction sheet fetching `.herdr/commands.json` shortcuts from the target repo and managing custom actions/key rails. Fills drafts inertly (Replace, Append, Cancel)—never auto-executes. The header search triggers Navigation Search across live snapshot Spaces, Tabs, and Panes. A horizontal native Tab rail under the header provides touch/swipe tab navigation.
 - **Source-Led Space and Tab Navigation**: The hamburger opens a Herdr-style Spaces sheet with truthful upstream status, counts, selection, and Space lifecycle controls. The separate header Tab trigger opens an active-Space Tabs & Panes sheet with canonical Tab groups, pane selection, Tab policy, New Shell Tab, and Close Tab. Space and Tab actions never share one mixed hierarchy.
 - **Canonical Lifecycle Controls**: The Spaces sheet can create a Space from Herdr default or a verified terminal-backed directory and close the selected Space. The Tabs & Panes sheet can create a shell Tab and close a non-last Tab. Exact in-sheet confirmations bind destructive requests to the confirmed membership and never fall back to raw CLI or shell execution.
-- **Truthful Agent Status**: Pane status is the effective agent state. Tab and Space status remain Herdr's upstream attention aggregates rather than being relabeled as “currently working” summaries; the Spaces sheet shows those exact aggregate values through distinct status dots, while Tab and Pane values remain visible directly.
+- **Truthful Agent Status & UI Activity**: Pane status is the effective agent state, while Tab and Space status remain Herdr's native upstream attention aggregates (`blocked > unseen idle/done > working > seen idle > unknown`) across raw socket schemas, push notifications, and action targets. In the browser UI, Herdr Web computes a pure derived Activity view (`blocked > working > done > idle > unknown`) from leaf panes to show current work truthfully (Space/Tab compact indicators, Pane plain word + indicator, with a rotating Working spinner that stays static under reduced motion), with native attention preserved in tooltips and accessible labels.
 - **Agent Diagnostics ("Why?")**: Agent panes expose a "Why?" trigger in the drawer, expanding an accordion with matched rule, source region, and status flags from `agent.explain`. Raw evaluated rules, buffer previews, paths, and free text are stripped at projection.
 - **Privacy-Bounded Web Push**: Optional background alerts deliver `Needs input` and `Done` notifications per Space via VAPID encryption (`web-push`). Alerts omit pane IDs, terminal output, prompts, questions, paths, or code.
 - **Opt-In Shell-Only Terminal Control**: Verified idle shell panes can enter Terminal Control Mode (`/api/terminal/control`) via authenticated WebSocket under an exclusive lease. Unavailable for agent panes; never uses `--takeover`; never exposes arbitrary shells.
+- **Base UI Primitives & Design System**: Accessible unstyled Base UI 1.8.0 primitives (`@base-ui/react`) including Button, Input, Textarea, Checkbox, Switch, RadioGroup, Select, Sheet, Tabs, Toggle, and ToggleGroup, backed by CSS recipes in `src/components/ui/recipes.css` adapted directly from `devswha/herdr-web-ui` (MIT copyright 2026 devswha, warm terminal dark theme) with 44px mobile touch targets, semantic tokens, and an owned IME-safe Textarea primitive.
 
 ## Security Model
 

@@ -2,13 +2,17 @@ import { useEffect, useRef } from 'react'
 import type { FC } from 'react'
 import { ChevronLeft } from 'lucide-react'
 import type { IUsePushSubscriptionResult } from '@/hooks/use-push-subscription.ts'
+import Button from '@/components/ui/button.tsx'
 
 export interface ISettingsViewProps {
   push: IUsePushSubscriptionResult
   onBack: () => void
 }
 
-const getLiveStatusAnnouncement = (state: string, error: string | null): string => {
+const getLiveStatusAnnouncement = (
+  state: string,
+  error: string | null,
+): string => {
   switch (state) {
     case 'busy':
       return 'Updating push notification status'
@@ -30,7 +34,16 @@ const getLiveStatusAnnouncement = (state: string, error: string | null): string 
 }
 
 const SettingsView: FC<ISettingsViewProps> = ({ push, onBack }) => {
-  const { state, error, isReady, isOperationPending, subscribe, unsubscribe, sendTestAlert, refresh } = push
+  const {
+    state,
+    error,
+    isReady,
+    isOperationPending,
+    subscribe,
+    unsubscribe,
+    sendTestAlert,
+    refresh,
+  } = push
   const headingRef = useRef<HTMLHeadingElement | null>(null)
 
   // Focus page heading on mount
@@ -59,15 +72,17 @@ const SettingsView: FC<ISettingsViewProps> = ({ push, onBack }) => {
 
       {/* Calm Settings Top Bar with Back Button */}
       <header className="settings-header">
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           className="settings-header__back-btn"
           onClick={onBack}
           aria-label="Back to terminal"
         >
           <ChevronLeft size={16} aria-hidden="true" />
           <span>Back</span>
-        </button>
+        </Button>
         <h1
           ref={headingRef}
           tabIndex={-1}
@@ -91,7 +106,10 @@ const SettingsView: FC<ISettingsViewProps> = ({ push, onBack }) => {
           </div>
 
           <p className="settings-policy-spec">
-            Fixed event copy with bounded Space label for the first canonical tab per Space by default (customizable per Tab in the drawer). Click targets the Space. Transitions are evaluated from authoritative snapshots.
+            Fixed event copy with bounded Space label for the first canonical
+            tab per Space by default (customizable per Tab in the drawer). Click
+            targets the Space. Transitions are evaluated from authoritative
+            snapshots.
           </p>
 
           <div className="settings-divider" />
@@ -117,10 +135,14 @@ const SettingsView: FC<ISettingsViewProps> = ({ push, onBack }) => {
                   [ INSTALL REQUIRED ]
                 </div>
                 <p className="settings-status-desc">
-                  iOS requires Herdr Web on Home Screen to receive notifications.
+                  iOS requires Herdr Web on Home Screen to receive
+                  notifications.
                 </p>
                 <div className="settings-guide-box">
-                  <span>Tap <strong>Share</strong> in Safari, then select <strong>&quot;Add to Home Screen&quot;</strong>.</span>
+                  <span>
+                    Tap <strong>Share</strong> in Safari, then select{' '}
+                    <strong>&quot;Add to Home Screen&quot;</strong>.
+                  </span>
                 </div>
               </div>
             )}
@@ -132,17 +154,19 @@ const SettingsView: FC<ISettingsViewProps> = ({ push, onBack }) => {
                   [ INACTIVE ]
                 </div>
                 <p className="settings-status-desc">
-                  Push is not enabled on this device. Browser permission alone does not enable alerts.
+                  Push is not enabled on this device. Browser permission alone
+                  does not enable alerts.
                 </p>
 
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
                   className="settings-action-btn settings-action-btn--elevated"
                   onClick={() => void subscribe()}
                   disabled={!isReady}
                 >
                   Enable Push Notifications
-                </button>
+                </Button>
 
                 <span className="settings-note">
                   Requires Tailnet user allowlist authorization.
@@ -154,18 +178,25 @@ const SettingsView: FC<ISettingsViewProps> = ({ push, onBack }) => {
             {state === 'active' && (
               <div className="settings-status-row settings-status-row--active">
                 <div className="settings-status-badge settings-status-badge--cyan">
-                  <span className="settings-status-badge__dot" aria-hidden="true" />
+                  <span
+                    className="settings-status-badge__dot"
+                    aria-hidden="true"
+                  />
                   [ ACTIVE ]
                 </div>
 
                 <div className="settings-spec-terminal">
                   <div className="settings-spec-item">
                     <span className="settings-spec-label">STATUS</span>
-                    <span className="settings-spec-val">Active on this device</span>
+                    <span className="settings-spec-val">
+                      Active on this device
+                    </span>
                   </div>
                   <div className="settings-spec-item">
                     <span className="settings-spec-label">EVENTS</span>
-                    <span className="settings-spec-val">Needs Input · Done</span>
+                    <span className="settings-spec-val">
+                      Needs Input · Done
+                    </span>
                   </div>
                   <div className="settings-spec-item">
                     <span className="settings-spec-label">SCOPE</span>
@@ -178,21 +209,23 @@ const SettingsView: FC<ISettingsViewProps> = ({ push, onBack }) => {
                 </div>
 
                 <div className="settings-actions-group">
-                  <button
+                  <Button
                     type="button"
+                    variant="secondary"
                     className="settings-action-btn settings-action-btn--elevated"
                     onClick={() => void sendTestAlert()}
                   >
                     Send Test Alert
-                  </button>
+                  </Button>
 
-                  <button
+                  <Button
                     type="button"
+                    variant="danger"
                     className="settings-action-btn settings-action-btn--ghost-danger"
                     onClick={() => void unsubscribe()}
                   >
                     Disable Notifications
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -204,15 +237,18 @@ const SettingsView: FC<ISettingsViewProps> = ({ push, onBack }) => {
                   [ BLOCKED ]
                 </div>
                 <p className="settings-status-desc">
-                  Notifications blocked by browser permission. Allow notifications for Herdr in your browser or device settings, then re-check permission.
+                  Notifications blocked by browser permission. Allow
+                  notifications for Herdr in your browser or device settings,
+                  then re-check permission.
                 </p>
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
                   className="settings-action-btn settings-action-btn--elevated"
                   onClick={() => void refresh()}
                 >
                   Re-check Permission
-                </button>
+                </Button>
               </div>
             )}
 
@@ -220,11 +256,17 @@ const SettingsView: FC<ISettingsViewProps> = ({ push, onBack }) => {
             {state === 'backend-error' && (
               <div className="settings-status-row settings-status-row--error">
                 <div className="settings-status-badge settings-status-badge--danger">
-                  {error && (error.includes('403') || error.toLowerCase().includes('not authorized') || error.toLowerCase().includes('forbidden'))
+                  {error &&
+                  (error.includes('403') ||
+                    error.toLowerCase().includes('not authorized') ||
+                    error.toLowerCase().includes('forbidden'))
                     ? '[ NOT AUTHORIZED ]'
-                    : error && (error.toLowerCase().includes('not enabled') || error.toLowerCase().includes('disabled') || error.toLowerCase().includes('unavailable'))
-                    ? '[ UNAVAILABLE ]'
-                    : '[ PUSH ERROR ]'}
+                    : error &&
+                        (error.toLowerCase().includes('not enabled') ||
+                          error.toLowerCase().includes('disabled') ||
+                          error.toLowerCase().includes('unavailable'))
+                      ? '[ UNAVAILABLE ]'
+                      : '[ PUSH ERROR ]'}
                 </div>
                 <p className="settings-status-desc">
                   {isOperationPending
@@ -233,30 +275,33 @@ const SettingsView: FC<ISettingsViewProps> = ({ push, onBack }) => {
                 </p>
                 <div className="settings-actions-group">
                   {isOperationPending ? (
-                    <button
+                    <Button
                       type="button"
+                      variant="secondary"
                       className="settings-action-btn settings-action-btn--elevated"
                       onClick={() => window.location.reload()}
                     >
                       Reload
-                    </button>
+                    </Button>
                   ) : (
                     <>
-                      <button
+                      <Button
                         type="button"
+                        variant="secondary"
                         className="settings-action-btn settings-action-btn--elevated"
                         onClick={() => void refresh()}
                       >
                         Re-check Status
-                      </button>
+                      </Button>
                       {push.hasSubscription && (
-                        <button
+                        <Button
                           type="button"
+                          variant="danger"
                           className="settings-action-btn settings-action-btn--ghost-danger"
                           onClick={() => void unsubscribe()}
                         >
                           Disable Notifications
-                        </button>
+                        </Button>
                       )}
                     </>
                   )}
@@ -268,7 +313,9 @@ const SettingsView: FC<ISettingsViewProps> = ({ push, onBack }) => {
             {state === 'busy' && (
               <div className="settings-status-row settings-status-row--busy">
                 <div className="settings-spinner" aria-hidden="true" />
-                <span className="settings-status-desc">Updating push notification status...</span>
+                <span className="settings-status-desc">
+                  Updating push notification status...
+                </span>
               </div>
             )}
           </div>

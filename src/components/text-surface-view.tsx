@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FC, UIEvent } from 'react'
 import { ArrowDown } from 'lucide-react'
+import Button from '@/components/ui/button.tsx'
 import {
   calculateDistanceFromBottom,
   calculateNewScrollTop,
-  isNearBottom
+  isNearBottom,
 } from '@/utils/scroll-position.ts'
 import { parseTerminalContent } from '@/utils/terminal-highlight.ts'
 
@@ -31,7 +32,7 @@ const TextSurfaceView: FC<ITextSurfaceViewProps> = ({
   emptyText,
   loadingText,
   onRefresh,
-  onSwitchToStream
+  onSwitchToStream,
 }) => {
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const activePaneRef = useRef(paneId)
@@ -71,10 +72,15 @@ const TextSurfaceView: FC<ITextSurfaceViewProps> = ({
           prevScrollHeight: prevScrollHeightRef.current,
           newScrollHeight: body.scrollHeight,
           clientHeight: body.clientHeight,
-          prevDistanceFromBottom: distanceFromBottomRef.current
+          prevDistanceFromBottom: distanceFromBottomRef.current,
         })
         body.scrollTop = targetScrollTop
-        const near = isNearBottom(body.scrollTop, body.scrollHeight, body.clientHeight, 48)
+        const near = isNearBottom(
+          body.scrollTop,
+          body.scrollHeight,
+          body.clientHeight,
+          48,
+        )
         setIsAwayFromBottom(!near)
       }
 
@@ -86,9 +92,18 @@ const TextSurfaceView: FC<ITextSurfaceViewProps> = ({
 
   const handleScroll = (event: UIEvent<HTMLDivElement>) => {
     const body = event.currentTarget
-    const near = isNearBottom(body.scrollTop, body.scrollHeight, body.clientHeight, 48)
+    const near = isNearBottom(
+      body.scrollTop,
+      body.scrollHeight,
+      body.clientHeight,
+      48,
+    )
     followLatestRef.current = near
-    distanceFromBottomRef.current = calculateDistanceFromBottom(body.scrollTop, body.scrollHeight, body.clientHeight)
+    distanceFromBottomRef.current = calculateDistanceFromBottom(
+      body.scrollTop,
+      body.scrollHeight,
+      body.clientHeight,
+    )
     setIsAwayFromBottom(!near)
   }
 
@@ -122,16 +137,21 @@ const TextSurfaceView: FC<ITextSurfaceViewProps> = ({
         aria-label={`${ariaLabel} scrollable content`}
       >
         {error && !content ? (
-          <div className="text-surface-view__state text-surface-view__state--error" role="alert">
+          <div
+            className="text-surface-view__state text-surface-view__state--error"
+            role="alert"
+          >
             <span>Failed to load content: {error}</span>
             {onRefresh && (
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
                 className="text-surface-view__retry-btn"
                 onClick={onRefresh}
               >
                 Retry
-              </button>
+              </Button>
             )}
           </div>
         ) : isLoading && !content ? (
@@ -142,13 +162,15 @@ const TextSurfaceView: FC<ITextSurfaceViewProps> = ({
           <div className="text-surface-view__state text-surface-view__state--empty">
             <span>{emptyText}</span>
             {onSwitchToStream && (
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
                 className="text-surface-view__toggle-stream-btn"
                 onClick={onSwitchToStream}
               >
                 Switch to Stream Observer
-              </button>
+              </Button>
             )}
           </div>
         ) : (
@@ -168,7 +190,7 @@ const TextSurfaceView: FC<ITextSurfaceViewProps> = ({
                     </span>
                   ) : (
                     segment.text
-                  )
+                  ),
                 )}
                 {line.newline}
               </span>
@@ -178,15 +200,17 @@ const TextSurfaceView: FC<ITextSurfaceViewProps> = ({
       </div>
 
       {isAwayFromBottom && content && content.length > 0 && (
-        <button
+        <Button
           type="button"
+          variant="default"
+          size="compact"
           className="text-surface-view__latest-btn"
           onClick={handleScrollToLatest}
           aria-label="Jump to latest output"
         >
           <ArrowDown size={14} aria-hidden="true" />
           <span>Latest</span>
-        </button>
+        </Button>
       )}
     </div>
   )

@@ -1,4 +1,5 @@
 import type { IPane, ISnapshotResult, ITab, IWorkspace } from '@/types/herdr.ts'
+import { ACTIVITY_LABEL, type KnownActivity } from '@/utils/activity-status.ts'
 
 export interface ITabWithPanes {
   tab: ITab | null
@@ -25,7 +26,7 @@ export const formatTabLabel = (tab?: ITab | null): string => {
 export const groupPanesByTab = (
   tabs: ITab[],
   panes: IPane[],
-  workspaceId?: string | null
+  workspaceId?: string | null,
 ): ITabWithPanes[] => {
   const targetPanes = workspaceId
     ? panes.filter((p) => p.workspace_id === workspaceId)
@@ -45,7 +46,7 @@ export const groupPanesByTab = (
     const tabPanes = targetPanes.filter((p) => p.tab_id === tab.tab_id)
     groups.push({
       tab,
-      panes: tabPanes
+      panes: tabPanes,
     })
   }
 
@@ -54,7 +55,7 @@ export const groupPanesByTab = (
   if (orphanPanes.length > 0) {
     groups.push({
       tab: null,
-      panes: orphanPanes
+      panes: orphanPanes,
     })
   }
 
@@ -70,7 +71,7 @@ export const groupPanesByTab = (
 export const selectBestPaneForWorkspace = (
   panes: IPane[],
   workspaceId: string,
-  focusedPaneId?: string | null
+  focusedPaneId?: string | null,
 ): IPane | null => {
   const wsPanes = panes.filter((p) => p.workspace_id === workspaceId)
   if (wsPanes.length === 0) return null
@@ -91,7 +92,44 @@ export const selectBestPaneForWorkspace = (
   return wsPanes[0]
 }
 
-const selectPaneFromTab = (panes: IPane[], tabId?: string | null): IPane | null => {
+/**
+ * Atomically selects the best pane within a specific chosen tab:
+ * 1. Filter panes belonging to that tab (and matching workspaceId if provided)
+ * 2. If no panes in tab, returns null (honest empty/disabled state)
+ * 3. If currentPaneId belongs to that tab, preserve current pane
+ * 4. Otherwise, use selectBestPaneForWorkspace over the filtered panes (passing focusedPaneId)
+ * Never chooses a pane from another tab via workspace-wide fallback.
+ */
+export const selectBestPaneForTab = (
+  panes: IPane[],
+  tabId: string,
+  workspaceId?: string | null,
+  currentPaneId?: string | null,
+  focusedPaneId?: string | null,
+): IPane | null => {
+  const tabPanes = panes.filter((p) => {
+    if (p.tab_id !== tabId) return false
+    if (workspaceId && p.workspace_id !== workspaceId) return false
+    return true
+  })
+  if (tabPanes.length === 0) return null
+
+  if (currentPaneId) {
+    const current = tabPanes.find((p) => p.pane_id === currentPaneId)
+    if (current) return current
+  }
+
+  return selectBestPaneForWorkspace(
+    tabPanes,
+    workspaceId || tabPanes[0].workspace_id,
+    focusedPaneId,
+  )
+}
+
+const selectPaneFromTab = (
+  panes: IPane[],
+  tabId?: string | null,
+): IPane | null => {
   if (!tabId) return null
   const tabPanes = panes.filter((pane) => pane.tab_id === tabId)
   return tabPanes.find((pane) => pane.focused) || tabPanes[0] || null
@@ -99,40 +137,56 @@ const selectPaneFromTab = (panes: IPane[], tabId?: string | null): IPane | null 
 
 const selectPaneFromWorkspaceFocus = (
   snapshot: ISnapshotResult,
-  workspaceId?: string | null
+  workspaceId?: string | null,
 ): IPane | null => {
   if (!workspaceId) return null
 
-  const workspace = snapshot.workspaces.find((item) => item.workspace_id === workspaceId)
-  const activeTabPane = selectPaneFromTab(snapshot.panes, workspace?.active_tab_id)
+  const workspace = snapshot.workspaces.find(
+    (item) => item.workspace_id === workspaceId,
+  )
+  const activeTabPane = selectPaneFromTab(
+    snapshot.panes,
+    workspace?.active_tab_id,
+  )
   if (activeTabPane?.workspace_id === workspaceId) return activeTabPane
 
   const focusedTab = snapshot.tabs.find(
-    (tab) => tab.workspace_id === workspaceId && tab.focused
+    (tab) => tab.workspace_id === workspaceId && tab.focused,
   )
   const focusedTabPane = selectPaneFromTab(snapshot.panes, focusedTab?.tab_id)
   if (focusedTabPane) return focusedTabPane
 
-  const workspacePanes = snapshot.panes.filter((pane) => pane.workspace_id === workspaceId)
-  return workspacePanes.find((pane) => pane.focused) || workspacePanes[0] || null
+  const workspacePanes = snapshot.panes.filter(
+    (pane) => pane.workspace_id === workspaceId,
+  )
+  return (
+    workspacePanes.find((pane) => pane.focused) || workspacePanes[0] || null
+  )
 }
 
 /**
  * Resolve Herdr's authoritative focus chain for initial browser selection.
  * Root snapshot IDs win, followed by focused item flags and active workspace fallback.
  */
-export const selectFocusedPaneFromSnapshot = (snapshot: ISnapshotResult): IPane | null => {
+export const selectFocusedPaneFromSnapshot = (
+  snapshot: ISnapshotResult,
+): IPane | null => {
   if (snapshot.focused_pane_id) {
-    const pane = snapshot.panes.find((item) => item.pane_id === snapshot.focused_pane_id)
+    const pane = snapshot.panes.find(
+      (item) => item.pane_id === snapshot.focused_pane_id,
+    )
     if (pane) return pane
   }
 
-  const explicitTabPane = selectPaneFromTab(snapshot.panes, snapshot.focused_tab_id)
+  const explicitTabPane = selectPaneFromTab(
+    snapshot.panes,
+    snapshot.focused_tab_id,
+  )
   if (explicitTabPane) return explicitTabPane
 
   const explicitWorkspacePane = selectPaneFromWorkspaceFocus(
     snapshot,
-    snapshot.focused_workspace_id
+    snapshot.focused_workspace_id,
   )
   if (explicitWorkspacePane) return explicitWorkspacePane
 
@@ -143,10 +197,12 @@ export const selectFocusedPaneFromSnapshot = (snapshot: ISnapshotResult): IPane 
   const focusedTabPane = selectPaneFromTab(snapshot.panes, focusedTab?.tab_id)
   if (focusedTabPane) return focusedTabPane
 
-  const focusedWorkspace = snapshot.workspaces.find((workspace) => workspace.focused)
+  const focusedWorkspace = snapshot.workspaces.find(
+    (workspace) => workspace.focused,
+  )
   const focusedWorkspacePane = selectPaneFromWorkspaceFocus(
     snapshot,
-    focusedWorkspace?.workspace_id
+    focusedWorkspace?.workspace_id,
   )
   if (focusedWorkspacePane) return focusedWorkspacePane
 
@@ -167,43 +223,64 @@ export interface IReconciledSelection {
 export const reconcileSnapshotSelection = (
   snapshot: ISnapshotResult,
   currentWorkspaceId: string | null,
-  currentPaneId: string | null
+  currentPaneId: string | null,
 ): IReconciledSelection => {
   if (snapshot.workspaces.length === 0 || snapshot.panes.length === 0) {
     return { workspaceId: null, paneId: null }
   }
 
   const currentWorkspaceExists = Boolean(
-    currentWorkspaceId && snapshot.workspaces.some((workspace) => workspace.workspace_id === currentWorkspaceId)
+    currentWorkspaceId &&
+    snapshot.workspaces.some(
+      (workspace) => workspace.workspace_id === currentWorkspaceId,
+    ),
   )
   const currentPane = currentPaneId
     ? snapshot.panes.find((pane) => pane.pane_id === currentPaneId)
     : undefined
 
-  if (currentWorkspaceExists && currentPane?.workspace_id === currentWorkspaceId) {
+  if (
+    currentWorkspaceExists &&
+    currentPane?.workspace_id === currentWorkspaceId
+  ) {
     return { workspaceId: currentWorkspaceId, paneId: currentPane.pane_id }
   }
 
   if (currentWorkspaceExists && currentWorkspaceId) {
-    const sameWorkspacePane = selectBestPaneForWorkspace(snapshot.panes, currentWorkspaceId, snapshot.focused_pane_id)
+    const sameWorkspacePane = selectBestPaneForWorkspace(
+      snapshot.panes,
+      currentWorkspaceId,
+      snapshot.focused_pane_id,
+    )
     if (sameWorkspacePane) {
-      return { workspaceId: currentWorkspaceId, paneId: sameWorkspacePane.pane_id }
+      return {
+        workspaceId: currentWorkspaceId,
+        paneId: sameWorkspacePane.pane_id,
+      }
     }
   }
 
   const focusedPane = selectFocusedPaneFromSnapshot(snapshot)
   if (focusedPane) {
-    return { workspaceId: focusedPane.workspace_id, paneId: focusedPane.pane_id }
+    return {
+      workspaceId: focusedPane.workspace_id,
+      paneId: focusedPane.pane_id,
+    }
   }
 
-  const blockedPane = snapshot.panes.find((pane) => pane.agent_status === 'blocked')
+  const blockedPane = snapshot.panes.find(
+    (pane) => pane.agent_status === 'blocked',
+  )
   const fallbackPane = blockedPane || snapshot.panes[0]
-  return { workspaceId: fallbackPane.workspace_id, paneId: fallbackPane.pane_id }
+  return {
+    workspaceId: fallbackPane.workspace_id,
+    paneId: fallbackPane.pane_id,
+  }
 }
 
 export const isAgentPane = (
   pane?: Partial<IPane> | null,
-  snapshotAgents?: any[] | null
+  snapshotAgents?: any[] | null,
 ): boolean => {
   if (!pane) return false
 
@@ -221,14 +298,23 @@ export const isAgentPane = (
 
   // 3. pane.agent_session (truthy check for session presence)
   const agentSession = (pane as any).agent_session
-  if (agentSession !== undefined && agentSession !== null && agentSession !== false && agentSession !== '') {
+  if (
+    agentSession !== undefined &&
+    agentSession !== null &&
+    agentSession !== false &&
+    agentSession !== ''
+  ) {
     return true
   }
 
   // 4. snapshot agents matching pane_id or target
-  if (pane.pane_id && Array.isArray(snapshotAgents) && snapshotAgents.length > 0) {
+  if (
+    pane.pane_id &&
+    Array.isArray(snapshotAgents) &&
+    snapshotAgents.length > 0
+  ) {
     const hasMatchingAgent = snapshotAgents.some(
-      (a) => a && (a.target === pane.pane_id || a.pane_id === pane.pane_id)
+      (a) => a && (a.target === pane.pane_id || a.pane_id === pane.pane_id),
     )
     if (hasMatchingAgent) {
       return true
@@ -247,7 +333,7 @@ export const isAgentPane = (
  * When metadata is absent, returns null so caller preserves counts-only anatomy.
  */
 export const formatWorkspaceSourceLine = (
-  workspace?: Partial<IWorkspace> | null
+  workspace?: Partial<IWorkspace> | null,
 ): string | null => {
   if (!workspace) return null
 
@@ -283,13 +369,14 @@ export const formatWorkspaceSourceLine = (
 
 /**
  * Formats an accessible aria-label for a Space item including projected source facts.
- * When metadata is absent, returns the truthful counts-only format:
- *   `${label}, ${workspace.agent_status || 'unknown'}, ${metadata}`
+ * When metadata is absent, returns the truthful format:
+ *   `${label}, ${statusPart}, ${metadata}`
  */
 export const formatWorkspaceAriaLabel = (
   workspace: IWorkspace,
   label: string,
-  metadata: string
+  metadata: string,
+  activity?: KnownActivity,
 ): string => {
   const tokens = workspace.tokens
   const branch = tokens?.mahiro_workspace_branch?.trim()
@@ -307,11 +394,13 @@ export const formatWorkspaceAriaLabel = (
     facts.push(`worktree ${worktreeLabel}`)
   }
 
-  const status = workspace.agent_status || 'unknown'
+  const statusPart = activity
+    ? `Activity: ${ACTIVITY_LABEL[activity]} (Native attention: ${workspace.agent_status || 'unknown'})`
+    : workspace.agent_status || 'unknown'
 
   if (facts.length === 0) {
-    return `${label}, ${status}, ${metadata}`
+    return `${label}, ${statusPart}, ${metadata}`
   }
 
-  return `${label}, ${status}, ${facts.join(', ')}, ${metadata}`
+  return `${label}, ${statusPart}, ${facts.join(', ')}, ${metadata}`
 }

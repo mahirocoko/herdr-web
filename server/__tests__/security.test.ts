@@ -5,7 +5,7 @@ import {
   validateActionRequest,
   validateAgentExplainParams,
   validatePaneReadParams,
-  validateTerminalParams
+  validateTerminalParams,
 } from '../security.ts'
 
 describe('security: host & origin validation', () => {
@@ -34,27 +34,53 @@ describe('security: host & origin validation', () => {
 
   test('validates origin header against allowed hosts', () => {
     // Exact same-host match
-    expect(isOriginAllowed('http://127.0.0.1:8787', '127.0.0.1:8787')).toBe(true)
-    expect(isOriginAllowed('https://my-node.ts.net', 'my-node.ts.net')).toBe(true)
-    expect(isOriginAllowed('https://my-node.ts.net:8787', 'my-node.ts.net:8787')).toBe(true)
+    expect(isOriginAllowed('http://127.0.0.1:8787', '127.0.0.1:8787')).toBe(
+      true,
+    )
+    expect(isOriginAllowed('https://my-node.ts.net', 'my-node.ts.net')).toBe(
+      true,
+    )
+    expect(
+      isOriginAllowed('https://my-node.ts.net:8787', 'my-node.ts.net:8787'),
+    ).toBe(true)
 
     // Localhost dev exception (both loopback and approved dev/app ports 8787, 5173)
-    expect(isOriginAllowed('http://localhost:5173', '127.0.0.1:8787')).toBe(true)
-    expect(isOriginAllowed('http://127.0.0.1:5173', 'localhost:8787')).toBe(true)
-    expect(isOriginAllowed('http://localhost:8787', '127.0.0.1:8787')).toBe(true)
+    expect(isOriginAllowed('http://localhost:5173', '127.0.0.1:8787')).toBe(
+      true,
+    )
+    expect(isOriginAllowed('http://127.0.0.1:5173', 'localhost:8787')).toBe(
+      true,
+    )
+    expect(isOriginAllowed('http://localhost:8787', '127.0.0.1:8787')).toBe(
+      true,
+    )
 
     // Rejection of unrelated Tailnet node origins (no wildcard ts.net cross-origin)
-    expect(isOriginAllowed('https://evil-node.ts.net', 'my-node.ts.net')).toBe(false)
-    expect(isOriginAllowed('https://evil-node.ts.net:8787', 'my-node.ts.net:8787')).toBe(false)
-    expect(isOriginAllowed('https://evil-node.ts.net:5173', 'my-node.ts.net:8787')).toBe(false)
+    expect(isOriginAllowed('https://evil-node.ts.net', 'my-node.ts.net')).toBe(
+      false,
+    )
+    expect(
+      isOriginAllowed('https://evil-node.ts.net:8787', 'my-node.ts.net:8787'),
+    ).toBe(false)
+    expect(
+      isOriginAllowed('https://evil-node.ts.net:5173', 'my-node.ts.net:8787'),
+    ).toBe(false)
 
     // Rejection of unapproved ports on localhost
-    expect(isOriginAllowed('http://localhost:3000', '127.0.0.1:8787')).toBe(false)
-    expect(isOriginAllowed('http://127.0.0.1:8080', '127.0.0.1:8787')).toBe(false)
+    expect(isOriginAllowed('http://localhost:3000', '127.0.0.1:8787')).toBe(
+      false,
+    )
+    expect(isOriginAllowed('http://127.0.0.1:8080', '127.0.0.1:8787')).toBe(
+      false,
+    )
 
     // Rejection of arbitrary external origins
-    expect(isOriginAllowed('https://attacker.site', '127.0.0.1:8787')).toBe(false)
-    expect(isOriginAllowed('https://attacker.site', 'my-node.ts.net')).toBe(false)
+    expect(isOriginAllowed('https://attacker.site', '127.0.0.1:8787')).toBe(
+      false,
+    )
+    expect(isOriginAllowed('https://attacker.site', 'my-node.ts.net')).toBe(
+      false,
+    )
 
     // Rejection of missing, null, or malformed origin
     expect(isOriginAllowed('', '127.0.0.1:8787')).toBe(false)
@@ -78,9 +104,9 @@ describe('security: validateActionRequest', () => {
       target: {
         paneId: 'w5N:p1',
         terminalId: 'term-1',
-        expectedMode: 'agent'
+        expectedMode: 'agent',
       },
-      text: 'git status'
+      text: 'git status',
     })
     expect(res.valid).toBe(true)
     expect(res.data).toEqual({
@@ -89,9 +115,9 @@ describe('security: validateActionRequest', () => {
       target: {
         paneId: 'w5N:p1',
         terminalId: 'term-1',
-        expectedMode: 'agent'
+        expectedMode: 'agent',
       },
-      text: 'git status'
+      text: 'git status',
     })
   })
 
@@ -102,9 +128,9 @@ describe('security: validateActionRequest', () => {
       target: {
         paneId: 'w5N:p1',
         terminalId: 'term-1',
-        expectedMode: 'agent'
+        expectedMode: 'agent',
       },
-      text: 'a'.repeat(4097)
+      text: 'a'.repeat(4097),
     })
     expect(res.valid).toBe(false)
     expect(res.error).toContain('4096')
@@ -117,9 +143,9 @@ describe('security: validateActionRequest', () => {
       target: {
         paneId: 'w5N:p1',
         terminalId: 'term-1',
-        expectedMode: 'agent'
+        expectedMode: 'agent',
       },
-      text: '   '
+      text: '   ',
     })
     expect(res.valid).toBe(false)
     expect(res.error).toContain('non-empty')
@@ -132,9 +158,9 @@ describe('security: validateActionRequest', () => {
       target: {
         paneId: 'w5N:p1',
         terminalId: 'term-1',
-        expectedMode: 'shell'
+        expectedMode: 'shell',
       },
-      text: 'ls -la'
+      text: 'ls -la',
     })
     expect(res.valid).toBe(true)
     expect(res.data).toEqual({
@@ -143,9 +169,9 @@ describe('security: validateActionRequest', () => {
       target: {
         paneId: 'w5N:p1',
         terminalId: 'term-1',
-        expectedMode: 'shell'
+        expectedMode: 'shell',
       },
-      text: 'ls -la'
+      text: 'ls -la',
     })
   })
 
@@ -156,9 +182,9 @@ describe('security: validateActionRequest', () => {
       target: {
         paneId: 'w5N:p1',
         terminalId: 'term-1',
-        expectedMode: 'shell'
+        expectedMode: 'shell',
       },
-      text: 'x'.repeat(4097)
+      text: 'x'.repeat(4097),
     })
     expect(res.valid).toBe(false)
     expect(res.error).toContain('4096')
@@ -171,9 +197,9 @@ describe('security: validateActionRequest', () => {
       target: {
         paneId: 'w5N:p1',
         terminalId: 'term-1',
-        expectedMode: 'shell'
+        expectedMode: 'shell',
       },
-      text: '   '
+      text: '   ',
     })
     expect(res.valid).toBe(false)
     expect(res.error).toContain('non-empty')
@@ -186,9 +212,9 @@ describe('security: validateActionRequest', () => {
       target: {
         paneId: 'w5N:p2',
         terminalId: 'term-2',
-        expectedMode: 'agent'
+        expectedMode: 'agent',
       },
-      keys: ['esc', 'tab', 'enter', 'ctrl+c', 'up', 'down', 'left', 'right']
+      keys: ['esc', 'tab', 'enter', 'ctrl+c', 'up', 'down', 'left', 'right'],
     })
     expect(res.valid).toBe(true)
     expect(res.data?.type).toBe('keys')
@@ -201,12 +227,12 @@ describe('security: validateActionRequest', () => {
       target: {
         paneId: 'w5N:p1',
         terminalId: 'term-1',
-        expectedMode: 'agent'
+        expectedMode: 'agent',
       },
-      keys: ['enter', 'backspace']
+      keys: ['enter', 'delete'],
     })
     expect(res.valid).toBe(false)
-    expect(res.error).toContain('Unauthorized key: "backspace"')
+    expect(res.error).toContain('Unauthorized key: "delete"')
   })
 
   test('rejects keys array exceeding 16 keys', () => {
@@ -217,9 +243,9 @@ describe('security: validateActionRequest', () => {
       target: {
         paneId: 'w5N:p1',
         terminalId: 'term-1',
-        expectedMode: 'agent'
+        expectedMode: 'agent',
       },
-      keys
+      keys,
     })
     expect(res.valid).toBe(false)
     expect(res.error).toContain('maximum size of 16 keys')
@@ -232,9 +258,9 @@ describe('security: validateActionRequest', () => {
       target: {
         paneId: 'w5N; rm -rf /',
         terminalId: 'term-1',
-        expectedMode: 'agent'
+        expectedMode: 'agent',
       },
-      text: 'hi'
+      text: 'hi',
     })
     expect(res.valid).toBe(false)
     expect(res.error).toContain('Invalid target paneId')
@@ -246,9 +272,9 @@ describe('security: validateActionRequest', () => {
       target: {
         paneId: 'w5N:p1',
         terminalId: 'term-1',
-        expectedMode: 'agent'
+        expectedMode: 'agent',
       },
-      text: 'hi'
+      text: 'hi',
     })
     expect(res.valid).toBe(false)
     expect(res.error).toContain('operationId')
@@ -261,9 +287,9 @@ describe('security: validateActionRequest', () => {
       workspaceId: 'ws-main',
       target: {
         paneId: 'ws-main:p1',
-        terminalId: 'term-root'
+        terminalId: 'term-root',
       },
-      label: 'Build Tab'
+      label: 'Build Tab',
     })
     expect(res.valid).toBe(true)
     expect(res.data?.type).toBe('tab-create')
@@ -275,7 +301,7 @@ describe('security: validateActionRequest', () => {
       operationId: 'op-tab-extra-root',
       workspaceId: 'ws-main',
       target: { paneId: 'ws-main:p1', terminalId: 'term-root' },
-      close_group: true
+      close_group: true,
     })
     expect(rootExtra.valid).toBe(false)
     expect(rootExtra.error).toContain('Unsupported field "close_group"')
@@ -287,8 +313,8 @@ describe('security: validateActionRequest', () => {
       target: {
         paneId: 'ws-main:p1',
         terminalId: 'term-root',
-        expectedMode: 'shell'
-      }
+        expectedMode: 'shell',
+      },
     })
     expect(targetExtra.valid).toBe(false)
     expect(targetExtra.error).toContain('Unsupported field "expectedMode"')
@@ -298,13 +324,13 @@ describe('security: validateActionRequest', () => {
     const res = validateActionRequest({
       type: 'workspace-create',
       operationId: 'op-ws-1',
-      label: 'New Space'
+      label: 'New Space',
     })
     expect(res.valid).toBe(true)
     expect(res.data).toEqual({
       type: 'workspace-create',
       operationId: 'op-ws-1',
-      label: 'New Space'
+      label: 'New Space',
     })
   })
 
@@ -312,7 +338,7 @@ describe('security: validateActionRequest', () => {
     const res = validateActionRequest({
       type: 'workspace-create',
       operationId: 'op-ws-null-source',
-      source: null
+      source: null,
     })
     expect(res.valid).toBe(false)
     expect(res.error).toContain('non-null object')
@@ -325,8 +351,8 @@ describe('security: validateActionRequest', () => {
       source: {
         workspaceId: 'ws-orig',
         paneId: 'ws-orig:p1',
-        terminalId: 'term-orig'
-      }
+        terminalId: 'term-orig',
+      },
     })
     expect(res.valid).toBe(true)
     expect(res.data).toEqual({
@@ -335,8 +361,8 @@ describe('security: validateActionRequest', () => {
       source: {
         workspaceId: 'ws-orig',
         paneId: 'ws-orig:p1',
-        terminalId: 'term-orig'
-      }
+        terminalId: 'term-orig',
+      },
     })
   })
 
@@ -345,7 +371,7 @@ describe('security: validateActionRequest', () => {
       type: 'workspace-create',
       operationId: 'op-ws-bad',
       label: 'Space',
-      unsupportedExtra: 'evil'
+      unsupportedExtra: 'evil',
     })
     expect(res.valid).toBe(false)
     expect(res.error).toContain('Unsupported field "unsupportedExtra"')
@@ -359,8 +385,8 @@ describe('security: validateActionRequest', () => {
         workspaceId: 'ws-1',
         paneId: 'ws-1:p1',
         terminalId: 'term-1',
-        unexpectedKey: 123
-      }
+        unexpectedKey: 123,
+      },
     })
     expect(res.valid).toBe(false)
     expect(res.error).toContain('Unsupported field "unexpectedKey"')
@@ -370,7 +396,7 @@ describe('security: validateActionRequest', () => {
     const resNull = validateActionRequest({
       type: 'workspace-create',
       operationId: 'op-ws-label-null',
-      label: null
+      label: null,
     })
     expect(resNull.valid).toBe(false)
     expect(resNull.error).toContain('must be a string')
@@ -378,7 +404,7 @@ describe('security: validateActionRequest', () => {
     const resOversized = validateActionRequest({
       type: 'workspace-create',
       operationId: 'op-ws-label-len',
-      label: 'a'.repeat(101)
+      label: 'a'.repeat(101),
     })
     expect(resOversized.valid).toBe(false)
     expect(resOversized.error).toContain('maximum length of 100 characters')
@@ -386,7 +412,7 @@ describe('security: validateActionRequest', () => {
     const resControl = validateActionRequest({
       type: 'workspace-create',
       operationId: 'op-ws-label-ctrl',
-      label: 'Bad\x00Label'
+      label: 'Bad\x00Label',
     })
     expect(resControl.valid).toBe(false)
     expect(resControl.error).toContain('control characters')
@@ -399,8 +425,8 @@ describe('security: validateActionRequest', () => {
       source: {
         workspaceId: 1, // numeric alias
         paneId: 'ws-1:p1',
-        terminalId: 'term-1'
-      }
+        terminalId: 'term-1',
+      },
     })
     expect(resNumericWs.valid).toBe(false)
 
@@ -410,8 +436,8 @@ describe('security: validateActionRequest', () => {
       source: {
         workspaceId: 'ws-1',
         paneId: 'not-a-pane',
-        terminalId: 'term-1'
-      }
+        terminalId: 'term-1',
+      },
     })
     expect(resBadPane.valid).toBe(false)
   })
@@ -424,9 +450,9 @@ describe('security: validateActionRequest', () => {
         workspaceId: 'ws-target',
         expected: {
           tabIds: ['tab-b', 'tab-a'],
-          paneIds: ['pane-b', 'pane-a']
-        }
-      }
+          paneIds: ['pane-b', 'pane-a'],
+        },
+      },
     })
     expect(res.valid).toBe(true)
     expect(res.data).toEqual({
@@ -436,9 +462,9 @@ describe('security: validateActionRequest', () => {
         workspaceId: 'ws-target',
         expected: {
           tabIds: ['tab-a', 'tab-b'],
-          paneIds: ['pane-a', 'pane-b']
-        }
-      }
+          paneIds: ['pane-a', 'pane-b'],
+        },
+      },
     })
   })
 
@@ -446,7 +472,10 @@ describe('security: validateActionRequest', () => {
     const workspaceBase = {
       type: 'workspace-close',
       operationId: 'op-close-manifest',
-      target: { workspaceId: 'ws-1', expected: { tabIds: ['tab-1'], paneIds: ['pane-1'] } }
+      target: {
+        workspaceId: 'ws-1',
+        expected: { tabIds: ['tab-1'], paneIds: ['pane-1'] },
+      },
     }
     const invalidWorkspaceExpected = [
       null,
@@ -454,12 +483,15 @@ describe('security: validateActionRequest', () => {
       { tabIds: ['tab-1', 'tab-1'], paneIds: [] },
       { tabIds: [1], paneIds: [] },
       { tabIds: [], paneIds: [], extra: true },
-      { tabIds: Array.from({ length: 65 }, (_, index) => `tab-${index}`), paneIds: [] }
+      {
+        tabIds: Array.from({ length: 65 }, (_, index) => `tab-${index}`),
+        paneIds: [],
+      },
     ]
     for (const expected of invalidWorkspaceExpected) {
       const result = validateActionRequest({
         ...workspaceBase,
-        target: { ...workspaceBase.target, expected }
+        target: { ...workspaceBase.target, expected },
       })
       expect(result.valid).toBe(false)
     }
@@ -469,13 +501,13 @@ describe('security: validateActionRequest', () => {
       { paneIds: null },
       { paneIds: ['pane-1', 'pane-1'] },
       { paneIds: [1] },
-      { paneIds: [], extra: true }
+      { paneIds: [], extra: true },
     ]
     for (const expected of invalidTabExpected) {
       const result = validateActionRequest({
         type: 'tab-close',
         operationId: 'op-tab-manifest',
-        target: { workspaceId: 'ws-1', tabId: 'tab-1', expected }
+        target: { workspaceId: 'ws-1', tabId: 'tab-1', expected },
       })
       expect(result.valid).toBe(false)
     }
@@ -486,7 +518,7 @@ describe('security: validateActionRequest', () => {
       type: 'workspace-close',
       operationId: 'op-close-ws',
       target: { workspaceId: 'ws-1' },
-      extraRoot: true
+      extraRoot: true,
     })
     expect(resRoot.valid).toBe(false)
     expect(resRoot.error).toContain('Unsupported field "extraRoot"')
@@ -496,8 +528,8 @@ describe('security: validateActionRequest', () => {
       operationId: 'op-close-ws',
       target: {
         workspaceId: 'ws-1',
-        extraTarget: 'bad'
-      }
+        extraTarget: 'bad',
+      },
     })
     expect(resTarget.valid).toBe(false)
     expect(resTarget.error).toContain('Unsupported field "extraTarget"')
@@ -508,14 +540,14 @@ describe('security: validateActionRequest', () => {
       type: 'workspace-close',
       operationId: 'op-close-ws',
       target: {
-        workspaceId: 123
-      }
+        workspaceId: 123,
+      },
     })
     expect(resNumeric.valid).toBe(false)
 
     const resMissing = validateActionRequest({
       type: 'workspace-close',
-      operationId: 'op-close-ws'
+      operationId: 'op-close-ws',
     })
     expect(resMissing.valid).toBe(false)
   })
@@ -527,8 +559,8 @@ describe('security: validateActionRequest', () => {
       target: {
         workspaceId: 'ws-1',
         tabId: 'tab-2',
-        expected: { paneIds: ['pane-b', 'pane-a'] }
-      }
+        expected: { paneIds: ['pane-b', 'pane-a'] },
+      },
     })
     expect(res.valid).toBe(true)
     expect(res.data).toEqual({
@@ -537,8 +569,8 @@ describe('security: validateActionRequest', () => {
       target: {
         workspaceId: 'ws-1',
         tabId: 'tab-2',
-        expected: { paneIds: ['pane-a', 'pane-b'] }
-      }
+        expected: { paneIds: ['pane-a', 'pane-b'] },
+      },
     })
   })
 
@@ -549,8 +581,8 @@ describe('security: validateActionRequest', () => {
       target: {
         workspaceId: 'ws-1',
         tabId: 'tab-2',
-        extra: 'bad'
-      }
+        extra: 'bad',
+      },
     })
     expect(resExtra.valid).toBe(false)
     expect(resExtra.error).toContain('Unsupported field "extra"')
@@ -560,8 +592,8 @@ describe('security: validateActionRequest', () => {
       operationId: 'op-close-tab',
       target: {
         workspaceId: 'ws-1',
-        tabId: 99
-      }
+        tabId: 99,
+      },
     })
     expect(resNumeric.valid).toBe(false)
   })
@@ -575,23 +607,27 @@ describe('security: validatePaneReadParams', () => {
     expect(res.data).toEqual({
       pane: 'w5N:p1',
       source: 'detection',
-      lines: undefined
+      lines: undefined,
     })
   })
 
   test('accepts valid custom source and lines', () => {
-    const url = new URL('http://127.0.0.1:8787/api/pane/read?pane=w5N:p1&source=visible&lines=50')
+    const url = new URL(
+      'http://127.0.0.1:8787/api/pane/read?pane=w5N:p1&source=visible&lines=50',
+    )
     const res = validatePaneReadParams(url)
     expect(res.valid).toBe(true)
     expect(res.data).toEqual({
       pane: 'w5N:p1',
       source: 'visible',
-      lines: 50
+      lines: 50,
     })
   })
 
   test('accepts recent-unwrapped source', () => {
-    const url = new URL('http://127.0.0.1:8787/api/pane/read?pane=w5N:p1&source=recent-unwrapped')
+    const url = new URL(
+      'http://127.0.0.1:8787/api/pane/read?pane=w5N:p1&source=recent-unwrapped',
+    )
     const res = validatePaneReadParams(url)
     expect(res.valid).toBe(true)
     expect(res.data?.source).toBe('recent-unwrapped')
@@ -606,17 +642,23 @@ describe('security: validatePaneReadParams', () => {
   })
 
   test('rejects unauthorized sources', () => {
-    const url = new URL('http://127.0.0.1:8787/api/pane/read?pane=w5N:p1&source=arbitrary-file')
+    const url = new URL(
+      'http://127.0.0.1:8787/api/pane/read?pane=w5N:p1&source=arbitrary-file',
+    )
     const res = validatePaneReadParams(url)
     expect(res.valid).toBe(false)
     expect(res.error).toContain('Invalid source')
   })
 
   test('rejects out-of-bounds lines count', () => {
-    const url0 = new URL('http://127.0.0.1:8787/api/pane/read?pane=w5N:p1&lines=0')
+    const url0 = new URL(
+      'http://127.0.0.1:8787/api/pane/read?pane=w5N:p1&lines=0',
+    )
     expect(validatePaneReadParams(url0).valid).toBe(false)
 
-    const urlHigh = new URL('http://127.0.0.1:8787/api/pane/read?pane=w5N:p1&lines=1001')
+    const urlHigh = new URL(
+      'http://127.0.0.1:8787/api/pane/read?pane=w5N:p1&lines=1001',
+    )
     expect(validatePaneReadParams(urlHigh).valid).toBe(false)
   })
 })
@@ -629,18 +671,20 @@ describe('security: validateTerminalParams', () => {
     expect(res.data).toEqual({
       pane: 'w5N:p1',
       cols: 80,
-      rows: 24
+      rows: 24,
     })
   })
 
   test('accepts valid custom cols and rows', () => {
-    const url = new URL('http://127.0.0.1:8787/api/terminal?pane=w5N:p1&cols=120&rows=40')
+    const url = new URL(
+      'http://127.0.0.1:8787/api/terminal?pane=w5N:p1&cols=120&rows=40',
+    )
     const res = validateTerminalParams(url)
     expect(res.valid).toBe(true)
     expect(res.data).toEqual({
       pane: 'w5N:p1',
       cols: 120,
-      rows: 40
+      rows: 40,
     })
   })
 
@@ -653,10 +697,14 @@ describe('security: validateTerminalParams', () => {
   })
 
   test('rejects out of bounds cols or rows', () => {
-    const urlCols = new URL('http://127.0.0.1:8787/api/terminal?pane=w5N:p1&cols=10')
+    const urlCols = new URL(
+      'http://127.0.0.1:8787/api/terminal?pane=w5N:p1&cols=10',
+    )
     expect(validateTerminalParams(urlCols).valid).toBe(false)
 
-    const urlRows = new URL('http://127.0.0.1:8787/api/terminal?pane=w5N:p1&rows=300')
+    const urlRows = new URL(
+      'http://127.0.0.1:8787/api/terminal?pane=w5N:p1&rows=300',
+    )
     expect(validateTerminalParams(urlRows).valid).toBe(false)
   })
 })
@@ -677,21 +725,27 @@ describe('security: validateAgentExplainParams', () => {
   })
 
   test('rejects malformed pane parameter', () => {
-    const url = new URL('http://127.0.0.1:8787/api/agent/explain?pane=invalid-format')
+    const url = new URL(
+      'http://127.0.0.1:8787/api/agent/explain?pane=invalid-format',
+    )
     const res = validateAgentExplainParams(url)
     expect(res.valid).toBe(false)
     expect(res.error).toContain('Invalid "pane"')
   })
 
   test('rejects duplicate pane parameter', () => {
-    const url = new URL('http://127.0.0.1:8787/api/agent/explain?pane=w5N:p1&pane=w5N:p2')
+    const url = new URL(
+      'http://127.0.0.1:8787/api/agent/explain?pane=w5N:p1&pane=w5N:p2',
+    )
     const res = validateAgentExplainParams(url)
     expect(res.valid).toBe(false)
     expect(res.error).toContain('Unexpected or duplicate')
   })
 
   test('rejects extra query parameters', () => {
-    const url = new URL('http://127.0.0.1:8787/api/agent/explain?pane=w5N:p1&source=detection')
+    const url = new URL(
+      'http://127.0.0.1:8787/api/agent/explain?pane=w5N:p1&source=detection',
+    )
     const res = validateAgentExplainParams(url)
     expect(res.valid).toBe(false)
     expect(res.error).toContain('Unexpected or duplicate')
@@ -708,10 +762,14 @@ describe('security: server endpoint origin enforcement', () => {
           method: 'POST',
           headers: {
             host: `127.0.0.1:${server.port}`,
-            'content-type': 'application/json'
+            'content-type': 'application/json',
           },
-          body: JSON.stringify({ type: 'keys', paneId: 'ws:p1', keys: ['enter'] })
-        })
+          body: JSON.stringify({
+            type: 'keys',
+            paneId: 'ws:p1',
+            keys: ['enter'],
+          }),
+        }),
       )
       expect(res.status).toBe(403)
       const data = (await res.json()) as { ok: boolean; error: string }
@@ -732,10 +790,14 @@ describe('security: server endpoint origin enforcement', () => {
           headers: {
             host: `my-node.ts.net`,
             origin: 'https://evil-node.ts.net',
-            'content-type': 'application/json'
+            'content-type': 'application/json',
           },
-          body: JSON.stringify({ type: 'keys', paneId: 'ws:p1', keys: ['enter'] })
-        })
+          body: JSON.stringify({
+            type: 'keys',
+            paneId: 'ws:p1',
+            keys: ['enter'],
+          }),
+        }),
       )
       expect(res.status).toBe(403)
     } finally {
@@ -750,9 +812,9 @@ describe('security: server endpoint origin enforcement', () => {
       const res = await server.fetch(
         new Request(`http://127.0.0.1:${server.port}/api/terminal?pane=ws:p1`, {
           headers: {
-            host: `127.0.0.1:${server.port}`
-          }
-        })
+            host: `127.0.0.1:${server.port}`,
+          },
+        }),
       )
       expect(res.status).toBe(403)
     } finally {
@@ -767,9 +829,9 @@ describe('security: server endpoint origin enforcement', () => {
       const res = await server.fetch(
         new Request(`http://127.0.0.1:${server.port}/api/events`, {
           headers: {
-            host: `127.0.0.1:${server.port}`
-          }
-        })
+            host: `127.0.0.1:${server.port}`,
+          },
+        }),
       )
       expect(res.status).toBe(403)
       const text = await res.text()
@@ -787,9 +849,9 @@ describe('security: server endpoint origin enforcement', () => {
         new Request(`http://127.0.0.1:${server.port}/api/events`, {
           headers: {
             host: `127.0.0.1:${server.port}`,
-            origin: 'http://malicious-site.com'
-          }
-        })
+            origin: 'http://malicious-site.com',
+          },
+        }),
       )
       expect(res.status).toBe(403)
     } finally {
@@ -802,11 +864,14 @@ describe('security: server endpoint origin enforcement', () => {
     const server = createServer(0, '127.0.0.1', { startPushBridge: false })
     try {
       const res = await server.fetch(
-        new Request(`http://127.0.0.1:${server.port}/api/agent/explain?pane=w5N:p1`, {
-          headers: {
-            host: 'attacker.evil.com'
-          }
-        })
+        new Request(
+          `http://127.0.0.1:${server.port}/api/agent/explain?pane=w5N:p1`,
+          {
+            headers: {
+              host: 'attacker.evil.com',
+            },
+          },
+        ),
       )
       expect(res.status).toBe(403)
       const data = (await res.json()) as { ok: boolean; error: string }
@@ -824,18 +889,21 @@ describe('security: server endpoint origin enforcement', () => {
       const resMissing = await server.fetch(
         new Request(`http://127.0.0.1:${server.port}/api/agent/explain`, {
           headers: {
-            host: `127.0.0.1:${server.port}`
-          }
-        })
+            host: `127.0.0.1:${server.port}`,
+          },
+        }),
       )
       expect(resMissing.status).toBe(400)
 
       const resBad = await server.fetch(
-        new Request(`http://127.0.0.1:${server.port}/api/agent/explain?pane=bad_pane`, {
-          headers: {
-            host: `127.0.0.1:${server.port}`
-          }
-        })
+        new Request(
+          `http://127.0.0.1:${server.port}/api/agent/explain?pane=bad_pane`,
+          {
+            headers: {
+              host: `127.0.0.1:${server.port}`,
+            },
+          },
+        ),
       )
       expect(resBad.status).toBe(400)
     } finally {
@@ -853,15 +921,21 @@ describe('security: server endpoint origin enforcement', () => {
     const server = createServer(0, '127.0.0.1', { startPushBridge: false })
     try {
       const res = await server.fetch(
-        new Request(`http://127.0.0.1:${server.port}/api/agent/explain?pane=w5N:p1`, {
-          headers: {
-            host: `127.0.0.1:${server.port}`
-          }
-        })
+        new Request(
+          `http://127.0.0.1:${server.port}/api/agent/explain?pane=w5N:p1`,
+          {
+            headers: {
+              host: `127.0.0.1:${server.port}`,
+            },
+          },
+        ),
       )
       expect(res.status).toBe(502)
       const data = (await res.json()) as { ok: boolean; error: string }
-      expect(data).toEqual({ ok: false, error: 'Failed to explain agent status' })
+      expect(data).toEqual({
+        ok: false,
+        error: 'Failed to explain agent status',
+      })
       expect(data.error).not.toContain('private-agent-explain-secret.sock')
     } finally {
       server.stop()

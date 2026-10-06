@@ -7,7 +7,7 @@ import type { ICatalogItem } from '@/types/herdr.ts'
 export const filterCatalogItems = (
   items: ICatalogItem[],
   mode: 'agent' | 'shell',
-  query?: string
+  query?: string,
 ): ICatalogItem[] => {
   const filteredByMode = items.filter((item) => {
     if (!item.mode || item.mode === 'both') return true
@@ -23,7 +23,8 @@ export const filterCatalogItems = (
     return (
       item.label.toLowerCase().includes(trimmedQuery) ||
       item.fillValue.toLowerCase().includes(trimmedQuery) ||
-      (item.description && item.description.toLowerCase().includes(trimmedQuery)) ||
+      (item.description &&
+        item.description.toLowerCase().includes(trimmedQuery)) ||
       (item.category && item.category.toLowerCase().includes(trimmedQuery))
     )
   })
@@ -34,9 +35,26 @@ export const filterCatalogItems = (
  * Items without a category default to 'Commands'.
  */
 export const groupCatalogItemsByCategory = (
-  items: ICatalogItem[]
+  items: ICatalogItem[],
 ): Map<string, ICatalogItem[]> => {
   const map = new Map<string, ICatalogItem[]>()
+  for (const item of items) {
+    const cat = item.category?.trim() || 'Commands'
+    if (!map.has(cat)) {
+      map.set(cat, [])
+    }
+    map.get(cat)!.push(item)
+  }
+  return map
+}
+
+/**
+ * Pure grouping for merged catalog items (repo + user custom actions) by category.
+ */
+export const groupMergedItemsByCategory = <T extends { category?: string }>(
+  items: T[],
+): Map<string, T[]> => {
+  const map = new Map<string, T[]>()
   for (const item of items) {
     const cat = item.category?.trim() || 'Commands'
     if (!map.has(cat)) {
@@ -56,7 +74,7 @@ export type IDraftApplyAction = 'fill' | 'replace' | 'append'
 export const applyDraftAction = (
   existingDraft: string,
   fillValue: string,
-  action: IDraftApplyAction
+  action: IDraftApplyAction,
 ): string => {
   switch (action) {
     case 'fill':

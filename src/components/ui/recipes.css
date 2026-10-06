@@ -1,0 +1,1042 @@
+/* ==========================================================================
+   Herdr Web - Canonical UI Recipe Stylesheet (Base UI + devswha/herdr-web-ui Visual Language)
+   Warm graphite dark-only terminal workspace with restrained modern primitives
+   Visual styling adapted from devswha/herdr-web-ui (MIT License Copyright 2026 devswha)
+   Headless behaviors and ARIA owned by Base UI 1.8.0 primitives
+   ========================================================================== */
+
+:root {
+  --ui-layer-backdrop: 100;
+  --ui-layer-sheet: 101;
+  --ui-layer-popover: 102;
+}
+
+/* --------------------------------------------------------------------------
+   1. Button Recipes (.ui-button)
+   -------------------------------------------------------------------------- */
+.ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--radius-md, 8px);
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm, 13px);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    opacity 150ms ease;
+  border: 1px solid transparent;
+  outline: none;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
+}
+
+.ui-button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.ui-button:disabled,
+.ui-button[data-disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Button Variants */
+.ui-button--default {
+  background-color: var(--color-accent);
+  color: var(--color-accent-text, #1b1407);
+  border-color: var(--color-accent);
+}
+
+.ui-button--default:hover:not(:disabled) {
+  background-color: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}
+
+.ui-button--secondary {
+  background-color: var(--color-bg-elevated);
+  color: var(--color-text-strong);
+  border-color: var(--color-border-subtle);
+}
+
+.ui-button--secondary:hover:not(:disabled) {
+  background-color: var(--color-bg-hover);
+  border-color: var(--color-border-strong);
+}
+
+.ui-button--outline {
+  background-color: transparent;
+  color: var(--color-text-primary);
+  border-color: var(--color-border-subtle);
+}
+
+.ui-button--outline:hover:not(:disabled) {
+  background-color: var(--color-bg-hover);
+  border-color: var(--color-border-strong);
+}
+
+.ui-button--ghost {
+  background-color: transparent;
+  color: var(--color-text-secondary);
+  border-color: transparent;
+}
+
+.ui-button--ghost:hover:not(:disabled) {
+  background-color: var(--color-bg-hover);
+  color: var(--color-text-strong);
+}
+
+.ui-button--danger {
+  background-color: var(--color-danger-tint);
+  color: var(--color-danger-text);
+  border-color: var(--color-status-blocked);
+}
+
+.ui-button--danger:hover:not(:disabled) {
+  background-color: rgba(255, 123, 112, 0.2);
+  border-color: var(--color-status-blocked);
+}
+
+.ui-button--warning {
+  background-color: var(--color-accent);
+  color: var(--color-accent-text, #1b1407);
+  border-color: var(--color-accent);
+  font-weight: 600;
+}
+
+.ui-button--warning:hover:not(:disabled) {
+  background-color: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}
+
+.ui-button--warning:active:not(:disabled) {
+  background-color: #d48c1f;
+  border-color: #d48c1f;
+}
+
+.ui-button--link {
+  background-color: transparent;
+  color: var(--color-accent);
+  border-color: transparent;
+  padding: 0;
+  height: auto;
+  min-height: auto;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.ui-button--link:hover:not(:disabled) {
+  color: var(--color-accent-hover);
+}
+
+/* Button Sizes: matching source --control-h: 34px, with safe hit area */
+.ui-button--default-size {
+  height: var(--control-h, 34px);
+  min-height: var(--control-h, 34px);
+  padding: 0 var(--space-3, 12px);
+  font-size: var(--fs-sm, 13px);
+  border-radius: var(--radius-md, 8px);
+}
+
+/* Multi-line content button override: intrinsic content height for space drawer / sidebar roster items */
+.ui-button.space-drawer-item,
+.ui-button--default-size.space-drawer-item {
+  height: auto;
+  min-height: 58px;
+  padding: 7px 10px;
+  white-space: normal;
+  line-height: normal;
+}
+
+/* Multi-line content button override: navigation search item */
+.ui-button.navigation-search-item,
+.ui-button--default-size.navigation-search-item {
+  height: auto;
+  min-height: 52px;
+  padding: 8px 12px;
+  white-space: normal;
+  line-height: normal;
+}
+
+.ui-button--sm {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 var(--space-2, 8px);
+  font-size: var(--fs-xs, 12px);
+  border-radius: var(--radius-sm, 6px);
+}
+
+.ui-button--lg {
+  height: 40px;
+  min-height: 40px;
+  padding: 0 var(--space-4, 16px);
+  font-size: var(--fs-md, 14px);
+  border-radius: var(--radius-md, 8px);
+}
+
+.ui-button--icon {
+  height: var(--control-h, 34px);
+  width: var(--control-h, 34px);
+  min-height: var(--control-h, 34px);
+  min-width: var(--control-h, 34px);
+  padding: 0;
+  border-radius: var(--radius-md, 8px);
+}
+
+.ui-button--compact {
+  height: 26px;
+  min-height: 26px;
+  padding: 0 var(--space-2, 8px);
+  font-size: var(--fs-2xs, 11px);
+  border-radius: var(--radius-sm, 6px);
+}
+
+/* --------------------------------------------------------------------------
+   2. Input Recipes (.ui-input)
+   -------------------------------------------------------------------------- */
+.ui-input {
+  display: flex;
+  width: 100%;
+  height: var(--control-h, 34px);
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--color-border-subtle);
+  background-color: var(--color-bg-input);
+  padding: 0 var(--space-3, 12px);
+  font-family: var(--font-sans);
+  font-size: 16px; /* 16px to prevent iOS auto-zoom */
+  color: var(--color-text-strong);
+  outline: none;
+  box-sizing: border-box;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+@media (min-width: 640px) {
+  .ui-input {
+    font-size: var(--fs-sm, 13px);
+  }
+}
+
+.ui-input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.ui-input:focus-visible {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.ui-input:disabled,
+.ui-input[data-disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: var(--color-bg-surface);
+}
+
+.ui-input--sm {
+  height: 32px;
+  padding: 0 0.5rem;
+  font-size: 0.8125rem;
+}
+
+.ui-input--error {
+  border-color: var(--color-status-error);
+}
+
+.ui-input--error:focus-visible {
+  border-color: var(--color-status-error);
+  box-shadow: 0 0 0 1px var(--color-status-error);
+}
+
+/* --------------------------------------------------------------------------
+   3. Textarea Recipes (.ui-textarea)
+   Shared field paint with Input, preserving mobile 16px font and IME safety
+   -------------------------------------------------------------------------- */
+.ui-textarea {
+  display: flex;
+  width: 100%;
+  min-height: 80px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--color-border-subtle);
+  background-color: var(--color-bg-input);
+  padding: 0.625rem 0.75rem;
+  font-family: var(--font-sans);
+  font-size: 16px; /* 16px to prevent iOS auto-zoom */
+  line-height: 1.4;
+  color: var(--color-text-strong);
+  outline: none;
+  resize: vertical;
+  box-sizing: border-box;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+@media (min-width: 640px) {
+  .ui-textarea {
+    font-size: 0.875rem;
+  }
+}
+
+.ui-textarea::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.ui-textarea:focus-visible {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.ui-textarea:disabled,
+.ui-textarea[data-disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: var(--color-bg-surface);
+}
+
+.ui-textarea--error {
+  border-color: var(--color-status-error);
+}
+
+/* --------------------------------------------------------------------------
+   4. Checkbox Recipes (.ui-checkbox)
+   -------------------------------------------------------------------------- */
+.ui-checkbox {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  border: 1px solid var(--color-border-subtle);
+  background-color: var(--color-bg-base);
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.ui-checkbox::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 44px;
+  min-height: 44px;
+  width: 100%;
+  height: 100%;
+}
+
+.ui-checkbox:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.ui-checkbox[data-checked] {
+  background-color: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #09090b;
+}
+
+.ui-checkbox[data-disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ui-checkbox__indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+}
+
+/* --------------------------------------------------------------------------
+   5. Switch Recipes (.ui-switch)
+   Note on provenance: Base UI behavior and owner-local visual adaptation of
+   source actual control language (warm graphite palette, amber accent,
+   and standard 40x22 pill geometry with 16px thumb and 18px translation).
+   Upstream herdr-web-ui defines .view-switch (a segmented control), having no
+   direct .switch class; this recipe provides the semantic toggle counterpart
+   for tab notification policy while matching source material tokens.
+   -------------------------------------------------------------------------- */
+.ui-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 40px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  border: 1px solid var(--color-border-strong);
+  background-color: var(--color-bg-elevated);
+  cursor: pointer;
+  padding: 2px;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.ui-switch::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 44px;
+  min-height: 44px;
+  width: 100%;
+  height: 100%;
+}
+
+.ui-switch:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.ui-switch[data-checked] {
+  background-color: var(--color-accent-tint);
+  border-color: var(--color-accent);
+}
+
+.ui-switch[data-disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ui-switch__thumb {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background-color: var(--color-text-secondary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition:
+    transform 180ms cubic-bezier(0.2, 0, 0, 1),
+    background-color 180ms ease;
+  transform: translateX(0);
+}
+
+.ui-switch[data-checked] .ui-switch__thumb {
+  transform: translateX(18px);
+  background-color: var(--color-accent);
+}
+
+/* --------------------------------------------------------------------------
+   6. Radio Group & Radio Recipes (.ui-radio-group, .ui-radio)
+   -------------------------------------------------------------------------- */
+.ui-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ui-radio {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  border: 1px solid var(--color-border-subtle);
+  background-color: var(--color-bg-base);
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.ui-radio::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 44px;
+  min-height: 44px;
+  width: 100%;
+  height: 100%;
+}
+
+.ui-radio:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.ui-radio[data-checked] {
+  border-color: var(--color-accent);
+}
+
+.ui-radio[data-disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ui-radio__indicator {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background-color: var(--color-accent);
+}
+
+/* --------------------------------------------------------------------------
+   7. Select Recipes (.ui-select)
+   -------------------------------------------------------------------------- */
+.ui-select__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: var(--control-h, 34px);
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--color-border-subtle);
+  background-color: var(--color-bg-input);
+  padding: 0 var(--space-3, 12px);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  color: var(--color-text-strong);
+  cursor: pointer;
+  outline: none;
+  box-sizing: border-box;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+@media (min-width: 640px) {
+  .ui-select__trigger {
+    font-size: var(--fs-sm, 13px);
+  }
+}
+
+.ui-select__trigger:focus-visible {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.ui-select__trigger:disabled,
+.ui-select__trigger[data-disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ui-select__positioner {
+  z-index: var(--ui-layer-popover);
+}
+
+.ui-select__popup {
+  min-width: var(--anchor-width, 160px);
+  max-height: 280px;
+  overflow-y: auto;
+  border-radius: var(--radius-lg, 12px);
+  border: 1px solid var(--color-border-subtle);
+  background-color: var(--color-bg-panel);
+  padding: 4px;
+  box-shadow: var(--shadow-pop);
+  z-index: var(--ui-layer-popover);
+  box-sizing: border-box;
+}
+
+.ui-select__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm, 6px);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+  transition: background-color 100ms ease;
+}
+
+.ui-select__item:hover,
+.ui-select__item[data-highlighted] {
+  background-color: var(--color-bg-hover);
+  color: var(--color-text-strong);
+}
+
+.ui-select__item[data-selected] {
+  color: var(--color-accent);
+  font-weight: 500;
+}
+
+/* --------------------------------------------------------------------------
+   8. Sheet / Dialog Recipes (.ui-sheet, .ui-dialog)
+   Genuine Base UI Dialog: Portal, Backdrop, Popup, Title, Description, Close
+   -------------------------------------------------------------------------- */
+.ui-sheet__backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: var(--color-bg-overlay);
+  backdrop-filter: blur(2px);
+  z-index: var(--ui-layer-backdrop);
+  transition: opacity 200ms ease;
+}
+
+.ui-sheet__backdrop[data-open] {
+  opacity: 1;
+}
+
+.ui-sheet__backdrop[data-closed] {
+  opacity: 0;
+}
+
+/* Bottom Sheet (.ui-sheet--bottom) */
+.ui-sheet--bottom {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-bg-panel);
+  border-top: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-xl, 16px) var(--radius-xl, 16px) 0 0;
+  box-shadow: var(--shadow-drawer);
+  z-index: var(--ui-layer-sheet);
+  outline: none;
+  overflow: hidden;
+  box-sizing: border-box;
+  animation: ui-sheet-slide-up 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Left Space Sheet (.ui-sheet--left) */
+.ui-sheet--left {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 320px;
+  max-width: 85vw;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-bg-panel);
+  border-right: 1px solid var(--color-border-subtle);
+  box-shadow: var(--shadow-drawer);
+  z-index: var(--ui-layer-sheet);
+  outline: none;
+  overflow: hidden;
+  box-sizing: border-box;
+  animation: ui-sheet-slide-right 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes ui-sheet-slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes ui-sheet-slide-right {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.ui-sheet__header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--color-border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.ui-sheet__title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-strong);
+  margin: 0;
+}
+
+.ui-sheet__description {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  margin: 0.25rem 0 0 0;
+}
+
+.ui-sheet__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem 1.25rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ui-sheet__footer {
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--color-border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  background-color: var(--color-bg-panel);
+}
+
+/* --------------------------------------------------------------------------
+   9. Tabs Recipes (.ui-tabs, .ui-tabs__list, .ui-tabs__tab, .ui-tabs__panel)
+   -------------------------------------------------------------------------- */
+.ui-tabs {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.ui-tabs__list {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background-color: var(--color-bg-elevated);
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--color-border-subtle);
+  box-sizing: border-box;
+}
+
+.ui-tabs__tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  min-height: 36px;
+  border-radius: var(--radius-sm, 6px);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  background-color: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.ui-tabs__tab:hover:not(:disabled):not([data-active]) {
+  color: var(--color-text-strong);
+  background-color: var(--color-bg-hover);
+}
+
+.ui-tabs__tab:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.ui-tabs__tab[data-active] {
+  color: var(--color-text-strong);
+  background-color: var(--color-bg-hover);
+  border-color: var(--color-border-subtle);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.ui-tabs__tab:disabled,
+.ui-tabs__tab[data-disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.ui-tabs__panel {
+  outline: none;
+  flex: 1;
+}
+
+.ui-tabs__panel:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   10. Toggle Recipes (.ui-toggle)
+   -------------------------------------------------------------------------- */
+.ui-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--radius-sm, 6px);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+  border: 1px solid transparent;
+  outline: none;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
+}
+
+.ui-toggle:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.ui-toggle:disabled,
+.ui-toggle[data-disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Toggle Variants */
+.ui-toggle--default {
+  background-color: transparent;
+  color: var(--color-text-secondary);
+  border-color: var(--color-border-subtle);
+}
+
+.ui-toggle--default:hover:not(:disabled):not([data-pressed]) {
+  background-color: var(--color-bg-hover);
+  color: var(--color-text-strong);
+}
+
+.ui-toggle--default[data-pressed] {
+  background-color: var(--color-bg-hover);
+  color: var(--color-text-strong);
+  border-color: var(--color-accent);
+  font-weight: 600;
+}
+
+.ui-toggle--outline {
+  background-color: transparent;
+  color: var(--color-text-primary);
+  border-color: var(--color-border-subtle);
+}
+
+.ui-toggle--outline:hover:not(:disabled):not([data-pressed]) {
+  background-color: var(--color-bg-hover);
+  border-color: var(--color-border-strong);
+}
+
+.ui-toggle--outline[data-pressed] {
+  background-color: var(--color-bg-hover);
+  color: var(--color-text-strong);
+  border-color: var(--color-accent);
+  font-weight: 600;
+}
+
+.ui-toggle--tab {
+  background-color: transparent;
+  color: var(--color-text-secondary);
+  border-color: transparent;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+}
+
+.ui-toggle--tab:hover:not(:disabled):not([data-pressed]) {
+  color: var(--color-text-strong);
+  background-color: transparent;
+}
+
+.ui-toggle--tab[data-pressed] {
+  color: var(--color-accent);
+  background-color: transparent;
+  border-bottom-color: var(--color-accent);
+  font-weight: 600;
+}
+
+.ui-toggle--tab:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+/* Toggle Sizes */
+.ui-toggle--default-size {
+  height: 40px;
+  min-height: 40px;
+  padding: 0 1rem;
+}
+
+.ui-toggle--sm {
+  height: 32px;
+  min-height: 32px;
+  padding: 0 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.ui-toggle--compact {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+}
+
+/* --------------------------------------------------------------------------
+   11. ToggleGroup Recipes (.ui-toggle-group)
+   -------------------------------------------------------------------------- */
+.ui-toggle-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background-color: var(--color-bg-base);
+  border-radius: 6px;
+  border: 1px solid var(--color-border-subtle);
+  box-sizing: border-box;
+}
+
+.ui-toggle-group[data-orientation='vertical'] {
+  flex-direction: column;
+}
+
+/* --------------------------------------------------------------------------
+   12. Mobile Touch Targets & Interaction Coverage
+   Source density controls visible paint; safe touch expansion is decoupled
+   from desktop metrics without inflating desktop/compact geometry.
+   Preserves 16px font-size for mobile input fields for iOS zoom safety.
+   -------------------------------------------------------------------------- */
+@media (pointer: coarse) {
+  .ui-button--icon {
+    width: var(--touch-target, 40px);
+    height: var(--touch-target, 40px);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   13. Status Badge Recipes (.badge, .badge-*)
+   Source recipe adapted from devswha/herdr-web-ui (MIT Copyright 2026 devswha)
+   Semantic state paint using source design tokens
+   -------------------------------------------------------------------------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm, 6px);
+  font-family: var(--font-sans);
+  font-size: var(--fs-2xs, 11px);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.badge-idle {
+  background: var(--color-bg-elevated);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-subtle);
+}
+
+.badge-working {
+  background: var(--color-status-working-tint);
+  color: var(--color-status-working);
+  border: 1px solid rgba(108, 184, 214, 0.35);
+}
+
+.badge-working::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-status-working);
+}
+
+.badge-blocked {
+  background: var(--color-status-blocked-tint);
+  color: var(--color-status-blocked);
+  border: 1px solid rgba(255, 123, 112, 0.35);
+}
+
+.badge-done {
+  background: var(--color-status-done-tint);
+  color: var(--color-status-done);
+  border: 1px solid rgba(147, 195, 107, 0.35);
+}
+
+.badge-unknown {
+  background: var(--color-bg-surface);
+  color: var(--color-text-tertiary);
+  border: 1px solid var(--color-border-subtle);
+}
+
+/* Backward-compatible alias for any residual .status-badge callers */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm, 6px);
+  font-family: var(--font-sans);
+  font-size: var(--fs-2xs, 11px);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.status-badge--idle {
+  background: var(--color-bg-elevated);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-subtle);
+}
+
+.status-badge--working {
+  background: var(--color-status-working-tint);
+  color: var(--color-status-working);
+  border: 1px solid rgba(108, 184, 214, 0.35);
+}
+
+.status-badge--blocked {
+  background: var(--color-status-blocked-tint);
+  color: var(--color-status-blocked);
+  border: 1px solid rgba(255, 123, 112, 0.35);
+}
+
+.status-badge--done {
+  background: var(--color-status-done-tint);
+  color: var(--color-status-done);
+  border: 1px solid rgba(147, 195, 107, 0.35);
+}
+
+.status-badge--unknown {
+  background: var(--color-bg-surface);
+  color: var(--color-text-tertiary);
+  border: 1px solid var(--color-border-subtle);
+}

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { FC, UIEvent } from 'react'
+import Button from '@/components/ui/button.tsx'
 
 export interface IQuestionViewProps {
   paneId: string
@@ -14,7 +15,7 @@ const QuestionView: FC<IQuestionViewProps> = ({
   content,
   isLoading,
   error,
-  onRefresh
+  onRefresh,
 }) => {
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const activePaneRef = useRef(paneId)
@@ -40,7 +41,8 @@ const QuestionView: FC<IQuestionViewProps> = ({
 
   const handleBodyScroll = (event: UIEvent<HTMLDivElement>) => {
     const body = event.currentTarget
-    const distanceFromBottom = body.scrollHeight - body.scrollTop - body.clientHeight
+    const distanceFromBottom =
+      body.scrollHeight - body.scrollTop - body.clientHeight
     shouldStickToBottomRef.current = distanceFromBottom <= 48
   }
 
@@ -59,12 +61,21 @@ const QuestionView: FC<IQuestionViewProps> = ({
         aria-label="Complete question and choices"
       >
         {error && !content ? (
-          <div className="question-view__state question-view__state--error" role="alert">
+          <div
+            className="question-view__state question-view__state--error"
+            role="alert"
+          >
             <span>Failed to read question: {error}</span>
             {onRefresh && (
-              <button type="button" className="question-view__retry-btn" onClick={onRefresh}>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="question-view__retry-btn"
+                onClick={onRefresh}
+              >
                 Retry
-              </button>
+              </Button>
             )}
           </div>
         ) : isLoading && !content ? (
