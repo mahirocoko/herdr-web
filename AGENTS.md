@@ -63,6 +63,8 @@ bun run dev
 
 `bun test` and `bun run test:coverage` must remain independent of a live Herdr daemon. Runtime integration belongs behind `HERDR_LIVE_TEST=1`. Coverage uses repository-owned global floors because Bun 1.3.11's built-in threshold is per loaded file.
 
+Live transport checks preserve protocol22 and compare adapter/CLI version metadata with the active native `herdr.ping` response, not the generated schema's historical0.9.1 producer version. Passing these bounded live operations does not establish complete host-schema compatibility: `schema:check` remains the independent exact generated-schema check, and its installed0.9.3 mismatch must stay explicit in release notes rather than being hidden by a version assertion or automatic schema sync.
+
 ## Code Shape
 
 - Use kebab-case filenames, single quotes, and no semicolons.

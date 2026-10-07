@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { beforeAll, describe, expect, test } from 'bun:test'
 import {
   buildAgentExplainArgv,
   buildPaneReadArgv,
@@ -61,17 +61,15 @@ describe('herdr-cli: unit helpers', () => {
   })
 
   test('buildTerminalInputArgv preserves input as one argv value without shell interpolation', () => {
-    expect(buildTerminalInputArgv('w1:p1', 'printf "$HOME" && echo done')).toEqual([
-      'herdr',
-      'pane',
-      'run',
-      'w1:p1',
-      'printf "$HOME" && echo done'
-    ])
+    expect(
+      buildTerminalInputArgv('w1:p1', 'printf "$HOME" && echo done')
+    ).toEqual(['herdr', 'pane', 'run', 'w1:p1', 'printf "$HOME" && echo done'])
   })
 
   test('buildPaneReadArgv creates a bounded public Herdr read command', () => {
-    expect(buildPaneReadArgv('w1:p1', { source: 'visible', lines: 80 })).toEqual([
+    expect(
+      buildPaneReadArgv('w1:p1', { source: 'visible', lines: 80 })
+    ).toEqual([
       'herdr',
       'pane',
       'read',
@@ -86,12 +84,12 @@ describe('herdr-cli: unit helpers', () => {
   })
 
   test('buildPaneReadArgv rejects unsupported sources and line counts', () => {
-    expect(() => buildPaneReadArgv('w1:p1', { source: 'arbitrary' as any })).toThrow(
-      'Unsupported pane read source'
-    )
-    expect(() => buildPaneReadArgv('w1:p1', { source: 'detection', lines: 0 })).toThrow(
-      'between 1 and 1000'
-    )
+    expect(() =>
+      buildPaneReadArgv('w1:p1', { source: 'arbitrary' as any })
+    ).toThrow('Unsupported pane read source')
+    expect(() =>
+      buildPaneReadArgv('w1:p1', { source: 'detection', lines: 0 })
+    ).toThrow('between 1 and 1000')
   })
 
   test('buildAgentExplainArgv creates bounded json explain command', () => {
@@ -109,12 +107,22 @@ const isLive = process.env.HERDR_LIVE_TEST === '1'
 const describeLive = isLive ? describe : describe.skip
 
 describeLive('herdr: live integration against active Herdr instance', () => {
+  let nativeVersion: string
+
+  beforeAll(async () => {
+    const { executePing } = await import('../herdr-socket.ts')
+    const pong = await executePing({ timeoutMs: 3000 })
+    expect(pong.protocol).toBe(22)
+    expect(pong.version).toMatch(/^\d+\.\d+\.\d+(?:-.+)?$/)
+    nativeVersion = pong.version
+  })
+
   test('direct socket ping returns protocol 22 and pong without input', async () => {
     const { executePing } = await import('../herdr-socket.ts')
     const pong = await executePing({ timeoutMs: 3000 })
     expect(pong.type).toBe('pong')
     expect(pong.protocol).toBe(22)
-    expect(pong.version).toBe('0.9.1')
+    expect(pong.version).toBe(nativeVersion)
   })
 
   test('socket adapter getHerdrHealth returns healthy status for running Herdr', async () => {
@@ -122,7 +130,7 @@ describeLive('herdr: live integration against active Herdr instance', () => {
     const health = await getHerdrHealth(3000)
     expect(health.ok).toBe(true)
     expect(health.herdrOk).toBe(true)
-    expect(health.version).toBe('0.9.1')
+    expect(health.version).toBe(nativeVersion)
     expect(health.serverStatus).toBe('running')
   })
 
@@ -130,7 +138,7 @@ describeLive('herdr: live integration against active Herdr instance', () => {
     const { getHerdrSnapshot } = await import('../herdr-adapter.ts')
     const snapshot = await getHerdrSnapshot(5000)
     expect(snapshot).toBeDefined()
-    expect(snapshot.version).toBe('0.9.1')
+    expect(snapshot.version).toBe(nativeVersion)
     expect(snapshot.protocol).toBe(22)
     expect(Array.isArray(snapshot.workspaces)).toBe(true)
     expect(Array.isArray(snapshot.tabs)).toBe(true)
@@ -140,12 +148,16 @@ describeLive('herdr: live integration against active Herdr instance', () => {
   })
 
   test('socket adapter readPaneContent reads visible text lines without submitting input', async () => {
-    const { getHerdrSnapshot, readPaneContent } = await import('../herdr-adapter.ts')
+    const { getHerdrSnapshot, readPaneContent } =
+      await import('../herdr-adapter.ts')
     const snapshot = await getHerdrSnapshot(5000)
     const activePane = snapshot.panes[0]
     expect(activePane).toBeDefined()
 
-    const result = await readPaneContent(activePane.pane_id, { source: 'visible', lines: 20 })
+    const result = await readPaneContent(activePane.pane_id, {
+      source: 'visible',
+      lines: 20
+    })
     expect(result.ok).toBe(true)
     expect(result.paneId).toBe(activePane.pane_id)
     expect(result.source).toBe('visible')
@@ -153,12 +165,16 @@ describeLive('herdr: live integration against active Herdr instance', () => {
   })
 
   test('socket adapter maps browser history source to recent_unwrapped without submitting input', async () => {
-    const { getHerdrSnapshot, readPaneContent } = await import('../herdr-adapter.ts')
+    const { getHerdrSnapshot, readPaneContent } =
+      await import('../herdr-adapter.ts')
     const snapshot = await getHerdrSnapshot(5000)
     const activePane = snapshot.panes[0]
     expect(activePane).toBeDefined()
 
-    const result = await readPaneContent(activePane.pane_id, { source: 'recent-unwrapped', lines: 20 })
+    const result = await readPaneContent(activePane.pane_id, {
+      source: 'recent-unwrapped',
+      lines: 20
+    })
     expect(result.ok).toBe(true)
     expect(result.paneId).toBe(activePane.pane_id)
     expect(result.source).toBe('recent-unwrapped')
@@ -167,7 +183,8 @@ describeLive('herdr: live integration against active Herdr instance', () => {
 
   // Retained intentional CLI transport: raw socket API does not expose terminal session observe.
   test('spawnObserverProcess (CLI child observer) captures live frame without input or takeover', async () => {
-    const { getHerdrSnapshot, spawnObserverProcess } = await import('../herdr-adapter.ts')
+    const { getHerdrSnapshot, spawnObserverProcess } =
+      await import('../herdr-adapter.ts')
     const snapshot = await getHerdrSnapshot(5000)
     const activePane = snapshot.panes[0]
     expect(activePane).toBeDefined()
@@ -197,7 +214,10 @@ describeLive('herdr: live integration against active Herdr instance', () => {
           if (!trimmed) continue
           try {
             const parsed = JSON.parse(trimmed)
-            if (parsed.type === 'terminal.frame' && typeof parsed.bytes === 'string') {
+            if (
+              parsed.type === 'terminal.frame' &&
+              typeof parsed.bytes === 'string'
+            ) {
               receivedFrame = parsed
               break
             }
@@ -223,11 +243,12 @@ describeLive('herdr: live integration against active Herdr instance', () => {
     const originalTransport = process.env.HERDR_TRANSPORT
     try {
       process.env.HERDR_TRANSPORT = 'cli'
-      const { getHerdrHealth, getHerdrSnapshot } = await import('../herdr-adapter.ts')
+      const { getHerdrHealth, getHerdrSnapshot } =
+        await import('../herdr-adapter.ts')
       const health = await getHerdrHealth(3000)
       expect(health.ok).toBe(true)
       const snap = await getHerdrSnapshot(5000)
-      expect(snap.version).toBe('0.9.1')
+      expect(snap.version).toBe(nativeVersion)
     } finally {
       if (originalTransport !== undefined) {
         process.env.HERDR_TRANSPORT = originalTransport
@@ -238,10 +259,13 @@ describeLive('herdr: live integration against active Herdr instance', () => {
   })
 
   test('socket adapter getAgentExplain retrieves bounded explain on active agent pane and truthful no-agent on shell pane without mutation', async () => {
-    const { getHerdrSnapshot, getAgentExplain } = await import('../herdr-adapter.ts')
+    const { getHerdrSnapshot, getAgentExplain } =
+      await import('../herdr-adapter.ts')
     const snapshot = await getHerdrSnapshot(5000)
     const agentPane = snapshot.panes.find((p) => p.agent || p.display_agent)
-    const shellPane = snapshot.panes.find((p) => !p.agent && (!p.display_agent || p.display_agent === 'Shell'))
+    const shellPane = snapshot.panes.find(
+      (p) => !p.agent && (!p.display_agent || p.display_agent === 'Shell')
+    )
 
     if (agentPane) {
       const explain = await getAgentExplain(agentPane.pane_id, 5000)

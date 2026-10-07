@@ -437,6 +437,14 @@ describe('terminal-touch-selection: listener attachment and gesture threshold', 
     expect(term.select).toHaveBeenCalled()
     expect(onSelection).toHaveBeenCalledWith('hello')
 
+    // Native context menus must not interrupt an active custom selection gesture.
+    const preventDefault = mock(() => {})
+    listeners.contextmenu[0]({ preventDefault })
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    listeners.touchend[0]({ touches: [] })
+    listeners.contextmenu[0]({ preventDefault })
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+
     cleanup()
   })
 })
