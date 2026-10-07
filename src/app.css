@@ -1182,6 +1182,7 @@ body {
 }
 
 .terminal-canvas {
+  --terminal-font-size: var(--fs-md);
   width: 100%;
   flex: 1 1 0%;
   min-height: 0;
@@ -1201,6 +1202,21 @@ body {
   height: 100%;
   padding: var(--space-2) var(--space-3);
   background-color: var(--color-bg-base);
+}
+
+@media (max-width: 600px) {
+  .terminal-canvas {
+    --terminal-font-size: var(--fs-sm);
+  }
+
+  .terminal-canvas--fitted .xterm {
+    padding: 0;
+  }
+
+  /* xterm's default viewport is black; keep leftover partial cells on our surface. */
+  .terminal-canvas--fitted .xterm .xterm-viewport {
+    background-color: var(--color-bg-base);
+  }
 }
 
 .terminal-canvas[data-adopted-grid] .xterm {

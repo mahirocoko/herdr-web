@@ -257,6 +257,51 @@ describe('terminal-touch-selection: drag calculation', () => {
 })
 
 describe('terminal-touch-selection: listener attachment and gesture threshold', () => {
+  it('keeps deltas relative to each new gesture after swipe, release and tap', () => {
+    const listeners: Record<string, Function> = {}
+    const deltas: number[] = []
+    const container = {
+      addEventListener: (name: string, fn: Function) => {
+        listeners[name] = fn
+      },
+      removeEventListener: () => {},
+      style: {}
+    } as any
+    const term = { hasSelection: () => false }
+    const cleanup = attachTerminalTouchSelection({
+      container,
+      getTerminal: () => term as any,
+      isObserverMode: () => true,
+      onSelection: () => {},
+      onClearSelection: () => {},
+      onTouchScroll: (delta) => deltas.push(delta)
+    })
+    const touch = (name: string, y: number) =>
+      listeners[name]({
+        touches: [{ clientX: 50, clientY: y }],
+        cancelable: true,
+        preventDefault: () => {}
+      })
+    touch('touchstart', 400)
+    touch('touchmove', 445)
+    listeners.touchend({ touches: [] })
+    expect(deltas).toEqual([2])
+    touch('touchstart', 100)
+    touch('touchmove', 101)
+    listeners.touchend({ touches: [] })
+    expect(deltas).toEqual([2])
+    touch('touchstart', 100)
+    touch('touchmove', 119)
+    expect(deltas).toEqual([2])
+    touch('touchmove', 121)
+    expect(deltas).toEqual([2, 1])
+    listeners.touchcancel({ touches: [] })
+    touch('touchstart', 500)
+    touch('touchmove', 520)
+    expect(deltas).toEqual([2, 1, 1])
+    cleanup()
+  })
+
   it('cancels selection and leaves ordinary pan intact when touch moves beyond threshold before timer', async () => {
     const listeners: Record<string, Function[]> = {}
     const container = {

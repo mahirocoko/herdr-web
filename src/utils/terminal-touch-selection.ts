@@ -287,6 +287,9 @@ export const attachTerminalTouchSelection = (
 
     const touch = e.touches[0]
     startPoint = { clientX: touch.clientX, clientY: touch.clientY }
+    // A gesture starts here, not at screen origin or the previous finger's endpoint.
+    lastTouchY = touch.clientY
+    accumulatedDeltaY = 0
     isMoved = false
     clearTimer()
 

@@ -1,5 +1,7 @@
 # Styling
 
+Mobile Terminal-only sizing uses `--terminal-font-size`: `--fs-sm` (13px) at ≤600px and `--fs-md` (14px) above it. Xterm applies the token before each FitAddon measurement, including resize of the same mounted terminal; header, toolbar, Composer and its 16px iOS-safe input are unchanged. On fitted mobile terminals, `.xterm` padding is zero and the native viewport's default black backdrop is replaced by the existing `--color-bg-base`. Mobile Live uses `pane.scroll` history rather than xterm local scrollback, so its local buffer is zero and FitAddon does not reserve a redundant scrollbar gutter. Desktop and shell Control retain xterm's 1000-line default. The source PTY still uses whole measured cells: a remainder smaller than one cell is expected and shares the surface paint, not a stretched or cropped terminal image. Source ANSI-authored colors remain intact.
+
 ## Terminal-first surface (October 6)
 
 The main pane opens in live Terminal (internal `stream` mode); History is an explicit secondary reading surface. Question remains available for blocked panes but status changes never replace the view being read. Panel is an internal text fallback, not a primary header choice. Composer Send and shell-only opt-in control retain their existing semantics; this slice does not implement agent live typing or Chat.

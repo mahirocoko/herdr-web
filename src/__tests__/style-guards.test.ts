@@ -2,6 +2,30 @@ import { describe, expect, it } from 'bun:test'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 
+describe('mobile terminal typography ownership', () => {
+  it('uses one responsive terminal token before measuring real PTY cells', () => {
+    const css = fs.readFileSync(path.resolve('src/app.css'), 'utf8')
+    const canvas = fs.readFileSync(
+      path.resolve('src/components/terminal-canvas.tsx'),
+      'utf8'
+    )
+    expect(css).toContain('--terminal-font-size: var(--fs-md);')
+    expect(css).toContain('--terminal-font-size: var(--fs-sm);')
+    expect(canvas).toContain("getPropertyValue('--terminal-font-size')")
+    expect(canvas).toContain("token('--terminal-font-size')")
+    expect(canvas).toContain("modeRef.current === 'observer' &&")
+    expect(canvas).toContain("window.matchMedia('(max-width: 600px)').matches")
+    expect(
+      canvas.indexOf('terminalRef.current.options.scrollback = localScrollback')
+    ).toBeLessThan(canvas.indexOf('fitAddonRef.current.fit()'))
+    expect(
+      canvas.indexOf('terminalRef.current.options.fontSize = fontSize')
+    ).toBeLessThan(canvas.indexOf('fitAddonRef.current.fit()'))
+    expect(css).toContain('.terminal-canvas--fitted .xterm .xterm-viewport')
+    expect(css).toMatch(/\.terminal-canvas--fitted \.xterm \{\s*padding: 0;/)
+  })
+})
+
 describe('forwarded mobile header, key rail and Working spinner scope', () => {
   const css = fs.readFileSync(
     path.resolve(import.meta.dir, '../app.css'),
