@@ -85,8 +85,17 @@ The transport adapter provides a unified interface selected by `HERDR_TRANSPORT`
   - `tab-create`, `workspace-create`, `workspace-close`, and `tab-close` actions are strictly rejected in CLI mode with HTTP 409 (socket transport required).
   - `/api/events` returns a non-upgrade response in CLI mode, so browser session snapshots use HTTP fallback polling.
   - No automatic per-request fallback: transport mode is explicit to prevent masking protocol errors.
-- **Stream Observer Child**:
-  - `spawnObserverProcess` (`herdr terminal session observe`) is retained as the default CLI transport in socket mode because the raw socket API exposes no terminal session observe method.
+- **Stream Observer Child (Fitted Live Grid)**:
+  - Stream mode fits the actual native PTY grid to the browser canvas by spawning `herdr terminal session control <TARGET> --cols <N> --rows <N>` via `server/terminal-fit.ts` (bounded cols 1..500, rows 1..200, allowing mobile 35-col viewports without a min-40 restriction).
+  - Synchronized reservation guarantees exactly one fitted geometry producer per `terminalId`; concurrent viewers receive explicit `FIT_BUSY` (HTTP 409) rather than competing or pretending fit.
+  - The browser stream hook debounces and dedupes `{ type: 'terminal.resize', cols, rows }` over the same WebSocket without reconnecting. Old fixed-grid layout watchers do not override browser-fitted dimensions.
+  - The fitted WebSocket also accepts bounded native source scroll commands (`terminal.scroll` with signed `deltaRows`, `to: 'latest'`, or `reset: true`), clamped against current native `pane.get` scroll metadata and executed via canonical `pane.scroll`, emitting `terminal.scroll-state`.
+  - Wheel and mobile touch drag in Live mode adjust native reading offset, with `Latest` restoring offset 0 and incoming updates preserving reading position when scrolled up (`offset > 0`).
+  - Terminal fit automatically releases on document hidden/pagehide/unmount/History/pane switch and on manual pause, terminating the fitted producer child and restoring native desktop PTY dimensions automatically without calling `pane.resize`.
+  - Resize and scroll authority do NOT acquire `operation-coordinator` pane claims, allowing Composer Send and agent prompts to execute concurrently without contention.
+  - Shell input control (`/api/terminal/control`) uses a break-before-make transition: it exclusively blocks fit admission for the terminal and confirms fit-producer exit before activating an input lease; fit admission remains blocked until lease release or quarantine clearance.
+  - The backend verifies the target against authoritative snapshot preflight before spawn and re-checks post-spawn.
+  - Local 2D panning remains available when scrolled away. Source history is bounded by the native API; native source viewport scrolling is distinct from agent-app/internal scroll when no history exists.
 - **Terminal Control Child (`herdr terminal session control`)**:
   - Opt-in shell-only control session bound to an exact verified idle shell pane.
   - Spawned as `herdr terminal session control <pane> --cols <N> --rows <N>` (bounded cols 40..240, rows 12..80).

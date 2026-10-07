@@ -60,12 +60,12 @@ Open **`http://127.0.0.1:8787`**.
 
 Herdr Web organizes an active Herdr session into canonical tabs across four dedicated reading surfaces:
 
-| Surface      | Best For                       | Behavior & Source                                                                                                                                                                           |
-| :----------- | :----------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Panel**    | Full screen source reading     | Source snapshot preserving whitespace, wrapping, semantic highlighting, auto-follow, and scroll position (`/api/pane/read?source=visible`, 1000ms polling). Default for running/idle panes. |
-| **History**  | Plain-text scrollback          | Bounded scrollback up to 1000 unwrapped rows (`/api/pane/read?source=recent-unwrapped&lines=1000`, 2000ms polling), text selection, and jump control.                                       |
-| **Question** | Long agent questions & choices | Detection snapshot preventing truncation on multi-line questions and choices (`/api/pane/read?source=detection`, 2000ms polling). Default for blocked panes.                                |
-| **Stream**   | Low-latency live progress      | Real-time ANSI observer streaming from `herdr terminal session observe` into `@xterm/xterm`. Viewport observer only; not full panel or scrollback.                                          |
+| Surface      | Best For                       | Behavior & Source                                                                                                                                                                               |
+| :----------- | :----------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Panel**    | Internal source fallback       | Source snapshot preserving whitespace, wrapping, semantic highlighting, auto-follow, and scroll position (`/api/pane/read?source=visible`, 1000ms polling). Not a primary header mode.          |
+| **History**  | Plain-text scrollback          | Bounded scrollback up to 1000 unwrapped rows (`/api/pane/read?source=recent-unwrapped&lines=1000`, 2000ms polling), text selection, and jump control.                                           |
+| **Question** | Long agent questions & choices | Explicit detection snapshot for blocked panes (`/api/pane/read?source=detection`, 2000ms polling). Status changes do not replace the surface being read.                                        |
+| **Terminal** | Default live reading surface   | Real-time ANSI observer streaming from `herdr terminal session observe` into `@xterm/xterm` (internal mode `stream`). Defaults for every selected pane; older source output remains in History. |
 
 For polling and bridge lifecycle internals, see [Transport Architecture](docs/transport-architecture.md).
 
@@ -182,7 +182,7 @@ Technical documentation is in [`docs/`](docs/):
 - **Strict Protocol Lock**: Tracks Herdr 0.9.1 protocol 22 (`schema_version: 1`). Mismatches fail closed during preflight.
 - **Single Local Session Scope**: Single-user companion observing one active local Herdr daemon.
 - **Socket-Only Features**: New Shell Tab, New Space, Close Tab, Close Space, and Web Push require Unix socket transport; unavailable in CLI fallback.
-- **Stream Mode Scope**: ANSI observer viewport streaming into `@xterm/xterm`, omitting full 158×52 panel text and scrollback; use Panel and History for full reading.
+- **Stream Mode Scope**: Real-time ANSI observer fitting the actual native PTY grid to the browser canvas via `herdr terminal session control <TARGET> --cols <N> --rows <N>` into `@xterm/xterm`, with debounced same-socket resize and bounded native source scrolling (valid 1..500 cols, 1..200 rows without a min-40 restriction, allowing mobile 35-col viewports). Wheel and touch drag adjust native reading offset (`pane.scroll`), Latest restores offset 0, and incoming frames preserve reading position when scrolled up. Fit automatically releases on document hide/unmount/pane switch or via the scope bar Pause fit button, restoring native desktop dimensions automatically. Local 2D panning and Latest affordance remain available. Native source scrolling is distinct from internal agent-app scrolling; alternate-screen applications expose only their current screen with zero source scrollback.
 - **Physical iOS Verification**: Web Push delivery and PWA switching on physical iOS devices require on-device human verification.
 - **Self-Hosted Repository**: Installed via `git clone`. Marked `"private": true` in `package.json` to prevent accidental npm publication.
 

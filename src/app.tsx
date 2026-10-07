@@ -22,11 +22,11 @@ import type { IPickerSheetTab } from '@/components/interaction-picker-sheet.tsx'
 import { resolveSurfaceMode, type ISurfaceMode } from '@/utils/surface-mode.ts'
 import {
   executeGuardedAction,
-  type ActionResultStatus,
+  type ActionResultStatus
 } from '@/utils/action-orchestrator.ts'
 import {
   deriveActionTarget,
-  formatActionErrorMessage,
+  formatActionErrorMessage
 } from '@/utils/action-target.ts'
 import { isAgentPane } from '@/utils/workspace-helpers.ts'
 import {
@@ -35,7 +35,7 @@ import {
   getTerminalControlFooterNotice,
   isLateControlOwnershipCallback,
   shouldReleaseControlOnPaneChange,
-  shouldReleaseControlOnViewChange,
+  shouldReleaseControlOnViewChange
 } from '@/utils/terminal-control-ownership.ts'
 import { fetchTerminalControlStatus } from '@/services/api-client.ts'
 import type { IExpectedPaneMode, IWorkspace } from '@/types/herdr.ts'
@@ -62,7 +62,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
     viewportGeometry,
     drawerTriggerRef,
     menuTriggerRef,
-    shouldRestoreMenuFocusRef,
+    shouldRestoreMenuFocusRef
   } = useOutletContext<IAppOutletContext>()
 
   const navigate = useNavigate()
@@ -86,7 +86,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
   const isBusyRef = useRef(isBusy)
   isBusyRef.current = isBusy
   const [actionError, setActionError] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<ISurfaceMode>('panel')
+  const [viewMode, setViewMode] = useState<ISurfaceMode>('stream')
   const viewModeRef = useRef<ISurfaceMode>(viewMode)
   viewModeRef.current = viewMode
 
@@ -142,7 +142,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
         try {
           statusResult = await fetchTerminalControlStatus(
             targetPane,
-            controller.signal,
+            controller.signal
           )
         } catch (err) {
           if (
@@ -166,7 +166,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
           activeGeneration: pollGenerationRef.current,
           targetPaneId: targetPane,
           statusResult,
-          fetchError,
+          fetchError
         })
 
         if (step.action === 'ignore_stale') {
@@ -190,7 +190,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
 
       void pollOnce()
     },
-    [stopReleasePolling],
+    [stopReleasePolling]
   )
 
   const handleControlOwnershipChange = useCallback(
@@ -203,7 +203,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
           nextOwnership,
           notifiedPaneId: explicitPaneId || controlPaneIdRef.current,
           currentSelectedPaneId: selectedPaneIdRef.current,
-          currentViewMode: viewModeRef.current,
+          currentViewMode: viewModeRef.current
         })
 
         if (isLate) {
@@ -246,7 +246,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
         setControlOwnership('idle')
       }
     },
-    [startReleasePolling, stopReleasePolling],
+    [startReleasePolling, stopReleasePolling]
   )
 
   const prevControlPaneIdRef = useRef<string | null>(selectedPaneId)
@@ -259,7 +259,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
       shouldReleaseControlOnPaneChange(
         prevPaneId,
         selectedPaneId,
-        controlOwnershipRef.current,
+        controlOwnershipRef.current
       )
     ) {
       handleControlOwnershipChange('releasing', prevPaneId || undefined)
@@ -273,7 +273,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
       shouldReleaseControlOnViewChange(
         prevView,
         viewMode,
-        controlOwnershipRef.current,
+        controlOwnershipRef.current
       )
     ) {
       handleControlOwnershipChange('releasing')
@@ -291,7 +291,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
       status === 'connected' &&
       workspaceId &&
       snapshot?.workspaces.some(
-        (workspace) => workspace.workspace_id === workspaceId,
+        (workspace) => workspace.workspace_id === workspaceId
       ) &&
       selectedWorkspaceId !== workspaceId
     ) {
@@ -302,7 +302,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
     status,
     workspaceId,
     selectedWorkspaceId,
-    setSelectedWorkspaceId,
+    setSelectedWorkspaceId
   ])
 
   useEffect(() => {
@@ -324,7 +324,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
       tabs.find(
         (t) =>
           t.tab_id === selectedPane.tab_id &&
-          (!workspaceId || t.workspace_id === workspaceId),
+          (!workspaceId || t.workspace_id === workspaceId)
       ) || null
     )
   }, [selectedPane?.tab_id, tabs, workspaceId])
@@ -346,7 +346,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
       currentMode: viewMode,
       isBlocked: isSelectedPaneBlocked,
       wasBlocked,
-      paneChanged,
+      paneChanged
     })
 
     if (nextMode !== viewMode) {
@@ -361,37 +361,37 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
     content: questionContent,
     isLoading: isQuestionLoading,
     error: questionError,
-    refetch: refetchQuestion,
+    refetch: refetchQuestion
   } = usePaneRead({
     paneId: selectedPaneId,
     source: 'detection',
     isEnabled: isSelectedPaneBlocked || viewMode === 'question',
-    pollIntervalMs: isSelectedPaneBlocked && viewMode === 'question' ? 2000 : 0,
+    pollIntervalMs: isSelectedPaneBlocked && viewMode === 'question' ? 2000 : 0
   })
 
   const {
     content: panelContent,
     isLoading: isPanelLoading,
     error: panelError,
-    refetch: refetchPanel,
+    refetch: refetchPanel
   } = usePaneRead({
     paneId: selectedPaneId,
     source: 'visible',
     isEnabled: viewMode === 'panel',
-    pollIntervalMs: viewMode === 'panel' ? 1000 : 0,
+    pollIntervalMs: viewMode === 'panel' ? 1000 : 0
   })
 
   const {
     content: historyContent,
     isLoading: isHistoryLoading,
     error: historyError,
-    refetch: refetchHistory,
+    refetch: refetchHistory
   } = usePaneRead({
     paneId: selectedPaneId,
     source: 'recent-unwrapped',
     lines: 1000,
     isEnabled: viewMode === 'history',
-    pollIntervalMs: viewMode === 'history' ? 2000 : 0,
+    pollIntervalMs: viewMode === 'history' ? 2000 : 0
   })
 
   const isAgentPaneForControl = isAgentPane(selectedPane, snapshot?.agents)
@@ -420,7 +420,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
   const canonicalIsBlocked = canonicalExpectedMode === 'blocked-agent'
 
   const handleSubmitText = async (
-    text: string,
+    text: string
   ): Promise<ActionResultStatus> => {
     if (!selectedPaneId || !targetResult.target) {
       if (targetResult.error) {
@@ -438,7 +438,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
           type: actionType,
           operationId,
           target: targetResult.target!,
-          text,
+          text
         }),
       onSuccessRefresh: () => {
         void Promise.allSettled([refreshSnapshot(), refetchActiveSurface()])
@@ -449,7 +449,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
         setIsBusy(busy)
       },
       setError: (err) =>
-        setActionError(err ? formatActionErrorMessage(err) : null),
+        setActionError(err ? formatActionErrorMessage(err) : null)
     })
   }
 
@@ -468,7 +468,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
             type: 'keys',
             operationId,
             target: targetResult.target!,
-            keys,
+            keys
           }),
         onSuccessRefresh: () => {
           void Promise.allSettled([refreshSnapshot(), refetchActiveSurface()])
@@ -479,7 +479,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
           setIsBusy(busy)
         },
         setError: (err) =>
-          setActionError(err ? formatActionErrorMessage(err) : null),
+          setActionError(err ? formatActionErrorMessage(err) : null)
       })
     } catch {
       // Key failure recorded in setActionError by executeGuardedAction
@@ -651,7 +651,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
         if (isMobile) setIsSpaceDrawerOpen(false)
       }}
       hasLifecycleGate={Boolean(
-        lifecycle.ticket && lifecycle.ticket.phase !== 'rejected',
+        lifecycle.ticket && lifecycle.ticket.phase !== 'rejected'
       )}
     />
   )
@@ -662,7 +662,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
         transform:
           viewportGeometry.offsetTop > 0
             ? `translateY(${viewportGeometry.offsetTop}px)`
-            : undefined,
+            : undefined
       }
     : undefined
 
@@ -837,10 +837,12 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
                       className="terminal-viewport-container"
                       id="surface-panel-stream"
                       role="region"
-                      aria-label="Stream Observer Viewport"
+                      aria-label="Live Terminal"
                     >
                       <TerminalCanvas
+                        key={selectedPaneId}
                         paneId={selectedPaneId}
+                        terminalId={selectedPane?.terminal_id}
                         isAgentPane={isAgentPaneForControl}
                         cols={80}
                         rows={24}

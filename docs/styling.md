@@ -1,5 +1,11 @@
 # Styling
 
+## Terminal-first surface (October 6)
+
+The main pane opens in live Terminal (internal `stream` mode); History is an explicit secondary reading surface. Question remains available for blocked panes but status changes never replace the view being read. Panel is an internal text fallback, not a primary header choice. Composer Send and shell-only opt-in control retain their existing semantics; this slice does not implement agent live typing or Chat.
+
+Terminal paint resolves the existing CSS owner (`--color-bg-base`, `--color-text-primary`, `--color-accent`, `--color-accent-glow`, `--font-mono`, `--fs-md`) instead of a separate hardcoded palette. Padding belongs to `.xterm`, not the FitAddon-measured mount. `server/terminal-fit.ts` fits the actual PTY to FitAddon-measured browser cells through a resize and source-scroll native control channel. The fitted mount does not carry `data-adopted-grid`, so the historical max-content native-grid rule cannot distort measurement. Fonts are unchanged, not scaled. Cursor follow, wheel/touch source scrolling, and Latest remain available while reading; selection gestures never forward raw PTY input. Earlier October 7 rendered QA proved native-grid pan, Thai Send/Copy and lifecycle—not fitted-grid acceptance. The later real API proof verifies PTY35×15→42×23 on the same socket; fresh fitted browser QA is a separate gate. Synthetic touch through `terminal-touch-selection.ts` (450ms hold, 8px cancellation) is not physical-phone proof. Actual IME/touch and Mahiro's visual acceptance remain pending human gates.
+
 ## Visual Source Attribution & Provenance
 
 Visual design and design tokens are adapted directly from `devswha/herdr-web-ui` (Pinned SHA `b498e7f053de3ac30318ac7d88b6fd21865edadf`, MIT License Copyright 2026 devswha).

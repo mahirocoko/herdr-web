@@ -1,17 +1,18 @@
 import {
   CONSERVATIVE_TOKEN_REGEX,
   PANE_ID_REGEX,
+  isAgentPane,
   isHostAllowed,
   isOriginAllowed,
   validateActionRequest,
   validateAgentExplainParams,
   validateOwnerAuth,
   validatePaneReadParams,
-  validateTerminalParams,
   verifyTargetAgainstSnapshot
 } from './security.ts'
 import {
   executeKeys,
+  executePaneScroll,
   executePrompt,
   executeTabClose,
   executeTabCreate,
@@ -21,10 +22,9 @@ import {
   getAgentExplain,
   getHerdrHealth,
   getHerdrSnapshot,
+  getPaneScrollMetadata,
   getTransportMode,
-  readPaneContent,
-  spawnObserverProcess,
-  validatePaneInSnapshot
+  readPaneContent
 } from './herdr-adapter.ts'
 import { HerdrSocketError } from './herdr-socket.ts'
 import { getSharedSnapshotBridge, SnapshotBridge } from './snapshot-bridge.ts'
@@ -59,18 +59,29 @@ import {
   validateTerminalControlParams,
   validateTerminalControlStatusParams,
   parseAndValidateUpstreamTerminalMessage,
+  parseAndValidateFittedTerminalMessage,
   getPublicPreflightErrorMessage,
   sanitizeStderrToCategory
 } from './terminal-control.ts'
+
+import {
+  getSharedTerminalFitManager,
+  validateTerminalFitClientMessage,
+  validateTerminalFitParams
+} from './terminal-fit.ts'
 
 export type IWebSocketData =
   | {
       kind: 'terminal'
       pane: string
+      terminalId: string
       cols: number
       rows: number
-      proc?: ReturnType<typeof spawnObserverProcess>
+      generation: number
+      proc?: any
       closed?: boolean
+      resizeRevision?: number
+      scrollRevision?: number
     }
   | {
       kind: 'terminal-control'
@@ -138,17 +149,30 @@ const PUSH_CLICK_DIAGNOSTIC_STAGES = new Set([
 const parseBoundedJsonBody = async (
   request: Request,
   maxBytes = 4096
-): Promise<{ ok: boolean; status?: number; error?: string; data?: unknown }> => {
+): Promise<{
+  ok: boolean
+  status?: number
+  error?: string
+  data?: unknown
+}> => {
   const cType = (request.headers.get('content-type') || '').toLowerCase()
   if (!cType.includes('application/json')) {
-    return { ok: false, status: 400, error: 'Content-Type must be application/json' }
+    return {
+      ok: false,
+      status: 400,
+      error: 'Content-Type must be application/json'
+    }
   }
 
   const cLen = request.headers.get('content-length')
   if (cLen) {
     const num = parseInt(cLen, 10)
     if (!Number.isNaN(num) && num > maxBytes) {
-      return { ok: false, status: 413, error: `Payload exceeds ${maxBytes} bytes limit` }
+      return {
+        ok: false,
+        status: 413,
+        error: `Payload exceeds ${maxBytes} bytes limit`
+      }
     }
   }
 
@@ -168,7 +192,11 @@ const parseBoundedJsonBody = async (
         total += value.byteLength
         if (total > maxBytes) {
           await reader.cancel()
-          return { ok: false, status: 413, error: `Payload exceeds ${maxBytes} bytes limit` }
+          return {
+            ok: false,
+            status: 413,
+            error: `Payload exceeds ${maxBytes} bytes limit`
+          }
         }
         chunks.push(value)
       }
@@ -192,7 +220,11 @@ const parseBoundedJsonBody = async (
   try {
     text = new TextDecoder('utf-8', { fatal: true }).decode(combined)
   } catch {
-    return { ok: false, status: 400, error: 'Invalid UTF-8 encoding in payload' }
+    return {
+      ok: false,
+      status: 400,
+      error: 'Invalid UTF-8 encoding in payload'
+    }
   }
 
   try {
@@ -207,26 +239,33 @@ export const createServer = (
   host = HOST,
   options: ICreateServerOptions = {}
 ) => {
-  const coordinator = options.deps?.coordinator ?? getSharedOperationCoordinator()
-  const leaseManager = options.deps?.leaseManager ?? (
-    options.deps?.coordinator
+  const coordinator =
+    options.deps?.coordinator ?? getSharedOperationCoordinator()
+  const leaseManager =
+    options.deps?.leaseManager ??
+    (options.deps?.coordinator
       ? new TerminalControlLeaseManager({
           arbiter: {
-            claimPane: (paneId, leaseId) => coordinator.claimPaneForControl(paneId, leaseId),
-            releasePane: (token) => { coordinator.releaseControlPane(token) },
+            claimPane: (paneId, leaseId) =>
+              coordinator.claimPaneForControl(paneId, leaseId),
+            releasePane: (token) => {
+              coordinator.releaseControlPane(token)
+            },
             isPaneClaimed: (paneId) => coordinator.isPaneClaimed(paneId)
           }
         })
-      : getSharedTerminalControlLeaseManager()
-  )
+      : getSharedTerminalControlLeaseManager())
 
   // Any explicitly injected manager is coherently rebound to the selected coordinator
   // before it can reserve a lease. This prevents tests or alternate server constructors
   // from accidentally creating separate action and Control claim maps.
   if (options.deps?.leaseManager) {
     leaseManager.bindArbiter({
-      claimPane: (paneId, leaseId) => coordinator.claimPaneForControl(paneId, leaseId),
-      releasePane: (token) => { coordinator.releaseControlPane(token) },
+      claimPane: (paneId, leaseId) =>
+        coordinator.claimPaneForControl(paneId, leaseId),
+      releasePane: (token) => {
+        coordinator.releaseControlPane(token)
+      },
       isPaneClaimed: (paneId) => coordinator.isPaneClaimed(paneId)
     })
   }
@@ -263,11 +302,15 @@ export const createServer = (
         try {
           const fetchSnapshot = options.deps?.fetchSnapshot ?? getHerdrSnapshot
           const snapshot = await fetchSnapshot(5000)
-          const projectFn = options.deps?.projectBrowserSnapshot ?? projectBrowserSnapshot
-          return new Response(JSON.stringify({ ok: true, snapshot: projectFn(snapshot) }), {
-            status: 200,
-            headers: { 'content-type': 'application/json' }
-          })
+          const projectFn =
+            options.deps?.projectBrowserSnapshot ?? projectBrowserSnapshot
+          return new Response(
+            JSON.stringify({ ok: true, snapshot: projectFn(snapshot) }),
+            {
+              status: 200,
+              headers: { 'content-type': 'application/json' }
+            }
+          )
         } catch (err) {
           return new Response(
             JSON.stringify({
@@ -284,7 +327,9 @@ export const createServer = (
 
       const getConfiguredOwnerLogin = (): string | undefined => {
         const pushService = getSharedPushService()
-        return pushService.getConfig()?.ownerLogin ?? loadPushConfig()?.ownerLogin
+        return (
+          pushService.getConfig()?.ownerLogin ?? loadPushConfig()?.ownerLogin
+        )
       }
 
       // POST /api/action
@@ -298,7 +343,10 @@ export const createServer = (
         )
         if (!auth.allowed) {
           return new Response(
-            JSON.stringify({ ok: false, error: auth.error || 'Forbidden: unauthorized' }),
+            JSON.stringify({
+              ok: false,
+              error: auth.error || 'Forbidden: unauthorized'
+            }),
             {
               status: auth.status,
               headers: { 'content-type': 'application/json' }
@@ -309,7 +357,10 @@ export const createServer = (
         const bodyParsed = await parseBoundedJsonBody(req)
         if (!bodyParsed.ok) {
           return new Response(
-            JSON.stringify({ ok: false, error: bodyParsed.error || 'Invalid action payload' }),
+            JSON.stringify({
+              ok: false,
+              error: bodyParsed.error || 'Invalid action payload'
+            }),
             {
               status: bodyParsed.status || 400,
               headers: { 'content-type': 'application/json' }
@@ -320,7 +371,10 @@ export const createServer = (
         const validation = validateActionRequest(bodyParsed.data)
         if (!validation.valid || !validation.data) {
           return new Response(
-            JSON.stringify({ ok: false, error: validation.error || 'Invalid action payload' }),
+            JSON.stringify({
+              ok: false,
+              error: validation.error || 'Invalid action payload'
+            }),
             {
               status: 400,
               headers: { 'content-type': 'application/json' }
@@ -334,37 +388,64 @@ export const createServer = (
         // 1. Synchronous token-fenced admission arbiter BEFORE ANY await
         let beginOptions: IBeginActionOptions
         if (action.type === 'workspace-create') {
-          beginOptions = { topology: 'exclusive', targetKey: 'workspace-create' }
+          beginOptions = {
+            topology: 'exclusive',
+            targetKey: 'workspace-create'
+          }
         } else if (action.type === 'workspace-close') {
-          beginOptions = { topology: 'exclusive', targetKey: `workspace:${action.target.workspaceId}` }
+          beginOptions = {
+            topology: 'exclusive',
+            targetKey: `workspace:${action.target.workspaceId}`
+          }
         } else if (action.type === 'tab-create') {
-          beginOptions = { topology: 'exclusive', targetKey: `workspace:${action.workspaceId}`, paneId: action.target.paneId }
+          beginOptions = {
+            topology: 'exclusive',
+            targetKey: `workspace:${action.workspaceId}`,
+            paneId: action.target.paneId
+          }
         } else if (action.type === 'tab-close') {
-          beginOptions = { topology: 'exclusive', targetKey: `tab:${action.target.tabId}` }
+          beginOptions = {
+            topology: 'exclusive',
+            targetKey: `tab:${action.target.tabId}`
+          }
         } else {
-          beginOptions = { topology: 'shared', targetKey: action.target.paneId, paneId: action.target.paneId }
+          beginOptions = {
+            topology: 'shared',
+            targetKey: action.target.paneId,
+            paneId: action.target.paneId
+          }
         }
 
-        const admission = coordinator.beginAction(action.operationId, beginOptions, fingerprint)
+        const admission = coordinator.beginAction(
+          action.operationId,
+          beginOptions,
+          fingerprint
+        )
 
         if (admission.kind === 'replay') {
-          return new Response(
-            JSON.stringify(admission.body),
-            { status: admission.status, headers: { 'content-type': 'application/json' } }
-          )
+          return new Response(JSON.stringify(admission.body), {
+            status: admission.status,
+            headers: { 'content-type': 'application/json' }
+          })
         }
 
         if (admission.kind === 'conflict') {
           return new Response(
             JSON.stringify({ ok: false, error: admission.error }),
-            { status: admission.status, headers: { 'content-type': 'application/json' } }
+            {
+              status: admission.status,
+              headers: { 'content-type': 'application/json' }
+            }
           )
         }
 
         if (admission.kind === 'in_flight' || admission.kind === 'contention') {
           return new Response(
             JSON.stringify({ ok: false, error: admission.error }),
-            { status: admission.status, headers: { 'content-type': 'application/json' } }
+            {
+              status: admission.status,
+              headers: { 'content-type': 'application/json' }
+            }
           )
         }
 
@@ -388,7 +469,8 @@ export const createServer = (
           // 2. Authoritative snapshot preflight verification
           let snapshot: ISnapshotResult
           try {
-            const fetchSnapshot = options.deps?.fetchSnapshot ?? getHerdrSnapshot
+            const fetchSnapshot =
+              options.deps?.fetchSnapshot ?? getHerdrSnapshot
             snapshot = await fetchSnapshot(3000)
           } catch (snapErr) {
             // Snapshot fetch failure remains uncached and abandons claim so same operation ID may later succeed!
@@ -398,10 +480,10 @@ export const createServer = (
               outcome: 'rejected' as const,
               error: `Snapshot preflight failed: ${snapErr instanceof Error ? snapErr.message : String(snapErr)}`
             }
-            return new Response(
-              JSON.stringify(errorBody),
-              { status: 502, headers: { 'content-type': 'application/json' } }
-            )
+            return new Response(JSON.stringify(errorBody), {
+              status: 502,
+              headers: { 'content-type': 'application/json' }
+            })
           }
 
           if (
@@ -410,20 +492,25 @@ export const createServer = (
             action.type === 'keys' ||
             action.type === 'tab-create'
           ) {
-            const verifyFn = options.deps?.verifyTarget ?? verifyTargetAgainstSnapshot
+            const verifyFn =
+              options.deps?.verifyTarget ?? verifyTargetAgainstSnapshot
             const preflight = verifyFn(snapshot, action.target, {
               isTabCreate: action.type === 'tab-create',
               actionType: action.type
             })
             if (!preflight.ok) {
               const status = preflight.status || 409
-              const errorBody = { ok: false, outcome: 'rejected' as const, error: preflight.error }
+              const errorBody = {
+                ok: false,
+                outcome: 'rejected' as const,
+                error: preflight.error
+              }
               // Authoritative target/mode/session mismatch remains a definitive cached rejection!
               safeComplete(status, errorBody)
-              return new Response(
-                JSON.stringify(errorBody),
-                { status, headers: { 'content-type': 'application/json' } }
-              )
+              return new Response(JSON.stringify(errorBody), {
+                status,
+                headers: { 'content-type': 'application/json' }
+              })
             }
           }
 
@@ -437,7 +524,8 @@ export const createServer = (
               responseBody = { ok: true, outcome: 'acknowledged', result: res }
               responseStatus = 200
             } else if (action.type === 'terminal-input') {
-              const inputFn = options.deps?.executeTerminalInput ?? executeTerminalInput
+              const inputFn =
+                options.deps?.executeTerminalInput ?? executeTerminalInput
               const res = await inputFn(action.target.paneId, action.text)
               responseBody = { ok: true, outcome: 'acknowledged', result: res }
               responseStatus = 200
@@ -447,28 +535,37 @@ export const createServer = (
               responseBody = { ok: true, outcome: 'acknowledged', result: res }
               responseStatus = 200
             } else if (action.type === 'tab-create') {
-              const tabCreateFn = options.deps?.executeTabCreate ?? executeTabCreate
-              const res = await tabCreateFn(action.workspaceId, action.target, action.label, {
-                preSnapshot: snapshot
-              })
+              const tabCreateFn =
+                options.deps?.executeTabCreate ?? executeTabCreate
+              const res = await tabCreateFn(
+                action.workspaceId,
+                action.target,
+                action.label,
+                {
+                  preSnapshot: snapshot
+                }
+              )
               responseStatus = res.status ?? (res.ok ? 200 : 500)
               responseBody = res
             } else if (action.type === 'workspace-create') {
-              const workspaceCreateFn = options.deps?.executeWorkspaceCreate ?? executeWorkspaceCreate
+              const workspaceCreateFn =
+                options.deps?.executeWorkspaceCreate ?? executeWorkspaceCreate
               const res = await workspaceCreateFn(action.label, action.source, {
                 preSnapshot: snapshot
               })
               responseStatus = res.status ?? (res.ok ? 200 : 500)
               responseBody = res
             } else if (action.type === 'workspace-close') {
-              const workspaceCloseFn = options.deps?.executeWorkspaceClose ?? executeWorkspaceClose
+              const workspaceCloseFn =
+                options.deps?.executeWorkspaceClose ?? executeWorkspaceClose
               // Close mutations perform their own immediately-before-RPC snapshot fetch so
               // the client-confirmed membership manifest cannot race this earlier route snapshot.
               const res = await workspaceCloseFn(action.target)
               responseStatus = res.status ?? (res.ok ? 200 : 500)
               responseBody = res
             } else if (action.type === 'tab-close') {
-              const tabCloseFn = options.deps?.executeTabClose ?? executeTabClose
+              const tabCloseFn =
+                options.deps?.executeTabClose ?? executeTabClose
               const res = await tabCloseFn(action.target)
               responseStatus = res.status ?? (res.ok ? 200 : 500)
               responseBody = res
@@ -487,12 +584,15 @@ export const createServer = (
                 actionErr.message.toLowerCase().includes('timed out'))
 
             const isDefinitiveNotFound =
-              (actionErr instanceof HerdrSocketError && actionErr.code === 'pane_not_found') ||
-              (actionErr instanceof Error && actionErr.message.includes('does not exist'))
+              (actionErr instanceof HerdrSocketError &&
+                actionErr.code === 'pane_not_found') ||
+              (actionErr instanceof Error &&
+                actionErr.message.includes('does not exist'))
 
             let status = 500
             let outcome: 'rejected' | 'unknown' = 'unknown'
-            const errorMsg = actionErr instanceof Error ? actionErr.message : String(actionErr)
+            const errorMsg =
+              actionErr instanceof Error ? actionErr.message : String(actionErr)
 
             if (isDefinitiveNotFound) {
               status = 404
@@ -513,13 +613,10 @@ export const createServer = (
 
             safeComplete(status, errorBody)
 
-            return new Response(
-              JSON.stringify(errorBody),
-              {
-                status,
-                headers: { 'content-type': 'application/json' }
-              }
-            )
+            return new Response(JSON.stringify(errorBody), {
+              status,
+              headers: { 'content-type': 'application/json' }
+            })
           }
         } catch (unexpectedPreDispatchErr) {
           safeAbandon()
@@ -546,13 +643,19 @@ export const createServer = (
       if (req.method === 'GET' && pathname === '/api/interactions/catalog') {
         if (!isHostAllowed(hostHeader)) {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Forbidden: host not authorized' }),
+            JSON.stringify({
+              ok: false,
+              error: 'Forbidden: host not authorized'
+            }),
             { status: 403, headers: { 'content-type': 'application/json' } }
           )
         }
         if (originHeader && !isOriginAllowed(originHeader, hostHeader)) {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Forbidden: origin not authorized' }),
+            JSON.stringify({
+              ok: false,
+              error: 'Forbidden: origin not authorized'
+            }),
             { status: 403, headers: { 'content-type': 'application/json' } }
           )
         }
@@ -560,25 +663,40 @@ export const createServer = (
         const paneParam = url.searchParams.get('pane')?.trim()
         if (!paneParam || !PANE_ID_REGEX.test(paneParam)) {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Invalid or missing "pane" query param' }),
+            JSON.stringify({
+              ok: false,
+              error: 'Invalid or missing "pane" query param'
+            }),
             { status: 400, headers: { 'content-type': 'application/json' } }
           )
         }
 
         const terminalIdParam = url.searchParams.get('terminalId')?.trim()
-        if (!terminalIdParam || !CONSERVATIVE_TOKEN_REGEX.test(terminalIdParam) || terminalIdParam.length > 128) {
+        if (
+          !terminalIdParam ||
+          !CONSERVATIVE_TOKEN_REGEX.test(terminalIdParam) ||
+          terminalIdParam.length > 128
+        ) {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Invalid or missing "terminalId" query param' }),
+            JSON.stringify({
+              ok: false,
+              error: 'Invalid or missing "terminalId" query param'
+            }),
             { status: 400, headers: { 'content-type': 'application/json' } }
           )
         }
 
         try {
           const snapshot = await getHerdrSnapshot(3000)
-          const targetPane = (snapshot.panes || []).find((p) => p && p.pane_id === paneParam)
+          const targetPane = (snapshot.panes || []).find(
+            (p) => p && p.pane_id === paneParam
+          )
           if (!targetPane) {
             return new Response(
-              JSON.stringify({ ok: false, error: `Pane "${paneParam}" not found in active session` }),
+              JSON.stringify({
+                ok: false,
+                error: `Pane "${paneParam}" not found in active session`
+              }),
               { status: 404, headers: { 'content-type': 'application/json' } }
             )
           }
@@ -629,7 +747,10 @@ export const createServer = (
       if (req.method === 'GET' && pathname === '/api/pane/read') {
         if (!isHostAllowed(hostHeader)) {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Forbidden: host not authorized' }),
+            JSON.stringify({
+              ok: false,
+              error: 'Forbidden: host not authorized'
+            }),
             {
               status: 403,
               headers: { 'content-type': 'application/json' }
@@ -640,7 +761,10 @@ export const createServer = (
         const paramValidation = validatePaneReadParams(url)
         if (!paramValidation.valid || !paramValidation.data) {
           return new Response(
-            JSON.stringify({ ok: false, error: paramValidation.error || 'Invalid pane read parameters' }),
+            JSON.stringify({
+              ok: false,
+              error: paramValidation.error || 'Invalid pane read parameters'
+            }),
             {
               status: 400,
               headers: { 'content-type': 'application/json' }
@@ -658,19 +782,18 @@ export const createServer = (
             headers: { 'content-type': 'application/json' }
           })
         } catch (readErr) {
-          const msg = readErr instanceof Error ? readErr.message : String(readErr)
+          const msg =
+            readErr instanceof Error ? readErr.message : String(readErr)
           const isNotFound =
-            (readErr instanceof HerdrSocketError && readErr.code === 'pane_not_found') ||
+            (readErr instanceof HerdrSocketError &&
+              readErr.code === 'pane_not_found') ||
             msg.includes('does not exist') ||
             msg.includes('not found')
           const status = isNotFound ? 404 : 502
-          return new Response(
-            JSON.stringify({ ok: false, error: msg }),
-            {
-              status,
-              headers: { 'content-type': 'application/json' }
-            }
-          )
+          return new Response(JSON.stringify({ ok: false, error: msg }), {
+            status,
+            headers: { 'content-type': 'application/json' }
+          })
         }
       }
 
@@ -678,7 +801,10 @@ export const createServer = (
       if (req.method === 'GET' && pathname === '/api/agent/explain') {
         if (!isHostAllowed(hostHeader)) {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Forbidden: host not authorized' }),
+            JSON.stringify({
+              ok: false,
+              error: 'Forbidden: host not authorized'
+            }),
             {
               status: 403,
               headers: { 'content-type': 'application/json' }
@@ -689,7 +815,10 @@ export const createServer = (
         const paramValidation = validateAgentExplainParams(url)
         if (!paramValidation.valid || !paramValidation.data) {
           return new Response(
-            JSON.stringify({ ok: false, error: paramValidation.error || 'Invalid agent explain parameters' }),
+            JSON.stringify({
+              ok: false,
+              error: paramValidation.error || 'Invalid agent explain parameters'
+            }),
             {
               status: 400,
               headers: { 'content-type': 'application/json' }
@@ -704,9 +833,13 @@ export const createServer = (
             headers: { 'content-type': 'application/json' }
           })
         } catch (explainErr) {
-          const msg = explainErr instanceof Error ? explainErr.message : String(explainErr)
+          const msg =
+            explainErr instanceof Error
+              ? explainErr.message
+              : String(explainErr)
           const isNotFound =
-            (explainErr instanceof HerdrSocketError && explainErr.code === 'pane_not_found') ||
+            (explainErr instanceof HerdrSocketError &&
+              explainErr.code === 'pane_not_found') ||
             msg.includes('does not exist') ||
             (msg.includes('not found') && msg.toLowerCase().includes('pane'))
           const status = isNotFound ? 404 : 502
@@ -729,7 +862,10 @@ export const createServer = (
       if (req.method === 'GET' && pathname === '/api/push/config') {
         if (!isHostAllowed(hostHeader)) {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Forbidden: host not authorized' }),
+            JSON.stringify({
+              ok: false,
+              error: 'Forbidden: host not authorized'
+            }),
             { status: 403, headers: { 'content-type': 'application/json' } }
           )
         }
@@ -756,21 +892,41 @@ export const createServer = (
       // POST /api/push/click-diagnostic (temporary fixed-enum physical-device receipts)
       if (req.method === 'POST' && pathname === '/api/push/click-diagnostic') {
         const pushService = getSharedPushService()
-        const auth = validatePushAuth(req, hostHeader, originHeader, pushService.getConfig()?.ownerLogin)
+        const auth = validatePushAuth(
+          req,
+          hostHeader,
+          originHeader,
+          pushService.getConfig()?.ownerLogin
+        )
         if (!auth.allowed) {
           return new Response(
-            JSON.stringify({ ok: false, error: auth.error || 'Forbidden: unauthorized' }),
-            { status: auth.status, headers: { 'content-type': 'application/json' } }
+            JSON.stringify({
+              ok: false,
+              error: auth.error || 'Forbidden: unauthorized'
+            }),
+            {
+              status: auth.status,
+              headers: { 'content-type': 'application/json' }
+            }
           )
         }
 
         const bodyParsed = await parseBoundedJsonBody(req, 256)
-        const stage = bodyParsed.ok && bodyParsed.data && typeof bodyParsed.data === 'object'
-          ? (bodyParsed.data as Record<string, unknown>).stage
-          : null
-        if (typeof stage !== 'string' || !PUSH_CLICK_DIAGNOSTIC_STAGES.has(stage)) {
+        const stage =
+          bodyParsed.ok &&
+          bodyParsed.data &&
+          typeof bodyParsed.data === 'object'
+            ? (bodyParsed.data as Record<string, unknown>).stage
+            : null
+        if (
+          typeof stage !== 'string' ||
+          !PUSH_CLICK_DIAGNOSTIC_STAGES.has(stage)
+        ) {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Invalid push click diagnostic stage' }),
+            JSON.stringify({
+              ok: false,
+              error: 'Invalid push click diagnostic stage'
+            }),
             { status: 400, headers: { 'content-type': 'application/json' } }
           )
         }
@@ -783,7 +939,11 @@ export const createServer = (
       if (req.method === 'POST' && pathname === '/api/push/subscriptions') {
         if (getTransportMode() === 'cli') {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Push notifications unavailable in CLI transport mode; socket transport is required.' }),
+            JSON.stringify({
+              ok: false,
+              error:
+                'Push notifications unavailable in CLI transport mode; socket transport is required.'
+            }),
             { status: 409, headers: { 'content-type': 'application/json' } }
           )
         }
@@ -791,16 +951,30 @@ export const createServer = (
         const pushService = getSharedPushService()
         if (!pushService.isEnabled()) {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Push service unavailable: not configured' }),
+            JSON.stringify({
+              ok: false,
+              error: 'Push service unavailable: not configured'
+            }),
             { status: 503, headers: { 'content-type': 'application/json' } }
           )
         }
 
-        const auth = validatePushAuth(req, hostHeader, originHeader, pushService.getConfig()?.ownerLogin)
+        const auth = validatePushAuth(
+          req,
+          hostHeader,
+          originHeader,
+          pushService.getConfig()?.ownerLogin
+        )
         if (!auth.allowed) {
           return new Response(
-            JSON.stringify({ ok: false, error: auth.error || 'Forbidden: unauthorized' }),
-            { status: auth.status, headers: { 'content-type': 'application/json' } }
+            JSON.stringify({
+              ok: false,
+              error: auth.error || 'Forbidden: unauthorized'
+            }),
+            {
+              status: auth.status,
+              headers: { 'content-type': 'application/json' }
+            }
           )
         }
 
@@ -808,14 +982,20 @@ export const createServer = (
         if (!bodyParsed.ok) {
           return new Response(
             JSON.stringify({ ok: false, error: bodyParsed.error }),
-            { status: bodyParsed.status || 400, headers: { 'content-type': 'application/json' } }
+            {
+              status: bodyParsed.status || 400,
+              headers: { 'content-type': 'application/json' }
+            }
           )
         }
 
         const validation = validatePushSubscriptionPayload(bodyParsed.data)
         if (!validation.valid || !validation.data) {
           return new Response(
-            JSON.stringify({ ok: false, error: validation.error || 'Invalid push subscription payload' }),
+            JSON.stringify({
+              ok: false,
+              error: validation.error || 'Invalid push subscription payload'
+            }),
             { status: 400, headers: { 'content-type': 'application/json' } }
           )
         }
@@ -828,7 +1008,10 @@ export const createServer = (
           })
         } catch {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Failed to register subscription' }),
+            JSON.stringify({
+              ok: false,
+              error: 'Failed to register subscription'
+            }),
             { status: 500, headers: { 'content-type': 'application/json' } }
           )
         }
@@ -838,7 +1021,11 @@ export const createServer = (
       if (req.method === 'DELETE' && pathname === '/api/push/subscriptions') {
         if (getTransportMode() === 'cli') {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Push notifications unavailable in CLI transport mode; socket transport is required.' }),
+            JSON.stringify({
+              ok: false,
+              error:
+                'Push notifications unavailable in CLI transport mode; socket transport is required.'
+            }),
             { status: 409, headers: { 'content-type': 'application/json' } }
           )
         }
@@ -846,16 +1033,30 @@ export const createServer = (
         const pushService = getSharedPushService()
         if (!pushService.isEnabled()) {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Push service unavailable: not configured' }),
+            JSON.stringify({
+              ok: false,
+              error: 'Push service unavailable: not configured'
+            }),
             { status: 503, headers: { 'content-type': 'application/json' } }
           )
         }
 
-        const auth = validatePushAuth(req, hostHeader, originHeader, pushService.getConfig()?.ownerLogin)
+        const auth = validatePushAuth(
+          req,
+          hostHeader,
+          originHeader,
+          pushService.getConfig()?.ownerLogin
+        )
         if (!auth.allowed) {
           return new Response(
-            JSON.stringify({ ok: false, error: auth.error || 'Forbidden: unauthorized' }),
-            { status: auth.status, headers: { 'content-type': 'application/json' } }
+            JSON.stringify({
+              ok: false,
+              error: auth.error || 'Forbidden: unauthorized'
+            }),
+            {
+              status: auth.status,
+              headers: { 'content-type': 'application/json' }
+            }
           )
         }
 
@@ -863,14 +1064,20 @@ export const createServer = (
         if (!bodyParsed.ok) {
           return new Response(
             JSON.stringify({ ok: false, error: bodyParsed.error }),
-            { status: bodyParsed.status || 400, headers: { 'content-type': 'application/json' } }
+            {
+              status: bodyParsed.status || 400,
+              headers: { 'content-type': 'application/json' }
+            }
           )
         }
 
         const validation = validatePushEndpointPayload(bodyParsed.data)
         if (!validation.valid || !validation.data) {
           return new Response(
-            JSON.stringify({ ok: false, error: validation.error || 'Invalid push endpoint payload' }),
+            JSON.stringify({
+              ok: false,
+              error: validation.error || 'Invalid push endpoint payload'
+            }),
             { status: 400, headers: { 'content-type': 'application/json' } }
           )
         }
@@ -883,7 +1090,10 @@ export const createServer = (
           })
         } catch {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Failed to delete subscription' }),
+            JSON.stringify({
+              ok: false,
+              error: 'Failed to delete subscription'
+            }),
             { status: 500, headers: { 'content-type': 'application/json' } }
           )
         }
@@ -893,7 +1103,11 @@ export const createServer = (
       if (req.method === 'POST' && pathname === '/api/push/test') {
         if (getTransportMode() === 'cli') {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Push notifications unavailable in CLI transport mode; socket transport is required.' }),
+            JSON.stringify({
+              ok: false,
+              error:
+                'Push notifications unavailable in CLI transport mode; socket transport is required.'
+            }),
             { status: 409, headers: { 'content-type': 'application/json' } }
           )
         }
@@ -901,16 +1115,30 @@ export const createServer = (
         const pushService = getSharedPushService()
         if (!pushService.isEnabled()) {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Push service unavailable: not configured' }),
+            JSON.stringify({
+              ok: false,
+              error: 'Push service unavailable: not configured'
+            }),
             { status: 503, headers: { 'content-type': 'application/json' } }
           )
         }
 
-        const auth = validatePushAuth(req, hostHeader, originHeader, pushService.getConfig()?.ownerLogin)
+        const auth = validatePushAuth(
+          req,
+          hostHeader,
+          originHeader,
+          pushService.getConfig()?.ownerLogin
+        )
         if (!auth.allowed) {
           return new Response(
-            JSON.stringify({ ok: false, error: auth.error || 'Forbidden: unauthorized' }),
-            { status: auth.status, headers: { 'content-type': 'application/json' } }
+            JSON.stringify({
+              ok: false,
+              error: auth.error || 'Forbidden: unauthorized'
+            }),
+            {
+              status: auth.status,
+              headers: { 'content-type': 'application/json' }
+            }
           )
         }
 
@@ -918,14 +1146,20 @@ export const createServer = (
         if (!bodyParsed.ok) {
           return new Response(
             JSON.stringify({ ok: false, error: bodyParsed.error }),
-            { status: bodyParsed.status || 400, headers: { 'content-type': 'application/json' } }
+            {
+              status: bodyParsed.status || 400,
+              headers: { 'content-type': 'application/json' }
+            }
           )
         }
 
         const validation = validatePushEndpointPayload(bodyParsed.data)
         if (!validation.valid || !validation.data) {
           return new Response(
-            JSON.stringify({ ok: false, error: validation.error || 'Invalid push endpoint payload' }),
+            JSON.stringify({
+              ok: false,
+              error: validation.error || 'Invalid push endpoint payload'
+            }),
             { status: 400, headers: { 'content-type': 'application/json' } }
           )
         }
@@ -933,10 +1167,17 @@ export const createServer = (
         try {
           const result = await pushService.sendTest(validation.data.endpoint)
           if (!result.ok) {
-            const isNotFound = result.error === 'Subscription not found in store'
+            const isNotFound =
+              result.error === 'Subscription not found in store'
             return new Response(
-              JSON.stringify({ ok: false, error: result.error || 'Test notification failed' }),
-              { status: isNotFound ? 404 : 502, headers: { 'content-type': 'application/json' } }
+              JSON.stringify({
+                ok: false,
+                error: result.error || 'Test notification failed'
+              }),
+              {
+                status: isNotFound ? 404 : 502,
+                headers: { 'content-type': 'application/json' }
+              }
             )
           }
 
@@ -956,7 +1197,11 @@ export const createServer = (
       if (req.method === 'GET' && pathname === '/api/push/tab-policy') {
         if (getTransportMode() === 'cli') {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Push notifications unavailable in CLI transport mode; socket transport is required.' }),
+            JSON.stringify({
+              ok: false,
+              error:
+                'Push notifications unavailable in CLI transport mode; socket transport is required.'
+            }),
             { status: 409, headers: { 'content-type': 'application/json' } }
           )
         }
@@ -964,16 +1209,31 @@ export const createServer = (
         const pushService = getSharedPushService()
         if (!pushService.isEnabled()) {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Push service unavailable: not configured' }),
+            JSON.stringify({
+              ok: false,
+              error: 'Push service unavailable: not configured'
+            }),
             { status: 503, headers: { 'content-type': 'application/json' } }
           )
         }
 
-        const auth = validatePushAuth(req, hostHeader, originHeader, pushService.getConfig()?.ownerLogin, { requireOrigin: false })
+        const auth = validatePushAuth(
+          req,
+          hostHeader,
+          originHeader,
+          pushService.getConfig()?.ownerLogin,
+          { requireOrigin: false }
+        )
         if (!auth.allowed) {
           return new Response(
-            JSON.stringify({ ok: false, error: auth.error || 'Forbidden: unauthorized' }),
-            { status: auth.status, headers: { 'content-type': 'application/json' } }
+            JSON.stringify({
+              ok: false,
+              error: auth.error || 'Forbidden: unauthorized'
+            }),
+            {
+              status: auth.status,
+              headers: { 'content-type': 'application/json' }
+            }
           )
         }
 
@@ -982,7 +1242,10 @@ export const createServer = (
           snapshot = await getHerdrSnapshot(5000)
         } catch (err) {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Failed to fetch authoritative snapshot' }),
+            JSON.stringify({
+              ok: false,
+              error: 'Failed to fetch authoritative snapshot'
+            }),
             { status: 502, headers: { 'content-type': 'application/json' } }
           )
         }
@@ -992,12 +1255,19 @@ export const createServer = (
           overrides = await pushService.getTabPolicyStore().getOverrides()
         } catch {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Failed to read tab policy store' }),
+            JSON.stringify({
+              ok: false,
+              error: 'Failed to read tab policy store'
+            }),
             { status: 500, headers: { 'content-type': 'application/json' } }
           )
         }
 
-        const tabs = resolveEffectiveTabPolicy(snapshot.workspaces || [], snapshot.tabs || [], overrides)
+        const tabs = resolveEffectiveTabPolicy(
+          snapshot.workspaces || [],
+          snapshot.tabs || [],
+          overrides
+        )
         return new Response(JSON.stringify({ ok: true, tabs }), {
           status: 200,
           headers: { 'content-type': 'application/json' }
@@ -1005,10 +1275,17 @@ export const createServer = (
       }
 
       // PUT or POST /api/push/tab-policy
-      if ((req.method === 'PUT' || req.method === 'POST') && pathname === '/api/push/tab-policy') {
+      if (
+        (req.method === 'PUT' || req.method === 'POST') &&
+        pathname === '/api/push/tab-policy'
+      ) {
         if (getTransportMode() === 'cli') {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Push notifications unavailable in CLI transport mode; socket transport is required.' }),
+            JSON.stringify({
+              ok: false,
+              error:
+                'Push notifications unavailable in CLI transport mode; socket transport is required.'
+            }),
             { status: 409, headers: { 'content-type': 'application/json' } }
           )
         }
@@ -1016,29 +1293,57 @@ export const createServer = (
         const pushService = getSharedPushService()
         if (!pushService.isEnabled()) {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Push service unavailable: not configured' }),
+            JSON.stringify({
+              ok: false,
+              error: 'Push service unavailable: not configured'
+            }),
             { status: 503, headers: { 'content-type': 'application/json' } }
           )
         }
 
-        const auth = validatePushAuth(req, hostHeader, originHeader, pushService.getConfig()?.ownerLogin)
+        const auth = validatePushAuth(
+          req,
+          hostHeader,
+          originHeader,
+          pushService.getConfig()?.ownerLogin
+        )
         if (!auth.allowed) {
           return new Response(
-            JSON.stringify({ ok: false, error: auth.error || 'Forbidden: unauthorized' }),
-            { status: auth.status, headers: { 'content-type': 'application/json' } }
+            JSON.stringify({
+              ok: false,
+              error: auth.error || 'Forbidden: unauthorized'
+            }),
+            {
+              status: auth.status,
+              headers: { 'content-type': 'application/json' }
+            }
           )
         }
 
         const bodyParsed = await parseBoundedJsonBody(req, 1024)
-        if (!bodyParsed.ok || !bodyParsed.data || typeof bodyParsed.data !== 'object') {
+        if (
+          !bodyParsed.ok ||
+          !bodyParsed.data ||
+          typeof bodyParsed.data !== 'object'
+        ) {
           return new Response(
-            JSON.stringify({ ok: false, error: bodyParsed.error || 'Malformed JSON payload' }),
-            { status: bodyParsed.status || 400, headers: { 'content-type': 'application/json' } }
+            JSON.stringify({
+              ok: false,
+              error: bodyParsed.error || 'Malformed JSON payload'
+            }),
+            {
+              status: bodyParsed.status || 400,
+              headers: { 'content-type': 'application/json' }
+            }
           )
         }
 
         const raw = bodyParsed.data as Record<string, unknown>
-        if (typeof raw.tabId !== 'string' || raw.tabId.trim().length === 0 || raw.tabId.length > 128) {
+        if (
+          typeof raw.tabId !== 'string' ||
+          raw.tabId.trim().length === 0 ||
+          raw.tabId.length > 128
+        ) {
           return new Response(
             JSON.stringify({ ok: false, error: 'Missing or invalid "tabId"' }),
             { status: 400, headers: { 'content-type': 'application/json' } }
@@ -1047,7 +1352,10 @@ export const createServer = (
 
         if (typeof raw.enabled !== 'boolean') {
           return new Response(
-            JSON.stringify({ ok: false, error: 'Missing or invalid boolean "enabled"' }),
+            JSON.stringify({
+              ok: false,
+              error: 'Missing or invalid boolean "enabled"'
+            }),
             { status: 400, headers: { 'content-type': 'application/json' } }
           )
         }
@@ -1059,7 +1367,10 @@ export const createServer = (
         if (!topoClaim.ok) {
           return new Response(
             JSON.stringify({ ok: false, error: topoClaim.error }),
-            { status: topoClaim.status, headers: { 'content-type': 'application/json' } }
+            {
+              status: topoClaim.status,
+              headers: { 'content-type': 'application/json' }
+            }
           )
         }
 
@@ -1069,14 +1380,24 @@ export const createServer = (
             snapshot = await getHerdrSnapshot(5000)
           } catch (err) {
             return new Response(
-              JSON.stringify({ ok: false, error: 'Failed to fetch authoritative snapshot' }),
+              JSON.stringify({
+                ok: false,
+                error: 'Failed to fetch authoritative snapshot'
+              }),
               { status: 502, headers: { 'content-type': 'application/json' } }
             )
           }
 
-          if (!Array.isArray(snapshot.workspaces) || !Array.isArray(snapshot.tabs) || !Array.isArray(snapshot.panes)) {
+          if (
+            !Array.isArray(snapshot.workspaces) ||
+            !Array.isArray(snapshot.tabs) ||
+            !Array.isArray(snapshot.panes)
+          ) {
             return new Response(
-              JSON.stringify({ ok: false, error: 'Malformed authoritative snapshot topology' }),
+              JSON.stringify({
+                ok: false,
+                error: 'Malformed authoritative snapshot topology'
+              }),
               { status: 502, headers: { 'content-type': 'application/json' } }
             )
           }
@@ -1084,58 +1405,89 @@ export const createServer = (
           const currentTabs = snapshot.tabs
           const currentWorkspaces = snapshot.workspaces
 
-          const matchingTabs = currentTabs.filter((t) => t && t.tab_id === targetTabId)
+          const matchingTabs = currentTabs.filter(
+            (t) => t && t.tab_id === targetTabId
+          )
           if (matchingTabs.length === 0) {
             return new Response(
-              JSON.stringify({ ok: false, error: 'Tab not found in active session' }),
+              JSON.stringify({
+                ok: false,
+                error: 'Tab not found in active session'
+              }),
               { status: 404, headers: { 'content-type': 'application/json' } }
             )
           }
           if (matchingTabs.length > 1) {
             return new Response(
-              JSON.stringify({ ok: false, error: 'Ambiguous duplicate tab ID in active session' }),
+              JSON.stringify({
+                ok: false,
+                error: 'Ambiguous duplicate tab ID in active session'
+              }),
               { status: 400, headers: { 'content-type': 'application/json' } }
             )
           }
 
           const liveTab = matchingTabs[0]
-          const matchingWorkspaces = currentWorkspaces.filter((workspace) => workspace && workspace.workspace_id === liveTab.workspace_id)
+          const matchingWorkspaces = currentWorkspaces.filter(
+            (workspace) =>
+              workspace && workspace.workspace_id === liveTab.workspace_id
+          )
           if (matchingWorkspaces.length !== 1) {
             return new Response(
               JSON.stringify({
                 ok: false,
-                error: matchingWorkspaces.length > 1
-                  ? 'Ambiguous duplicate workspace ID in active session'
-                  : 'Workspace not found for tab'
+                error:
+                  matchingWorkspaces.length > 1
+                    ? 'Ambiguous duplicate workspace ID in active session'
+                    : 'Workspace not found for tab'
               }),
               { status: 400, headers: { 'content-type': 'application/json' } }
             )
           }
           const liveWorkspace = matchingWorkspaces[0]
 
-          if (!Number.isFinite(liveTab.number) || !Number.isFinite(liveWorkspace.number)) {
+          if (
+            !Number.isFinite(liveTab.number) ||
+            !Number.isFinite(liveWorkspace.number)
+          ) {
             return new Response(
-              JSON.stringify({ ok: false, error: 'Invalid non-finite tab or workspace number' }),
+              JSON.stringify({
+                ok: false,
+                error: 'Invalid non-finite tab or workspace number'
+              }),
               { status: 400, headers: { 'content-type': 'application/json' } }
             )
           }
 
           const ownerMap = resolveWorkspaceOwnerTabs(currentTabs)
-          const isDefaultOwner = ownerMap.get(liveWorkspace.workspace_id) === liveTab.tab_id
+          const isDefaultOwner =
+            ownerMap.get(liveWorkspace.workspace_id) === liveTab.tab_id
 
           let updatedOverrides: ITabPolicyOverrideRecord[]
           try {
             updatedOverrides = await pushService
               .getTabPolicyStore()
-              .setTabOverride(liveWorkspace, liveTab, targetEnabled, isDefaultOwner)
+              .setTabOverride(
+                liveWorkspace,
+                liveTab,
+                targetEnabled,
+                isDefaultOwner
+              )
           } catch {
             return new Response(
-              JSON.stringify({ ok: false, error: 'Failed to write tab policy store' }),
+              JSON.stringify({
+                ok: false,
+                error: 'Failed to write tab policy store'
+              }),
               { status: 500, headers: { 'content-type': 'application/json' } }
             )
           }
 
-          const refreshedTabs = resolveEffectiveTabPolicy(currentWorkspaces, currentTabs, updatedOverrides)
+          const refreshedTabs = resolveEffectiveTabPolicy(
+            currentWorkspaces,
+            currentTabs,
+            updatedOverrides
+          )
           return new Response(
             JSON.stringify({ ok: true, tabs: refreshedTabs }),
             { status: 200, headers: { 'content-type': 'application/json' } }
@@ -1148,11 +1500,16 @@ export const createServer = (
       // WebSocket /api/events (strict-origin browser event transport)
       if (pathname === '/api/events') {
         if (!originHeader || !isOriginAllowed(originHeader, hostHeader)) {
-          return new Response('Forbidden: origin not authorized', { status: 403 })
+          return new Response('Forbidden: origin not authorized', {
+            status: 403
+          })
         }
 
         if (getTransportMode() === 'cli') {
-          return new Response('Event bridge unavailable in CLI transport mode; use HTTP snapshot polling.', { status: 409 })
+          return new Response(
+            'Event bridge unavailable in CLI transport mode; use HTTP snapshot polling.',
+            { status: 409 }
+          )
         }
 
         const upgraded = server.upgrade(req, {
@@ -1168,13 +1525,26 @@ export const createServer = (
         return new Response('WebSocket upgrade failed', { status: 400 })
       }
 
-      // WebSocket /api/terminal (observer stream)
+      // WebSocket /api/terminal (fitted observer stream)
       if (pathname === '/api/terminal') {
-        if (!originHeader || !isOriginAllowed(originHeader, hostHeader)) {
-          return new Response('Forbidden: origin not authorized', { status: 403 })
+        const auth = validateOwnerAuth(
+          req,
+          hostHeader,
+          originHeader,
+          getConfiguredOwnerLogin(),
+          { requireOrigin: true }
+        )
+        if (!auth.allowed) {
+          return new Response(
+            JSON.stringify({ error: auth.error || 'Forbidden: unauthorized' }),
+            {
+              status: auth.status,
+              headers: { 'content-type': 'application/json' }
+            }
+          )
         }
 
-        const paramValidation = validateTerminalParams(url)
+        const paramValidation = validateTerminalFitParams(url)
         if (!paramValidation.valid || !paramValidation.data) {
           return new Response(
             JSON.stringify({ error: paramValidation.error }),
@@ -1182,18 +1552,57 @@ export const createServer = (
           )
         }
 
-        // Validate pane against a fresh snapshot before upgrading
+        const { pane, terminalId, cols, rows } = paramValidation.data
+
+        const fitManager = getSharedTerminalFitManager()
+        // Synchronous reservation by terminalId before await!
+        const reservation = fitManager.reserveFit(terminalId, pane)
+        if (!reservation.ok) {
+          return new Response(
+            JSON.stringify({
+              error: reservation.error,
+              code: reservation.code
+            }),
+            {
+              status: reservation.status,
+              headers: { 'content-type': 'application/json' }
+            }
+          )
+        }
+
+        const generation = reservation.generation
+
+        // Validate target pane and terminalId against a fresh snapshot before upgrading
         try {
           const snapshot = await getHerdrSnapshot(3000)
-          if (!validatePaneInSnapshot(snapshot, paramValidation.data.pane)) {
+          const targetPane = (snapshot.panes || []).find(
+            (p) => p && p.pane_id === pane
+          )
+          if (!targetPane) {
+            fitManager.cancelReservation(terminalId, generation)
             return new Response(
-              JSON.stringify({ error: `Pane "${paramValidation.data.pane}" not found in active session` }),
+              JSON.stringify({
+                error: `Pane "${pane}" not found in active session`
+              }),
               { status: 404, headers: { 'content-type': 'application/json' } }
             )
           }
+
+          if (targetPane.terminal_id !== terminalId) {
+            fitManager.cancelReservation(terminalId, generation)
+            return new Response(
+              JSON.stringify({
+                error: `Terminal replacement detected: pane "${pane}" terminal is "${targetPane.terminal_id ?? ''}", expected "${terminalId}"`
+              }),
+              { status: 409, headers: { 'content-type': 'application/json' } }
+            )
+          }
         } catch (snapErr) {
+          fitManager.cancelReservation(terminalId, generation)
           return new Response(
-            JSON.stringify({ error: `Snapshot verification failed: ${snapErr instanceof Error ? snapErr.message : String(snapErr)}` }),
+            JSON.stringify({
+              error: `Snapshot verification failed: ${snapErr instanceof Error ? snapErr.message : String(snapErr)}`
+            }),
             { status: 502, headers: { 'content-type': 'application/json' } }
           )
         }
@@ -1201,9 +1610,11 @@ export const createServer = (
         const upgraded = server.upgrade(req, {
           data: {
             kind: 'terminal',
-            pane: paramValidation.data.pane,
-            cols: paramValidation.data.cols,
-            rows: paramValidation.data.rows
+            pane,
+            terminalId,
+            cols,
+            rows,
+            generation
           }
         })
 
@@ -1211,6 +1622,7 @@ export const createServer = (
           return undefined
         }
 
+        fitManager.cancelReservation(terminalId, generation)
         return new Response('WebSocket upgrade failed', { status: 400 })
       }
 
@@ -1231,16 +1643,23 @@ export const createServer = (
           { requireOrigin: false }
         )
         if (!auth.allowed) {
-          return new Response(JSON.stringify({ error: auth.error || 'Forbidden: unauthorized' }), {
-            status: auth.status,
-            headers: { 'content-type': 'application/json' }
-          })
+          return new Response(
+            JSON.stringify({ error: auth.error || 'Forbidden: unauthorized' }),
+            {
+              status: auth.status,
+              headers: { 'content-type': 'application/json' }
+            }
+          )
         }
 
         const paramValidation = validateTerminalControlStatusParams(url)
         if (!paramValidation.valid || !paramValidation.data) {
           return new Response(
-            JSON.stringify({ error: paramValidation.error || 'Invalid terminal control status parameters' }),
+            JSON.stringify({
+              error:
+                paramValidation.error ||
+                'Invalid terminal control status parameters'
+            }),
             { status: 400, headers: { 'content-type': 'application/json' } }
           )
         }
@@ -1283,15 +1702,21 @@ export const createServer = (
           { requireOrigin: true }
         )
         if (!auth.allowed) {
-          return new Response(JSON.stringify({ error: auth.error || 'Forbidden: unauthorized' }), {
-            status: auth.status,
-            headers: { 'content-type': 'application/json' }
-          })
+          return new Response(
+            JSON.stringify({ error: auth.error || 'Forbidden: unauthorized' }),
+            {
+              status: auth.status,
+              headers: { 'content-type': 'application/json' }
+            }
+          )
         }
 
         if (getTransportMode() === 'cli') {
           return new Response(
-            JSON.stringify({ error: 'Terminal control is unavailable in CLI transport mode; socket transport is required.' }),
+            JSON.stringify({
+              error:
+                'Terminal control is unavailable in CLI transport mode; socket transport is required.'
+            }),
             { status: 409, headers: { 'content-type': 'application/json' } }
           )
         }
@@ -1299,42 +1724,173 @@ export const createServer = (
         const paramValidation = validateTerminalControlParams(url)
         if (!paramValidation.valid || !paramValidation.data) {
           return new Response(
-            JSON.stringify({ error: paramValidation.error || 'Invalid terminal control parameters' }),
+            JSON.stringify({
+              error:
+                paramValidation.error || 'Invalid terminal control parameters'
+            }),
             { status: 400, headers: { 'content-type': 'application/json' } }
           )
         }
 
         const { pane, cols, rows } = paramValidation.data
 
-        // Atomically reserve lease before upgrading
-        const reservation = leaseManager.reserveLease(pane)
-        if (!reservation.ok) {
+        // Existing input ownership wins before any fitted-reader retirement or
+        // target lookup. reserveLease below still fences concurrent admissions.
+        if (leaseManager.getActiveLease()) {
           return new Response(
-            JSON.stringify({ error: reservation.error }),
-            { status: reservation.status, headers: { 'content-type': 'application/json' } }
+            JSON.stringify({
+              error: 'Terminal input control lease is already active'
+            }),
+            {
+              status: 409,
+              headers: { 'content-type': 'application/json' }
+            }
           )
+        }
+
+        const fitManager = getSharedTerminalFitManager()
+        let controlTerminalId: string | null = null
+        try {
+          const snapshot = await getHerdrSnapshot(3000)
+          const targetPane = (snapshot.panes || []).find(
+            (p) => p && p.pane_id === pane
+          )
+          if (!targetPane) {
+            return new Response(
+              JSON.stringify({
+                error: `Pane "${pane}" not found in active session`,
+                code: 'pane_not_found'
+              }),
+              { status: 404, headers: { 'content-type': 'application/json' } }
+            )
+          }
+
+          if (isAgentPane(targetPane, snapshot.agents)) {
+            return new Response(
+              JSON.stringify({
+                error: `Control mode is disabled for agent panes ("${pane}")`,
+                code: 'agent_pane_refusal'
+              }),
+              { status: 422, headers: { 'content-type': 'application/json' } }
+            )
+          }
+
+          controlTerminalId = targetPane.terminal_id ?? null
+        } catch (snapErr) {
+          return new Response(
+            JSON.stringify({
+              error: 'Failed to fetch authoritative snapshot',
+              code: 'snapshot_unavailable'
+            }),
+            { status: 502, headers: { 'content-type': 'application/json' } }
+          )
+        }
+
+        // Atomically reserve lease before retiring active fit or blocking fit!
+        const reservation = leaseManager.reserveLease(
+          pane,
+          controlTerminalId ?? undefined
+        )
+        if (!reservation.ok) {
+          return new Response(JSON.stringify({ error: reservation.error }), {
+            status: reservation.status,
+            headers: { 'content-type': 'application/json' }
+          })
         }
 
         const leaseId = reservation.lease.id
 
+        // A busy shell is not eligible either. Reject before disturbing its
+        // fitted reader; the existing post-retirement preflight still rechecks.
+        const eligibility = await preflightShellPane(pane)
+        if (!eligibility.ok) {
+          await leaseManager.releaseLease(leaseId, 'preflight_failed')
+          return new Response(
+            JSON.stringify({
+              error: getPublicPreflightErrorMessage(eligibility.code),
+              code: eligibility.code
+            }),
+            {
+              status: eligibility.status,
+              headers: { 'content-type': 'application/json' }
+            }
+          )
+        }
+
+        // Now that lease is reserved, block fit admission bound to this exact leaseId
+        if (controlTerminalId) {
+          fitManager.blockFitAdmission(controlTerminalId, leaseId)
+        }
+
+        // Confirm retirement before input spawn; do not proceed on unconfirmed retirement
+        if (controlTerminalId) {
+          try {
+            const retireResult =
+              await fitManager.retireFitProducer(controlTerminalId)
+            if (!retireResult.confirmed) {
+              fitManager.unblockFitAdmission(controlTerminalId, leaseId)
+              await leaseManager.releaseLease(leaseId, 'fit_retire_unconfirmed')
+              return new Response(
+                JSON.stringify({
+                  error: 'Failed to retire active fitted terminal session',
+                  code: 'fit_retire_timeout'
+                }),
+                {
+                  status: 409,
+                  headers: { 'content-type': 'application/json' }
+                }
+              )
+            }
+          } catch (retireErr) {
+            fitManager.unblockFitAdmission(controlTerminalId, leaseId)
+            await leaseManager.releaseLease(leaseId, 'fit_retire_failed')
+            return new Response(
+              JSON.stringify({
+                error: 'Failed to retire active fitted terminal session',
+                code: 'fit_retire_failed'
+              }),
+              { status: 409, headers: { 'content-type': 'application/json' } }
+            )
+          }
+        }
+
         try {
           // Preflight shell pane before upgrading
           const preflight = await preflightShellPane(pane)
-          if (!preflight.ok || preflight.shellPid === undefined || preflight.pgid === undefined) {
+          if (
+            !preflight.ok ||
+            preflight.shellPid === undefined ||
+            preflight.pgid === undefined
+          ) {
+            if (controlTerminalId) {
+              fitManager.unblockFitAdmission(controlTerminalId, leaseId)
+            }
             await leaseManager.releaseLease(leaseId, 'preflight_failed')
             const code = !preflight.ok ? preflight.code : 'invalid_process_info'
             const status = !preflight.ok ? preflight.status : 409
             return new Response(
-              JSON.stringify({ error: getPublicPreflightErrorMessage(code), code }),
+              JSON.stringify({
+                error: getPublicPreflightErrorMessage(code),
+                code
+              }),
               { status, headers: { 'content-type': 'application/json' } }
             )
           }
 
           // Verify exact lease ID is still pending and unexpired before upgrading
           if (!leaseManager.isLeasePending(leaseId)) {
-            await leaseManager.releaseLease(leaseId, 'lease_expired_or_invalidated')
+            if (controlTerminalId) {
+              fitManager.unblockFitAdmission(controlTerminalId, leaseId)
+            }
+            await leaseManager.releaseLease(
+              leaseId,
+              'lease_expired_or_invalidated'
+            )
             return new Response(
-              JSON.stringify({ error: 'Terminal control lease expired or was invalidated during preflight' }),
+              JSON.stringify({
+                error:
+                  'Terminal control lease expired or was invalidated during preflight'
+              }),
               { status: 409, headers: { 'content-type': 'application/json' } }
             )
           }
@@ -1357,10 +1913,13 @@ export const createServer = (
           }
 
           await leaseManager.releaseLease(leaseId, 'upgrade_failed')
-          return new Response(JSON.stringify({ error: 'WebSocket upgrade failed' }), {
-            status: 400,
-            headers: { 'content-type': 'application/json' }
-          })
+          return new Response(
+            JSON.stringify({ error: 'WebSocket upgrade failed' }),
+            {
+              status: 400,
+              headers: { 'content-type': 'application/json' }
+            }
+          )
         } catch (err) {
           await leaseManager.releaseLease(leaseId, 'preflight_failed')
           throw err
@@ -1403,31 +1962,45 @@ export const createServer = (
         })
       }
 
-      return new Response('Herdr Web API server is running on 127.0.0.1:8787. Run "bun run build" or connect Vite dev server on 5173.', {
-        status: 200,
-        headers: { 'content-type': 'text/plain; charset=utf-8' }
-      })
+      return new Response(
+        'Herdr Web API server is running on 127.0.0.1:8787. Run "bun run build" or connect Vite dev server on 5173.',
+        {
+          status: 200,
+          headers: { 'content-type': 'text/plain; charset=utf-8' }
+        }
+      )
     },
     websocket: {
-      open(ws) {
+      async open(ws) {
         if (ws.data.kind === 'events') {
-          const bridge = options.deps?.snapshotBridge ?? getSharedSnapshotBridge()
+          const bridge =
+            options.deps?.snapshotBridge ?? getSharedSnapshotBridge()
           bridge.start()
           ws.data.closed = false
 
           // Send current status immediately
-          ws.send(JSON.stringify({ type: 'status', status: bridge.getStatus() }))
+          ws.send(
+            JSON.stringify({ type: 'status', status: bridge.getStatus() })
+          )
 
           // Send current snapshot if available
-          const projectFn = options.deps?.projectBrowserSnapshot ?? projectBrowserSnapshot
+          const projectFn =
+            options.deps?.projectBrowserSnapshot ?? projectBrowserSnapshot
           const currentSnap = bridge.getLatestSnapshot()
           if (currentSnap) {
-            ws.send(JSON.stringify({ type: 'snapshot', data: projectFn(currentSnap) }))
+            ws.send(
+              JSON.stringify({
+                type: 'snapshot',
+                data: projectFn(currentSnap)
+              })
+            )
           }
 
           const unsubSnapshot = bridge.onSnapshot((snapshot) => {
             if (!ws.data.closed && ws.readyState === 1) {
-              ws.send(JSON.stringify({ type: 'snapshot', data: projectFn(snapshot) }))
+              ws.send(
+                JSON.stringify({ type: 'snapshot', data: projectFn(snapshot) })
+              )
             }
           })
 
@@ -1455,7 +2028,12 @@ export const createServer = (
           } catch {
             void leaseManager.releaseLease(leaseId, 'spawn_failed')
             if (ws.readyState === 1) {
-              ws.send(JSON.stringify({ type: 'control.error', error: 'Failed to spawn terminal control process' }))
+              ws.send(
+                JSON.stringify({
+                  type: 'control.error',
+                  error: 'Failed to spawn terminal control process'
+                })
+              )
               ws.close()
             }
             return
@@ -1463,9 +2041,16 @@ export const createServer = (
 
           const activated = leaseManager.activateLease(leaseId, proc, ws)
           if (!activated) {
-            try { proc.kill() } catch {}
+            try {
+              proc.kill()
+            } catch {}
             if (ws.readyState === 1) {
-              ws.send(JSON.stringify({ type: 'control.error', error: 'Failed to activate terminal control lease' }))
+              ws.send(
+                JSON.stringify({
+                  type: 'control.error',
+                  error: 'Failed to activate terminal control lease'
+                })
+              )
               ws.close()
             }
             return
@@ -1480,26 +2065,36 @@ export const createServer = (
               recheck.shellPid !== shellPid ||
               recheck.pgid !== pgid
             ) {
-              const reason = !recheck.ok ? 'post_spawn_recheck_failed' : 'shell_process_changed'
+              const reason = !recheck.ok
+                ? 'post_spawn_recheck_failed'
+                : 'shell_process_changed'
               await leaseManager.releaseLease(leaseId, reason)
               if (ws.readyState === 1 && !ws.data.closed) {
-                ws.send(JSON.stringify({
-                  type: 'control.error',
-                  error: 'Terminal control preflight mismatch after spawn'
-                }))
+                ws.send(
+                  JSON.stringify({
+                    type: 'control.error',
+                    error: 'Terminal control preflight mismatch after spawn'
+                  })
+                )
                 ws.close()
               }
               return
             }
 
             // Immediately before setting controlReady/sending control.ready, verify exact same lease ID is still active and WS is open
-            if (!leaseManager.isLeaseActive(leaseId) || ws.readyState !== 1 || ws.data.closed) {
+            if (
+              !leaseManager.isLeaseActive(leaseId) ||
+              ws.readyState !== 1 ||
+              ws.data.closed
+            ) {
               await leaseManager.releaseLease(leaseId, 'lease_no_longer_active')
               if (ws.readyState === 1 && !ws.data.closed) {
-                ws.send(JSON.stringify({
-                  type: 'control.error',
-                  error: 'Terminal control lease is no longer active'
-                }))
+                ws.send(
+                  JSON.stringify({
+                    type: 'control.error',
+                    error: 'Terminal control lease is no longer active'
+                  })
+                )
                 ws.close()
               }
               return
@@ -1510,13 +2105,17 @@ export const createServer = (
 
             // Report control.ready to browser
             const activeLease = leaseManager.getActiveLease()
-            const remainingMs = activeLease ? Math.max(0, activeLease.expiresAt - Date.now()) : MAX_LEASE_DURATION_MS
+            const remainingMs = activeLease
+              ? Math.max(0, activeLease.expiresAt - Date.now())
+              : MAX_LEASE_DURATION_MS
             if (ws.readyState === 1 && !ws.data.closed) {
-              ws.send(JSON.stringify({
-                type: 'control.ready',
-                pane,
-                leaseDurationMs: remainingMs
-              }))
+              ws.send(
+                JSON.stringify({
+                  type: 'control.ready',
+                  pane,
+                  leaseDurationMs: remainingMs
+                })
+              )
             }
           })
 
@@ -1532,9 +2131,17 @@ export const createServer = (
                 if (done) break
                 buffer += decoder.decode(value, { stream: true })
                 if (buffer.length > MAX_STDOUT_LINE_BYTES * 2) {
-                  await leaseManager.releaseLease(leaseId, 'stdout_line_limit_exceeded')
+                  await leaseManager.releaseLease(
+                    leaseId,
+                    'stdout_line_limit_exceeded'
+                  )
                   if (ws.readyState === 1 && !ws.data.closed) {
-                    ws.send(JSON.stringify({ type: 'control.error', error: 'Terminal stdout buffer limit exceeded' }))
+                    ws.send(
+                      JSON.stringify({
+                        type: 'control.error',
+                        error: 'Terminal stdout buffer limit exceeded'
+                      })
+                    )
                     ws.close()
                   }
                   return
@@ -1546,11 +2153,20 @@ export const createServer = (
                   const trimmed = line.trim()
                   if (!trimmed) continue
 
-                  const validation = parseAndValidateUpstreamTerminalMessage(trimmed)
+                  const validation =
+                    parseAndValidateUpstreamTerminalMessage(trimmed)
                   if (!validation.valid || !validation.data) {
-                    await leaseManager.releaseLease(leaseId, 'malformed_upstream_envelope')
+                    await leaseManager.releaseLease(
+                      leaseId,
+                      'malformed_upstream_envelope'
+                    )
                     if (ws.readyState === 1 && !ws.data.closed) {
-                      ws.send(JSON.stringify({ type: 'control.error', error: 'Malformed upstream terminal frame' }))
+                      ws.send(
+                        JSON.stringify({
+                          type: 'control.error',
+                          error: 'Malformed upstream terminal frame'
+                        })
+                      )
                       ws.close()
                     }
                     return
@@ -1558,7 +2174,10 @@ export const createServer = (
 
                   const parsed = validation.data
                   if (parsed.type === 'terminal.closed') {
-                    await leaseManager.releaseLease(leaseId, parsed.reason || 'child_closed')
+                    await leaseManager.releaseLease(
+                      leaseId,
+                      parsed.reason || 'child_closed'
+                    )
                     return
                   }
 
@@ -1589,7 +2208,12 @@ export const createServer = (
                   console.warn(`[terminal-control] Child stderr: ${category}`)
                   await leaseManager.releaseLease(leaseId, `stderr_${category}`)
                   if (ws.readyState === 1 && !ws.data.closed) {
-                    ws.send(JSON.stringify({ type: 'terminal.closed', reason: category }))
+                    ws.send(
+                      JSON.stringify({
+                        type: 'terminal.closed',
+                        reason: category
+                      })
+                    )
                     ws.close()
                   }
                   return
@@ -1602,7 +2226,10 @@ export const createServer = (
           // Child exit monitoring
           proc.exited.then(async (exitCode) => {
             if (!ws.data.closed) {
-              await leaseManager.releaseLease(leaseId, `process exited with code ${exitCode}`)
+              await leaseManager.releaseLease(
+                leaseId,
+                `process exited with code ${exitCode}`
+              )
             }
           })
 
@@ -1610,10 +2237,142 @@ export const createServer = (
         }
 
         // ws.data.kind === 'terminal'
-        const { pane, cols, rows } = ws.data
-        const proc = spawnObserverProcess(pane, cols, rows)
-        ws.data.proc = proc
-        ws.data.closed = false
+        const data = ws.data
+        data.closed = false
+        const fitManager = getSharedTerminalFitManager({
+          scrollAdapter: {
+            getScrollMetadata: getPaneScrollMetadata,
+            executeScroll: executePaneScroll,
+            verifyTarget: async (paneId, terminalId) => {
+              const snap = await getHerdrSnapshot(2000)
+              return (snap.panes || []).some(
+                (pane) =>
+                  pane.pane_id === paneId && pane.terminal_id === terminalId
+              )
+            }
+          }
+        })
+
+        let proc: any
+        try {
+          const spawnFn = fitManager.getSpawnProcess()
+          proc = spawnFn(data.terminalId, data.cols, data.rows)
+          data.proc = proc
+          fitManager.registerProcess(data.terminalId, data.generation, proc)
+        } catch (spawnErr) {
+          data.closed = true
+          void fitManager.retireFitProducer(data.terminalId, data.generation)
+          if (ws.readyState === 1) {
+            ws.send(
+              JSON.stringify({
+                type: 'terminal.closed',
+                reason: `spawn_failed: ${spawnErr instanceof Error ? spawnErr.message : String(spawnErr)}`
+              })
+            )
+            ws.close()
+          }
+          return
+        }
+
+        // Post-spawn recheck against authoritative snapshot
+        try {
+          const snap = await getHerdrSnapshot(2000)
+          const target = (snap.panes || []).find(
+            (p) => p && p.pane_id === data.pane
+          )
+          if (!target || target.terminal_id !== data.terminalId) {
+            data.closed = true
+            try {
+              proc.kill()
+            } catch {}
+            try {
+              await proc.exited
+            } catch {}
+            void fitManager.retireFitProducer(data.terminalId, data.generation)
+            if (ws.readyState === 1) {
+              ws.send(
+                JSON.stringify({
+                  type: 'terminal.closed',
+                  reason: 'target_replaced'
+                })
+              )
+              ws.close()
+            }
+            return
+          }
+        } catch {
+          data.closed = true
+          try {
+            proc.kill()
+          } catch {}
+          try {
+            await proc.exited
+          } catch {}
+          void fitManager.retireFitProducer(data.terminalId, data.generation)
+          if (ws.readyState === 1) {
+            ws.send(
+              JSON.stringify({
+                type: 'terminal.closed',
+                reason: 'snapshot_preflight_failed'
+              })
+            )
+            ws.close()
+          }
+          return
+        }
+
+        const activated = fitManager.activateSession(
+          data.terminalId,
+          data.generation,
+          proc,
+          ws,
+          data.cols,
+          data.rows
+        )
+        if (!activated) {
+          data.closed = true
+          try {
+            proc.kill()
+          } catch {}
+          try {
+            await proc.exited
+          } catch {}
+          void fitManager.retireFitProducer(data.terminalId, data.generation)
+          if (ws.readyState === 1) {
+            ws.send(
+              JSON.stringify({
+                type: 'terminal.closed',
+                reason: 'activation_failed'
+              })
+            )
+            ws.close()
+          }
+          return
+        }
+
+        // Emit initial validated scroll-state on ready
+        void (async () => {
+          try {
+            const scrollMeta = await getPaneScrollMetadata(data.pane, 2000)
+            if (data.closed || ws.readyState !== 1) return
+            fitManager.setInitialScrollOffset(
+              data.terminalId,
+              data.generation,
+              scrollMeta.offset_from_bottom
+            )
+            ws.send(
+              JSON.stringify({
+                type: 'terminal.scroll-state',
+                offset: scrollMeta.offset_from_bottom,
+                maxOffset: scrollMeta.max_offset_from_bottom,
+                viewportRows: scrollMeta.viewport_rows,
+                offset_from_bottom: scrollMeta.offset_from_bottom,
+                max_offset_from_bottom: scrollMeta.max_offset_from_bottom,
+                viewport_rows: scrollMeta.viewport_rows
+              })
+            )
+          } catch {}
+        })()
 
         // Stream stdout line-by-line (NDJSON)
         const reader = proc.stdout.getReader()
@@ -1622,25 +2381,84 @@ export const createServer = (
 
         const readStream = async () => {
           try {
-            while (!ws.data.closed) {
+            while (!data.closed && data.proc === proc) {
               const { done, value } = await reader.read()
               if (done) break
               buffer += decoder.decode(value, { stream: true })
+              if (buffer.length > MAX_STDOUT_LINE_BYTES * 2) {
+                data.closed = true
+                void fitManager.retireFitProducer(
+                  data.terminalId,
+                  data.generation
+                )
+                if (ws.readyState === 1) {
+                  ws.send(
+                    JSON.stringify({
+                      type: 'terminal.closed',
+                      reason: 'stdout_line_limit_exceeded'
+                    })
+                  )
+                  ws.close()
+                }
+                return
+              }
+
               const lines = buffer.split('\n')
               buffer = lines.pop() || ''
               for (const line of lines) {
                 const trimmed = line.trim()
-                if (trimmed.length > 0 && ws.readyState === 1) {
-                  ws.send(trimmed)
+                if (
+                  trimmed.length > 0 &&
+                  ws.readyState === 1 &&
+                  data.proc === proc
+                ) {
+                  const validated =
+                    parseAndValidateFittedTerminalMessage(trimmed)
+                  if (!validated.valid || !validated.data) {
+                    data.closed = true
+                    void fitManager.retireFitProducer(
+                      data.terminalId,
+                      data.generation
+                    )
+                    if (ws.readyState === 1) {
+                      ws.send(
+                        JSON.stringify({
+                          type: 'terminal.closed',
+                          reason: 'malformed_upstream_envelope'
+                        })
+                      )
+                      ws.close()
+                    }
+                    return
+                  }
+
+                  ws.send(JSON.stringify(validated.data))
+                  if (validated.data.type === 'terminal.closed') {
+                    data.closed = true
+                    ws.close()
+                    break
+                  }
                 }
               }
             }
           } catch {
             // Stream closed or broken
           } finally {
-            if (!ws.data.closed && ws.readyState === 1) {
-              ws.send(JSON.stringify({ type: 'terminal.closed', reason: 'stream_ended' }))
-              ws.close()
+            if (!data.closed && data.proc === proc) {
+              data.closed = true
+              void fitManager.retireFitProducer(
+                data.terminalId,
+                data.generation
+              )
+              if (ws.readyState === 1) {
+                ws.send(
+                  JSON.stringify({
+                    type: 'terminal.closed',
+                    reason: 'stream_ended'
+                  })
+                )
+                ws.close()
+              }
             }
           }
         }
@@ -1652,10 +2470,20 @@ export const createServer = (
         const readErr = async () => {
           try {
             const { value } = await errReader.read()
-            if (value && ws.readyState === 1 && !ws.data.closed) {
+            if (
+              value &&
+              ws.readyState === 1 &&
+              !data.closed &&
+              data.proc === proc
+            ) {
               const errText = decoder.decode(value).slice(0, 500)
               if (errText.trim()) {
-                ws.send(JSON.stringify({ type: 'terminal.closed', reason: errText.trim() }))
+                ws.send(
+                  JSON.stringify({
+                    type: 'terminal.closed',
+                    reason: errText.trim()
+                  })
+                )
               }
             }
           } catch {}
@@ -1663,15 +2491,30 @@ export const createServer = (
         readErr()
 
         // Monitor process exit
-        proc.exited.then((exitCode) => {
-          if (!ws.data.closed && ws.readyState === 1) {
-            ws.send(JSON.stringify({ type: 'terminal.closed', reason: `process exited with code ${exitCode}` }))
+        proc.exited.then((exitCode: number) => {
+          if (!data.closed && data.proc === proc && ws.readyState === 1) {
+            data.closed = true
+            void fitManager.retireFitProducer(data.terminalId, data.generation)
+            ws.send(
+              JSON.stringify({
+                type: 'terminal.closed',
+                reason: `process exited with code ${exitCode}`
+              })
+            )
             ws.close()
           }
         })
       },
       close(ws) {
         ws.data.closed = true
+        if (ws.data.kind === 'terminal') {
+          const fitManager = getSharedTerminalFitManager()
+          void fitManager.retireFitProducer(
+            ws.data.terminalId,
+            ws.data.generation
+          )
+          return
+        }
         if (ws.data.kind === 'events') {
           ws.data.unsubscribeSnapshot?.()
           ws.data.unsubscribeStatus?.()
@@ -1682,22 +2525,141 @@ export const createServer = (
           void leaseManager.releaseLease(ws.data.leaseId, 'websocket_closed')
           return
         }
-
-        if (ws.data.proc) {
-          try {
-            ws.data.proc.kill()
-          } catch {}
-        }
       },
       message(ws, message) {
         if (ws.data.kind === 'events') {
           return
         }
 
+        if (ws.data.kind === 'terminal') {
+          const fitManager = getSharedTerminalFitManager()
+          const data = ws.data
+          if (data.closed || ws.readyState !== 1) return
+
+          const msgValidation = validateTerminalFitClientMessage(message)
+          if (!msgValidation.valid || !msgValidation.data) {
+            // Reject interactive input/key/binary/oversize/extra fields
+            return
+          }
+
+          const msg = msgValidation.data
+
+          if (msg.type === 'terminal.resize') {
+            const { cols, rows } = msg
+
+            data.resizeRevision = (data.resizeRevision ?? 0) + 1
+            const revision = data.resizeRevision
+
+            // Recheck target against snapshot before resize (fenced against target replacement and out-of-order writes)
+            void (async () => {
+              try {
+                const snap = await getHerdrSnapshot(2000)
+                if (data.closed || ws.readyState !== 1) return
+                if (data.resizeRevision !== revision) {
+                  return
+                }
+
+                const target = (snap.panes || []).find(
+                  (p) => p && p.pane_id === data.pane
+                )
+                if (!target || target.terminal_id !== data.terminalId) {
+                  data.closed = true
+                  void fitManager.retireFitProducer(
+                    data.terminalId,
+                    data.generation
+                  )
+                  if (ws.readyState === 1) {
+                    ws.send(
+                      JSON.stringify({
+                        type: 'terminal.closed',
+                        reason: 'target_replaced'
+                      })
+                    )
+                    ws.close()
+                  }
+                  return
+                }
+              } catch {
+                return
+              }
+
+              if (
+                data.closed ||
+                ws.readyState !== 1 ||
+                data.resizeRevision !== revision
+              ) {
+                return
+              }
+
+              fitManager.handleClientResize(
+                data.terminalId,
+                data.generation,
+                cols,
+                rows
+              )
+            })()
+            return
+          }
+
+          if (msg.type === 'terminal.scroll') {
+            void fitManager.enqueueScroll(
+              data.terminalId,
+              data.generation,
+              msg,
+              {
+                verifyTarget: async () => {
+                  const snap = await getHerdrSnapshot(2000)
+                  const target = (snap.panes || []).find(
+                    (p) => p && p.pane_id === data.pane
+                  )
+                  if (!target || target.terminal_id !== data.terminalId) {
+                    data.closed = true
+                    void fitManager.retireFitProducer(
+                      data.terminalId,
+                      data.generation
+                    )
+                    if (ws.readyState === 1) {
+                      ws.send(
+                        JSON.stringify({
+                          type: 'terminal.closed',
+                          reason: 'target_replaced'
+                        })
+                      )
+                      ws.close()
+                    }
+                    return false
+                  }
+                  return true
+                },
+                onScrollState: (state) => {
+                  if (data.closed || ws.readyState !== 1) return
+                  ws.send(
+                    JSON.stringify({
+                      type: 'terminal.scroll-state',
+                      offset: state.offset,
+                      maxOffset: state.maxOffset,
+                      viewportRows: state.viewportRows,
+                      offset_from_bottom: state.offset,
+                      max_offset_from_bottom: state.maxOffset,
+                      viewport_rows: state.viewportRows
+                    })
+                  )
+                }
+              }
+            )
+            return
+          }
+        }
+
         if (ws.data.kind === 'terminal-control') {
           const { leaseId, proc } = ws.data
           const activeLease = leaseManager.getActiveLease()
-          if (!activeLease || activeLease.id !== leaseId || activeLease.status !== 'active' || ws.data.closed) {
+          if (
+            !activeLease ||
+            activeLease.id !== leaseId ||
+            activeLease.status !== 'active' ||
+            ws.data.closed
+          ) {
             return
           }
 
@@ -1705,10 +2667,12 @@ export const createServer = (
           if (!ws.data.controlReady) {
             void leaseManager.releaseLease(leaseId, 'pre_ready_input_rejected')
             if (ws.readyState === 1 && !ws.data.closed) {
-              ws.send(JSON.stringify({
-                type: 'control.error',
-                error: 'Terminal control received client message before ready'
-              }))
+              ws.send(
+                JSON.stringify({
+                  type: 'control.error',
+                  error: 'Terminal control received client message before ready'
+                })
+              )
               ws.close()
             }
             return
@@ -1716,7 +2680,10 @@ export const createServer = (
 
           const validation = validateTerminalControlMessage(message)
           if (!validation.valid || !validation.data) {
-            void leaseManager.releaseLease(leaseId, validation.error || 'invalid_message')
+            void leaseManager.releaseLease(
+              leaseId,
+              validation.error || 'invalid_message'
+            )
             return
           }
 
@@ -1724,7 +2691,10 @@ export const createServer = (
           if (msg.type === 'terminal.input') {
             if (proc && proc.stdin && typeof proc.stdin.write === 'function') {
               try {
-                proc.stdin.write(JSON.stringify({ type: 'terminal.input', text: msg.text }) + '\n')
+                proc.stdin.write(
+                  JSON.stringify({ type: 'terminal.input', text: msg.text }) +
+                    '\n'
+                )
                 proc.stdin.flush?.()
               } catch {
                 void leaseManager.releaseLease(leaseId, 'stdin_write_failed')
@@ -1736,7 +2706,13 @@ export const createServer = (
           if (msg.type === 'terminal.resize') {
             if (proc && proc.stdin && typeof proc.stdin.write === 'function') {
               try {
-                proc.stdin.write(JSON.stringify({ type: 'terminal.resize', cols: msg.cols, rows: msg.rows }) + '\n')
+                proc.stdin.write(
+                  JSON.stringify({
+                    type: 'terminal.resize',
+                    cols: msg.cols,
+                    rows: msg.rows
+                  }) + '\n'
+                )
                 proc.stdin.flush?.()
               } catch {
                 void leaseManager.releaseLease(leaseId, 'resize_write_failed')
@@ -1755,7 +2731,15 @@ export const createServer = (
 
         // Terminal observer mode: read-only CLI session observation stream; interactive input and control belong strictly to /api/terminal/control
         if (ws.readyState === 1) {
-          ws.send(JSON.stringify({ type: 'terminal.frame', encoding: 'ansi', full: false, bytes: '', note: 'observer_only' }))
+          ws.send(
+            JSON.stringify({
+              type: 'terminal.frame',
+              encoding: 'ansi',
+              full: false,
+              bytes: '',
+              note: 'observer_only'
+            })
+          )
         }
       }
     }
@@ -1765,5 +2749,7 @@ export const createServer = (
 // Start server if executed directly
 if (import.meta.main) {
   const server = createServer()
-  console.log(`[herdr-web] server listening on http://${server.hostname}:${server.port}`)
+  console.log(
+    `[herdr-web] server listening on http://${server.hostname}:${server.port}`
+  )
 }

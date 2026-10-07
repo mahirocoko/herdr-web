@@ -1,8 +1,18 @@
-import { PANE_ID_REGEX, isAgentPane, type IValidationResult } from './security.ts'
+import {
+  PANE_ID_REGEX,
+  isAgentPane,
+  type IValidationResult
+} from './security.ts'
 import { getHerdrSnapshot } from './herdr-adapter.ts'
 import { sendRawSocketRequest, HerdrSocketError } from './herdr-socket.ts'
 import { getSharedOperationCoordinator } from './operation-coordinator.ts'
-import type { ISnapshotResult, IPane, ITerminalFrame, ITerminalClosed } from './types.ts'
+import { getSharedTerminalFitManager } from './terminal-fit.ts'
+import type {
+  ISnapshotResult,
+  IPane,
+  ITerminalFrame,
+  ITerminalClosed
+} from './types.ts'
 
 export const MIN_CONTROL_COLS = 40
 export const MAX_CONTROL_COLS = 240
@@ -30,7 +40,13 @@ export type IControlClientMessage =
 export type IControlServerEnvelope =
   | { type: 'control.ready'; pane: string; leaseDurationMs: number }
   | { type: 'control.error'; error: string }
-  | { type: 'terminal.frame'; encoding: string; full: boolean; bytes: string; note?: string }
+  | {
+      type: 'terminal.frame'
+      encoding: string
+      full: boolean
+      bytes: string
+      note?: string
+    }
   | { type: 'terminal.closed'; reason: string }
 
 export interface IPaneProcessInfoProcess {
@@ -53,15 +69,33 @@ export type IControlPreflightResult =
   | { ok: true; paneId: string; shellPid: number; pgid: number }
   | { ok: false; status: number; code: string; error: string }
 
-export const buildTerminalControlArgv = (paneId: string, cols: number, rows: number): string[] => {
+export const buildTerminalControlArgv = (
+  paneId: string,
+  cols: number,
+  rows: number
+): string[] => {
   if (!PANE_ID_REGEX.test(paneId)) {
     throw new Error(`Invalid paneId for terminal control argv: "${paneId}"`)
   }
-  if (typeof cols !== 'number' || !Number.isInteger(cols) || cols < MIN_CONTROL_COLS || cols > MAX_CONTROL_COLS) {
-    throw new Error(`Invalid cols for terminal control: ${cols} (must be integer between ${MIN_CONTROL_COLS} and ${MAX_CONTROL_COLS})`)
+  if (
+    typeof cols !== 'number' ||
+    !Number.isInteger(cols) ||
+    cols < MIN_CONTROL_COLS ||
+    cols > MAX_CONTROL_COLS
+  ) {
+    throw new Error(
+      `Invalid cols for terminal control: ${cols} (must be integer between ${MIN_CONTROL_COLS} and ${MAX_CONTROL_COLS})`
+    )
   }
-  if (typeof rows !== 'number' || !Number.isInteger(rows) || rows < MIN_CONTROL_ROWS || rows > MAX_CONTROL_ROWS) {
-    throw new Error(`Invalid rows for terminal control: ${rows} (must be integer between ${MIN_CONTROL_ROWS} and ${MAX_CONTROL_ROWS})`)
+  if (
+    typeof rows !== 'number' ||
+    !Number.isInteger(rows) ||
+    rows < MIN_CONTROL_ROWS ||
+    rows > MAX_CONTROL_ROWS
+  ) {
+    throw new Error(
+      `Invalid rows for terminal control: ${rows} (must be integer between ${MIN_CONTROL_ROWS} and ${MAX_CONTROL_ROWS})`
+    )
   }
 
   return [
@@ -86,7 +120,10 @@ export const validateTerminalControlParams = (
 ): IValidationResult<{ pane: string; cols: number; rows: number }> => {
   const paneValues = url.searchParams.getAll('pane')
   if (paneValues.length !== 1) {
-    return { valid: false, error: 'Query parameter "pane" must be specified exactly once' }
+    return {
+      valid: false,
+      error: 'Query parameter "pane" must be specified exactly once'
+    }
   }
   const pane = paneValues[0]
   if (!PANE_ID_REGEX.test(pane)) {
@@ -109,7 +146,10 @@ export const validateTerminalControlParams = (
   if (colsValues.length === 1) {
     const rawCols = colsValues[0]
     if (!isStrictDecimalInteger(rawCols)) {
-      return { valid: false, error: 'cols must be a canonical decimal integer' }
+      return {
+        valid: false,
+        error: 'cols must be a canonical decimal integer'
+      }
     }
     const parsed = Number(rawCols)
     if (parsed < MIN_CONTROL_COLS || parsed > MAX_CONTROL_COLS) {
@@ -124,7 +164,10 @@ export const validateTerminalControlParams = (
   if (rowsValues.length === 1) {
     const rawRows = rowsValues[0]
     if (!isStrictDecimalInteger(rawRows)) {
-      return { valid: false, error: 'rows must be a canonical decimal integer' }
+      return {
+        valid: false,
+        error: 'rows must be a canonical decimal integer'
+      }
     }
     const parsed = Number(rawRows)
     if (parsed < MIN_CONTROL_ROWS || parsed > MAX_CONTROL_ROWS) {
@@ -158,7 +201,10 @@ export const validateTerminalControlStatusParams = (
 
   const paneValues = url.searchParams.getAll('pane')
   if (paneValues.length !== 1) {
-    return { valid: false, error: 'Query parameter "pane" must be specified exactly once' }
+    return {
+      valid: false,
+      error: 'Query parameter "pane" must be specified exactly once'
+    }
   }
   const pane = paneValues[0]
   if (!PANE_ID_REGEX.test(pane)) {
@@ -176,7 +222,10 @@ export const validateTerminalControlMessage = (
 ): IValidationResult<IControlClientMessage> => {
   if (typeof raw === 'string') {
     if (new TextEncoder().encode(raw).length > MAX_WS_CONTROL_MESSAGE_BYTES) {
-      return { valid: false, error: 'WebSocket message exceeds maximum size of 8192 bytes' }
+      return {
+        valid: false,
+        error: 'WebSocket message exceeds maximum size of 8192 bytes'
+      }
     }
     try {
       raw = JSON.parse(raw)
@@ -193,15 +242,24 @@ export const validateTerminalControlMessage = (
   const keys = Object.keys(obj)
 
   if (typeof obj.type !== 'string') {
-    return { valid: false, error: 'Missing or invalid "type" in control message' }
+    return {
+      valid: false,
+      error: 'Missing or invalid "type" in control message'
+    }
   }
 
   if (obj.type === 'terminal.input') {
     if (keys.length !== 2 || !('text' in obj)) {
-      return { valid: false, error: 'terminal.input message must contain only "type" and "text"' }
+      return {
+        valid: false,
+        error: 'terminal.input message must contain only "type" and "text"'
+      }
     }
     if (typeof obj.text !== 'string' || obj.text.length === 0) {
-      return { valid: false, error: 'terminal.input text must be a non-empty string' }
+      return {
+        valid: false,
+        error: 'terminal.input text must be a non-empty string'
+      }
     }
     const byteLength = new TextEncoder().encode(obj.text).length
     if (byteLength > MAX_INPUT_TEXT_UTF8_BYTES) {
@@ -221,7 +279,11 @@ export const validateTerminalControlMessage = (
 
   if (obj.type === 'terminal.resize') {
     if (keys.length !== 3 || !('cols' in obj) || !('rows' in obj)) {
-      return { valid: false, error: 'terminal.resize message must contain only "type", "cols", and "rows"' }
+      return {
+        valid: false,
+        error:
+          'terminal.resize message must contain only "type", "cols", and "rows"'
+      }
     }
     if (
       typeof obj.cols !== 'number' ||
@@ -257,7 +319,10 @@ export const validateTerminalControlMessage = (
 
   if (obj.type === 'terminal.release') {
     if (keys.length !== 1) {
-      return { valid: false, error: 'terminal.release message must not contain additional fields' }
+      return {
+        valid: false,
+        error: 'terminal.release message must not contain additional fields'
+      }
     }
     return {
       valid: true,
@@ -267,12 +332,36 @@ export const validateTerminalControlMessage = (
     }
   }
 
-  return { valid: false, error: `Unsupported control message type: "${obj.type}"` }
+  return {
+    valid: false,
+    error: `Unsupported control message type: "${obj.type}"`
+  }
 }
 
 export type IUpstreamTerminalFrame = ITerminalFrame
 export type IUpstreamTerminalClosed = ITerminalClosed
 export type IUpstreamTerminalMessage = ITerminalFrame | ITerminalClosed
+
+export const FRAME_REQUIRED_KEYS = [
+  'type',
+  'seq',
+  'encoding',
+  'width',
+  'height',
+  'full',
+  'bytes'
+]
+export const FRAME_ALLOWED_KEYS = [
+  'type',
+  'seq',
+  'encoding',
+  'width',
+  'height',
+  'full',
+  'bytes',
+  'note'
+]
+export const CLOSED_ALLOWED_KEYS = ['type', 'reason']
 
 export const canAcceptTerminalControlMessage = (
   controlReady: boolean,
@@ -281,19 +370,30 @@ export const canAcceptTerminalControlMessage = (
   return Boolean(controlReady && !isClosed)
 }
 
-const FRAME_ALLOWED_KEYS = ['type', 'seq', 'encoding', 'width', 'height', 'full', 'bytes']
-const CLOSED_ALLOWED_KEYS = ['type', 'reason']
+export interface ITerminalMessageValidationGeometry {
+  minCols?: number
+  maxCols?: number
+  minRows?: number
+  maxRows?: number
+}
 
 export const parseAndValidateUpstreamTerminalMessage = (
-  raw: string
+  raw: string,
+  geometry?: ITerminalMessageValidationGeometry
 ): IValidationResult<IUpstreamTerminalMessage> => {
   if (typeof raw !== 'string') {
-    return { valid: false, error: 'Upstream terminal message must be a string' }
+    return {
+      valid: false,
+      error: 'Upstream terminal message must be a string'
+    }
   }
 
   const byteLength = new TextEncoder().encode(raw).length
   if (byteLength > MAX_STDOUT_LINE_BYTES) {
-    return { valid: false, error: `Upstream terminal message exceeds ${MAX_STDOUT_LINE_BYTES} byte limit` }
+    return {
+      valid: false,
+      error: `Upstream terminal message exceeds ${MAX_STDOUT_LINE_BYTES} byte limit`
+    }
   }
 
   let obj: any
@@ -311,34 +411,72 @@ export const parseAndValidateUpstreamTerminalMessage = (
     return { valid: false, error: 'Upstream message missing "type" string' }
   }
 
+  const minCols = geometry?.minCols ?? MIN_CONTROL_COLS
+  const maxCols = geometry?.maxCols ?? MAX_CONTROL_COLS
+  const minRows = geometry?.minRows ?? MIN_CONTROL_ROWS
+  const maxRows = geometry?.maxRows ?? MAX_CONTROL_ROWS
+
   const keys = Object.keys(obj)
 
   if (obj.type === 'terminal.frame') {
     for (const key of keys) {
       if (!FRAME_ALLOWED_KEYS.includes(key)) {
-        return { valid: false, error: `Unexpected key in terminal.frame: "${key}"` }
+        return {
+          valid: false,
+          error: `Unexpected key in terminal.frame: "${key}"`
+        }
       }
     }
-    for (const reqKey of FRAME_ALLOWED_KEYS) {
+    for (const reqKey of FRAME_REQUIRED_KEYS) {
       if (!(reqKey in obj)) {
-        return { valid: false, error: `Missing required key in terminal.frame: "${reqKey}"` }
+        return {
+          valid: false,
+          error: `Missing required key in terminal.frame: "${reqKey}"`
+        }
       }
     }
 
-    if (typeof obj.seq !== 'number' || !Number.isInteger(obj.seq) || !Number.isFinite(obj.seq) || obj.seq < 0) {
-      return { valid: false, error: 'terminal.frame "seq" must be a finite non-negative integer' }
+    if (
+      typeof obj.seq !== 'number' ||
+      !Number.isInteger(obj.seq) ||
+      !Number.isFinite(obj.seq) ||
+      obj.seq < 0
+    ) {
+      return {
+        valid: false,
+        error: 'terminal.frame "seq" must be a finite non-negative integer'
+      }
     }
 
     if (obj.encoding !== 'ansi') {
-      return { valid: false, error: `terminal.frame "encoding" must be exactly "ansi", got "${obj.encoding}"` }
+      return {
+        valid: false,
+        error: `terminal.frame "encoding" must be exactly "ansi", got "${obj.encoding}"`
+      }
     }
 
-    if (typeof obj.width !== 'number' || !Number.isInteger(obj.width) || obj.width < MIN_CONTROL_COLS || obj.width > MAX_CONTROL_COLS) {
-      return { valid: false, error: `terminal.frame "width" must be an integer between ${MIN_CONTROL_COLS} and ${MAX_CONTROL_COLS}` }
+    if (
+      typeof obj.width !== 'number' ||
+      !Number.isInteger(obj.width) ||
+      obj.width < minCols ||
+      obj.width > maxCols
+    ) {
+      return {
+        valid: false,
+        error: `terminal.frame "width" must be an integer between ${minCols} and ${maxCols}`
+      }
     }
 
-    if (typeof obj.height !== 'number' || !Number.isInteger(obj.height) || obj.height < MIN_CONTROL_ROWS || obj.height > MAX_CONTROL_ROWS) {
-      return { valid: false, error: `terminal.frame "height" must be an integer between ${MIN_CONTROL_ROWS} and ${MAX_CONTROL_ROWS}` }
+    if (
+      typeof obj.height !== 'number' ||
+      !Number.isInteger(obj.height) ||
+      obj.height < minRows ||
+      obj.height > maxRows
+    ) {
+      return {
+        valid: false,
+        error: `terminal.frame "height" must be an integer between ${minRows} and ${maxRows}`
+      }
     }
 
     if (typeof obj.full !== 'boolean') {
@@ -350,12 +488,21 @@ export const parseAndValidateUpstreamTerminalMessage = (
     }
 
     if (obj.bytes.length > 0) {
-      if (obj.bytes.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(obj.bytes)) {
-        return { valid: false, error: 'terminal.frame "bytes" must be valid base64' }
+      if (
+        obj.bytes.length % 4 !== 0 ||
+        !/^[A-Za-z0-9+/]*={0,2}$/.test(obj.bytes)
+      ) {
+        return {
+          valid: false,
+          error: 'terminal.frame "bytes" must be valid base64'
+        }
       }
       const approxDecoded = Math.floor((obj.bytes.length * 3) / 4)
       if (approxDecoded > MAX_STDOUT_LINE_BYTES) {
-        return { valid: false, error: 'terminal.frame "bytes" exceeds decoded byte limit' }
+        return {
+          valid: false,
+          error: 'terminal.frame "bytes" exceeds decoded byte limit'
+        }
       }
     }
 
@@ -376,20 +523,32 @@ export const parseAndValidateUpstreamTerminalMessage = (
   if (obj.type === 'terminal.closed') {
     for (const key of keys) {
       if (!CLOSED_ALLOWED_KEYS.includes(key)) {
-        return { valid: false, error: `Unexpected key in terminal.closed: "${key}"` }
+        return {
+          valid: false,
+          error: `Unexpected key in terminal.closed: "${key}"`
+        }
       }
     }
 
     let reason: string | undefined = undefined
     if ('reason' in obj) {
       if (typeof obj.reason !== 'string') {
-        return { valid: false, error: 'terminal.closed "reason" must be a string' }
+        return {
+          valid: false,
+          error: 'terminal.closed "reason" must be a string'
+        }
       }
       if (obj.reason.length > 100) {
-        return { valid: false, error: 'terminal.closed "reason" exceeds 100 characters' }
+        return {
+          valid: false,
+          error: 'terminal.closed "reason" exceeds 100 characters'
+        }
       }
       if (!/^[a-zA-Z0-9_ -]+$/.test(obj.reason)) {
-        return { valid: false, error: 'terminal.closed "reason" contains invalid characters' }
+        return {
+          valid: false,
+          error: 'terminal.closed "reason" contains invalid characters'
+        }
       }
       reason = obj.reason
     }
@@ -403,7 +562,21 @@ export const parseAndValidateUpstreamTerminalMessage = (
     }
   }
 
-  return { valid: false, error: `Unsupported upstream message type: "${obj.type}"` }
+  return {
+    valid: false,
+    error: `Unsupported upstream message type: "${obj.type}"`
+  }
+}
+
+export const parseAndValidateFittedTerminalMessage = (
+  raw: string
+): IValidationResult<IUpstreamTerminalMessage> => {
+  return parseAndValidateUpstreamTerminalMessage(raw, {
+    minCols: 1,
+    maxCols: 500,
+    minRows: 1,
+    maxRows: 200
+  })
 }
 
 export const PUBLIC_PREFLIGHT_ERRORS: Record<string, string> = {
@@ -430,16 +603,32 @@ export const getPublicPreflightErrorMessage = (code?: string): string => {
 export const sanitizeStderrToCategory = (raw: string): string => {
   const trimmed = raw.trim().toLowerCase()
   if (!trimmed) return 'empty'
-  if (trimmed.includes('permission') || trimmed.includes('eacces') || trimmed.includes('operation not permitted')) {
+  if (
+    trimmed.includes('permission') ||
+    trimmed.includes('eacces') ||
+    trimmed.includes('operation not permitted')
+  ) {
     return 'permission_denied'
   }
-  if (trimmed.includes('not found') || trimmed.includes('enoent') || trimmed.includes('no such file')) {
+  if (
+    trimmed.includes('not found') ||
+    trimmed.includes('enoent') ||
+    trimmed.includes('no such file')
+  ) {
     return 'resource_not_found'
   }
-  if (trimmed.includes('busy') || trimmed.includes('in use') || trimmed.includes('locked')) {
+  if (
+    trimmed.includes('busy') ||
+    trimmed.includes('in use') ||
+    trimmed.includes('locked')
+  ) {
     return 'resource_busy'
   }
-  if (trimmed.includes('invalid') || trimmed.includes('unsupported') || trimmed.includes('bad argument')) {
+  if (
+    trimmed.includes('invalid') ||
+    trimmed.includes('unsupported') ||
+    trimmed.includes('bad argument')
+  ) {
     return 'invalid_argument'
   }
   return 'child_process_error'
@@ -533,7 +722,10 @@ export const preflightShellPane = async (
       )
     }
   } catch (procErr) {
-    if (procErr instanceof HerdrSocketError && procErr.code === 'pane_not_found') {
+    if (
+      procErr instanceof HerdrSocketError &&
+      procErr.code === 'pane_not_found'
+    ) {
       return {
         ok: false,
         status: 404,
@@ -550,7 +742,9 @@ export const preflightShellPane = async (
   }
 
   const info: IPaneProcessInfo =
-    rawProcessInfo && typeof rawProcessInfo === 'object' && 'process_info' in rawProcessInfo
+    rawProcessInfo &&
+    typeof rawProcessInfo === 'object' &&
+    'process_info' in rawProcessInfo
       ? rawProcessInfo.process_info
       : rawProcessInfo
 
@@ -607,7 +801,8 @@ export const preflightShellPane = async (
       ok: false,
       status: 409,
       code: 'busy_shell_refusal',
-      error: 'Pane is not an idle shell: multiple or zero foreground processes detected'
+      error:
+        'Pane is not an idle shell: multiple or zero foreground processes detected'
     }
   }
 
@@ -616,7 +811,8 @@ export const preflightShellPane = async (
       ok: false,
       status: 409,
       code: 'busy_shell_refusal',
-      error: 'Pane is busy: foreground process group differs from shell process ID'
+      error:
+        'Pane is busy: foreground process group differs from shell process ID'
     }
   }
 
@@ -631,7 +827,8 @@ export const preflightShellPane = async (
       ok: false,
       status: 409,
       code: 'busy_shell_refusal',
-      error: 'Pane is busy: foreground process PID differs from shell process ID'
+      error:
+        'Pane is busy: foreground process PID differs from shell process ID'
     }
   }
 
@@ -643,7 +840,11 @@ export const preflightShellPane = async (
   }
 }
 
-export const spawnTerminalControlProcess = (paneId: string, cols: number, rows: number) => {
+export const spawnTerminalControlProcess = (
+  paneId: string,
+  cols: number,
+  rows: number
+) => {
   const argv = buildTerminalControlArgv(paneId, cols, rows)
   return Bun.spawn(argv, {
     stdin: 'pipe',
@@ -653,7 +854,10 @@ export const spawnTerminalControlProcess = (paneId: string, cols: number, rows: 
 }
 
 export interface ITerminalControlArbiter {
-  claimPane(paneId: string, leaseId: string): { ok: true; token: string } | { ok: false; status: number; error: string }
+  claimPane(
+    paneId: string,
+    leaseId: string
+  ): { ok: true; token: string } | { ok: false; status: number; error: string }
   releasePane(token: string): void
   isPaneClaimed?(paneId: string): boolean
 }
@@ -661,6 +865,7 @@ export interface ITerminalControlArbiter {
 export interface IControlLease {
   id: string
   paneId: string
+  terminalId?: string
   createdAt: number
   expiresAt: number
   status: 'pending' | 'active' | 'releasing' | 'released'
@@ -675,7 +880,11 @@ const createLocalArbiter = (): ITerminalControlArbiter => {
   return {
     claimPane: (paneId: string) => {
       if (claimed.has(paneId)) {
-        return { ok: false, status: 409, error: 'A terminal control session is already active or pending' }
+        return {
+          ok: false,
+          status: 409,
+          error: 'A terminal control session is already active or pending'
+        }
       }
       const token = crypto.randomUUID()
       claimed.set(paneId, token)
@@ -707,8 +916,10 @@ export class TerminalControlLeaseManager {
 
   constructor(options: ITerminalControlLeaseManagerOptions = {}) {
     this.arbiter = options.arbiter ?? createLocalArbiter()
-    this.maxLeaseDurationMs = options.maxLeaseDurationMs ?? MAX_LEASE_DURATION_MS
-    this.releaseGraceTimeoutMs = options.releaseGraceTimeoutMs ?? RELEASE_GRACE_TIMEOUT_MS
+    this.maxLeaseDurationMs =
+      options.maxLeaseDurationMs ?? MAX_LEASE_DURATION_MS
+    this.releaseGraceTimeoutMs =
+      options.releaseGraceTimeoutMs ?? RELEASE_GRACE_TIMEOUT_MS
     this.releaseKillTimeoutMs = options.releaseKillTimeoutMs ?? 500
   }
 
@@ -719,7 +930,9 @@ export class TerminalControlLeaseManager {
    */
   public bindArbiter(arbiter: ITerminalControlArbiter): void {
     if (this.currentLease && this.currentLease.status !== 'released') {
-      throw new Error('Cannot bind terminal control arbiter while a lease is active or pending')
+      throw new Error(
+        'Cannot bind terminal control arbiter while a lease is active or pending'
+      )
     }
     this.arbiter = arbiter
   }
@@ -738,7 +951,12 @@ export class TerminalControlLeaseManager {
     return true
   }
 
-  public reserveLease(paneId: string): { ok: true; lease: IControlLease } | { ok: false; status: number; error: string } {
+  public reserveLease(
+    paneId: string,
+    terminalId?: string
+  ):
+    | { ok: true; lease: IControlLease }
+    | { ok: false; status: number; error: string } {
     if (this.currentLease && this.currentLease.status !== 'released') {
       return {
         ok: false,
@@ -752,6 +970,7 @@ export class TerminalControlLeaseManager {
     const lease: IControlLease = {
       id: leaseId,
       paneId,
+      ...(terminalId ? { terminalId } : {}),
       createdAt: now,
       expiresAt: now + this.maxLeaseDurationMs,
       status: 'pending'
@@ -829,10 +1048,20 @@ export class TerminalControlLeaseManager {
             this.arbiter.releasePane(lease.claimToken)
             lease.claimToken = undefined
           }
+          if (lease.terminalId) {
+            try {
+              getSharedTerminalFitManager().unblockFitAdmission(
+                lease.terminalId,
+                leaseId
+              )
+            } catch {}
+          }
           if (lease.ws) {
             try {
               if (lease.ws.readyState === 1) {
-                lease.ws.send(JSON.stringify({ type: 'terminal.closed', reason }))
+                lease.ws.send(
+                  JSON.stringify({ type: 'terminal.closed', reason })
+                )
                 lease.ws.close()
               }
             } catch {}
@@ -853,14 +1082,18 @@ export class TerminalControlLeaseManager {
         // 1. Send terminal.release to child stdin if writable
         try {
           if (proc.stdin && typeof proc.stdin.write === 'function') {
-            proc.stdin.write(JSON.stringify({ type: 'terminal.release' }) + '\n')
+            proc.stdin.write(
+              JSON.stringify({ type: 'terminal.release' }) + '\n'
+            )
             proc.stdin.flush?.()
           }
         } catch {}
 
         // 2. Wait bounded grace period for clean exit
         try {
-          const timeoutPromise = new Promise((resolve) => setTimeout(resolve, this.releaseGraceTimeoutMs))
+          const timeoutPromise = new Promise((resolve) =>
+            setTimeout(resolve, this.releaseGraceTimeoutMs)
+          )
           const race = await Promise.race([proc.exited, timeoutPromise])
           if (typeof race === 'number') {
             childExited = true
@@ -875,7 +1108,9 @@ export class TerminalControlLeaseManager {
             } catch {
               proc.kill()
             }
-            const killTimeout = new Promise((resolve) => setTimeout(resolve, this.releaseKillTimeoutMs))
+            const killTimeout = new Promise((resolve) =>
+              setTimeout(resolve, this.releaseKillTimeoutMs)
+            )
             const killRace = await Promise.race([proc.exited, killTimeout])
             if (typeof killRace === 'number') {
               childExited = true
@@ -901,6 +1136,14 @@ export class TerminalControlLeaseManager {
             this.arbiter.releasePane(lease.claimToken)
             lease.claimToken = undefined
           }
+          if (lease.terminalId) {
+            try {
+              getSharedTerminalFitManager().unblockFitAdmission(
+                lease.terminalId,
+                leaseId
+              )
+            } catch {}
+          }
           if (this.currentLease?.id === leaseId) {
             this.currentLease = null
           }
@@ -911,6 +1154,14 @@ export class TerminalControlLeaseManager {
             if (lease.claimToken) {
               this.arbiter.releasePane(lease.claimToken)
               lease.claimToken = undefined
+            }
+            if (lease.terminalId) {
+              try {
+                getSharedTerminalFitManager().unblockFitAdmission(
+                  lease.terminalId,
+                  leaseId
+                )
+              } catch {}
             }
             if (this.currentLease?.id === leaseId) {
               this.currentLease = null
@@ -975,6 +1226,14 @@ export class TerminalControlLeaseManager {
       if (this.currentLease.claimToken) {
         this.arbiter.releasePane(this.currentLease.claimToken)
       }
+      if (this.currentLease.terminalId) {
+        try {
+          getSharedTerminalFitManager().unblockFitAdmission(
+            this.currentLease.terminalId,
+            this.currentLease.id
+          )
+        } catch {}
+      }
       if (this.currentLease.proc) {
         try {
           this.currentLease.proc.kill()
@@ -988,15 +1247,23 @@ export class TerminalControlLeaseManager {
 
 let sharedLeaseManager: TerminalControlLeaseManager | null = null
 
-export const getSharedTerminalControlLeaseManager = (): TerminalControlLeaseManager => {
-  if (!sharedLeaseManager) {
-    sharedLeaseManager = new TerminalControlLeaseManager({
-      arbiter: {
-        claimPane: (paneId, leaseId) => getSharedOperationCoordinator().claimPaneForControl(paneId, leaseId),
-        releasePane: (token) => { getSharedOperationCoordinator().releaseControlPane(token) },
-        isPaneClaimed: (paneId) => getSharedOperationCoordinator().isPaneClaimed(paneId)
-      }
-    })
+export const getSharedTerminalControlLeaseManager =
+  (): TerminalControlLeaseManager => {
+    if (!sharedLeaseManager) {
+      sharedLeaseManager = new TerminalControlLeaseManager({
+        arbiter: {
+          claimPane: (paneId, leaseId) =>
+            getSharedOperationCoordinator().claimPaneForControl(
+              paneId,
+              leaseId
+            ),
+          releasePane: (token) => {
+            getSharedOperationCoordinator().releaseControlPane(token)
+          },
+          isPaneClaimed: (paneId) =>
+            getSharedOperationCoordinator().isPaneClaimed(paneId)
+        }
+      })
+    }
+    return sharedLeaseManager
   }
-  return sharedLeaseManager
-}

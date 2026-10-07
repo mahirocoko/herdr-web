@@ -8,7 +8,7 @@ describe('HorizonHeader context ownership and responsive markup', () => {
     isSpaceDrawerOpen: false,
     isTabDrawerOpen: false,
     onOpenSpaces: () => {},
-    onOpenTabs: () => {},
+    onOpenTabs: () => {}
   }
 
   it('shows the current Space title and retains desktop Tab and folder context', () => {
@@ -22,7 +22,7 @@ describe('HorizonHeader context ownership and responsive markup', () => {
           agent_status: 'done',
           tab_count: 1,
           pane_count: 1,
-          focused: true,
+          focused: true
         }}
         activeTab={{
           tab_id: 't1',
@@ -31,7 +31,7 @@ describe('HorizonHeader context ownership and responsive markup', () => {
           label: 'Main',
           agent_status: 'done',
           pane_count: 1,
-          focused: true,
+          focused: true
         }}
         selectedPane={{
           pane_id: 'p1',
@@ -40,28 +40,30 @@ describe('HorizonHeader context ownership and responsive markup', () => {
           agent_status: 'working',
           focused: true,
           title: 'Agent One',
-          cwd: '/projects/web/',
+          cwd: '/projects/web/'
         }}
-        viewMode="panel"
+        viewMode="stream"
         onSelectMode={() => {}}
         onRefresh={() => {}}
-      />,
+      />
     )
     expect(html).toContain('class="context-title-text">Project</span>')
     expect(html).not.toContain('Mahiro Code')
-    expect(html).not.toContain('surface-tab-stream')
+    expect(html).toContain('surface-tab-stream')
+    expect(html).toContain('>Terminal</span>')
+    expect(html).not.toContain('surface-tab-panel')
     expect(html).toContain('surface-tab-history')
     expect(html).toContain('context-sub header-desktop-only')
     expect(html).toContain('Project')
     expect(html).toContain('Open Tabs and Panes')
     expect(html).toContain('>web</span>')
-    expect(html).toContain('aria-label="Refresh Panel"')
+    expect(html).not.toContain('aria-label="Refresh Terminal"')
     expect(html).toContain('aria-pressed="true"')
   })
 
   it('has truthful empty-target fallbacks and handles Windows folder paths', () => {
     const empty = renderToStaticMarkup(
-      <HorizonHeader {...common} activeWorkspace={null} />,
+      <HorizonHeader {...common} activeWorkspace={null} />
     )
     expect(empty).toContain('Select Workspace')
     expect(empty).toContain('Select Tab')
@@ -78,11 +80,13 @@ describe('HorizonHeader context ownership and responsive markup', () => {
           agent_status: 'idle',
           focused: true,
           terminal_title_stripped: 'Shell',
-          cwd: 'C:\\projects\\terminal\\',
+          cwd: 'C:\\projects\\terminal\\'
         }}
-      />,
+      />
     )
-    expect(shell).toContain('class="context-title-text">Select Workspace</span>')
+    expect(shell).toContain(
+      'class="context-title-text">Select Workspace</span>'
+    )
     expect(shell).toContain('>terminal</span>')
   })
 })
