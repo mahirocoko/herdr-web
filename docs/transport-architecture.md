@@ -124,10 +124,10 @@ The snapshot bridge maintains an efficient, shared event-driven invalidation loo
   - If a snapshot fetch is currently in flight, arriving events coalesce into a single follow-up fetch:
     ```ts
     do {
-      isDirty = false
-      const snap = await fetchSnapshot()
-      emitSnapshot(snap)
-    } while (isDirty)
+      isDirty = false;
+      const snap = await fetchSnapshot();
+      emitSnapshot(snap);
+    } while (isDirty);
     ```
   - This prevents overlapping snapshot queries during event bursts in the same active subscription generation. A stale fetch from a lost connection cannot publish because generation checks reject it; reconnect preflight is allowed to proceed without waiting for an unresponsive stale request to time out.
 - **Resilience**:
@@ -254,3 +254,19 @@ The snapshot bridge maintains an efficient, shared event-driven invalidation loo
   - Authoritative native interaction envelope (`INativeInteractionEnvelope` with providerId, providerVersion, target, interactionId, revision, expiry, responseMethod, choices) and response type (`INativeChoiceResponse`). No runtime or endpoint.
   - Structured dormant preset contract (`IAgentPreset` with kind `'agy'`, model `'gemini-3.8-flash-high'`, effort `'high'`, permissions `'dangerously-skip-permissions'`, `enabled: false`, fixed argv `['agy', '--model', 'gemini-3.8-flash-high', '--dangerously-skip-permissions']`).
   - Launch execution validator fails closed (`Agent presets are dormant; no agent launch runtime or route is enabled.`); dormant preset is unreferenced by routes or UI.
+
+## 9. Terminal Image Preview Transport (`server/image-preview.ts`)
+
+- **Endpoint**: `POST /api/media/image` accepting bounded JSON payload `{ path: string, paneId?: string }` (maximum 4096 bytes).
+- **Authentication & Origin Protection**: Shares the existing `validateOwnerAuth` owner check (`requireOrigin: true`), strictly requiring valid host/origin and matching `Tailscale-User-Login` (configured `ownerLogin` from push config) with loopback development exception. Checks run strictly before body reading, filesystem access, or native snapshot lookup. Unauthenticated GET, filesystem browsing, directory listing, text reading, and open file servers are rejected.
+- **Owner-Image Access & Path Resolution**:
+  - Absolute paths and `~/` (homedir) require no pane context and resolve directly across the owner-accessible local filesystem without manual root enrollment.
+  - Relative paths require an active `paneId` in the request body. The server looks up the pane in the authoritative native snapshot (`IPane.foreground_cwd` preferred, fallback `IPane.cwd`). Missing, stale, or unavailable working directories fail closed without fallback.
+  - OS-normal `..` path traversal is resolved within local owner-accessible directories. Remote URLs, file schemes, NUL bytes, and ASCII control characters remain strictly rejected.
+- **File System & Content Validation**:
+  - Rejects NUL bytes, ASCII control characters, remote URLs, and `file://` schemes before data access.
+  - Checks regular-file identity before opening (`lstat`), opens with no-follow/nonblocking flags (`O_NOFOLLOW | O_NONBLOCK`), and compares descriptor and canonical device/inode identities before reading. Directories, FIFOs, device nodes, symlinks at leaf, and detected replacement races are rejected.
+  - Bounded reading with a 12 MiB compressed-file limit (`MAX_IMAGE_BYTES`); PNG/JPEG/WebP headers must also report dimensions at most 8192 pixels per axis and 33,554,432 pixels total. This is cooperative-local checking, not protection against an adversarial same-UID filesystem writer.
+  - Dual validation of file extension (`.png`, `.jpg`, `.jpeg`, `.webp`) and magic bytes (PNG header, JPEG markers, WebP RIFF/WEBP chunks). Files with extension/magic mismatch (such as SVGs or HTML disguised as PNG) are rejected.
+- **Security Response Headers**: Returns binary buffer with explicit Content-Type (`image/png`, `image/jpeg`, `image/webp`), `Cache-Control: no-store`, and `X-Content-Type-Options: nosniff`. Generic error responses avoid leaking internal filesystem paths or stack traces.
+- **Terminal Link Ownership**: Browser-only detection maps xterm cells across a bounded physical-row window. Formatting indentation is removed only inside a recognized unquoted `View Image` argument at its owned column alignment, including intervening native wraps. Completed paths, new rooted paths, tool records and unrelated prose remain separate. Terminal text is only a candidate; backend validation remains authoritative. This does not add previews to the native terminal or promise recognition of every agent's output format.
