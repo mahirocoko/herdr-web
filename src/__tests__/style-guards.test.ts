@@ -3,6 +3,19 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 
 describe('mobile terminal typography ownership', () => {
+  it('keeps landscape drawer reconciliation and iOS input sizing aligned with compact CSS', () => {
+    const css = fs.readFileSync(path.resolve('src/app.css'), 'utf8')
+    const app = fs.readFileSync(path.resolve('src/app.tsx'), 'utf8')
+    expect(app).toContain('mql.matches && !compactLandscape.matches')
+    expect(app).toContain(
+      "compactLandscape.addEventListener?.('change', handleMediaChange)"
+    )
+    expect(app).toContain(
+      "compactLandscape.removeEventListener?.('change', handleMediaChange)"
+    )
+    expect(css).toMatch(/max-height: 80px;\s*font-size: 16px;/)
+  })
+
   it('uses one responsive terminal token before measuring real PTY cells', () => {
     const css = fs.readFileSync(path.resolve('src/app.css'), 'utf8')
     const canvas = fs.readFileSync(
@@ -14,7 +27,9 @@ describe('mobile terminal typography ownership', () => {
     expect(canvas).toContain("getPropertyValue('--terminal-font-size')")
     expect(canvas).toContain("token('--terminal-font-size')")
     expect(canvas).toContain("modeRef.current === 'observer' &&")
-    expect(canvas).toContain("window.matchMedia('(max-width: 600px)').matches")
+    expect(canvas).toMatch(
+      /window\.matchMedia\(\s*['"]\(max-width: 600px\), \(max-width: 1023px\) and \(max-height: 500px\) and \(orientation: landscape\)['"]\s*\)\.matches/
+    )
     expect(
       canvas.indexOf('terminalRef.current.options.scrollback = localScrollback')
     ).toBeLessThan(canvas.indexOf('fitAddonRef.current.fit()'))
@@ -100,6 +115,21 @@ describe('forwarded mobile header, key rail and Working spinner scope', () => {
     )
     expect(composer).toContain('onCompositionStart=')
     expect(composer).toContain('onCompositionEnd=')
+  })
+
+  it('applies compact 1-row composer form and bounds height in low-height mobile landscape', () => {
+    expect(css).toContain(
+      '(max-width: 1023px) and (max-height: 500px) and (orientation: landscape)'
+    )
+    expect(css).toMatch(
+      /@media\s*\(max-width:\s*1023px\)\s*and\s*\(max-height:\s*500px\)\s*and\s*\(orientation:\s*landscape\)\s*\{[\s\S]*?\.prompt-composer__form \.ui-textarea\s*\{\s*max-height:\s*80px;/
+    )
+    const composer = fs.readFileSync(
+      path.resolve(import.meta.dir, '../components/prompt-composer.tsx'),
+      'utf8'
+    )
+    expect(composer).toContain('window.getComputedStyle(el).maxHeight')
+    expect(composer).toContain('Math.min(parsedMaxHeight, COMPOSER_MAX_HEIGHT)')
   })
 })
 

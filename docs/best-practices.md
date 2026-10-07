@@ -2,7 +2,7 @@
 
 ## Herdr Boundary
 
-- Connect socket-first using Herdr 0.9.1's public NDJSON Unix socket API (`HERDR_TRACKED_PROTOCOL=22`, `schema_version=1`).
+- Connect socket-first using the installed Herdr 0.9.3 host's public NDJSON Unix socket API (`HERDR_TRACKED_PROTOCOL=22`, `schema_version=1`).
 - Maintain `HERDR_TRANSPORT=cli` strictly as an explicit operational fallback and debugging mode. Do not use automatic per-request fallback that could mask protocol mismatches.
 - Retain `herdr terminal session observe` as the sole intentional CLI transport in socket mode because the raw socket API does not expose terminal session observation.
 - When CLI transport is selected, pass commands strictly as typed argv arrays without shell interpolation.

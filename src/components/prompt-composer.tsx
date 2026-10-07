@@ -2,16 +2,17 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import type { FC, FormEvent, KeyboardEvent } from 'react'
 import { Loader2, SendHorizontal, SquareTerminal } from 'lucide-react'
 import {
+  COMPOSER_MAX_HEIGHT,
   COMPOSER_MIN_HEIGHT,
   calculateComposerHeight,
   evaluateComposerKey,
   resolveDraftAfterSubmit,
-  type ActionResultStatus,
+  type ActionResultStatus
 } from '@/utils/prompt-composer.ts'
 import type { IExpectedPaneMode } from '@/types/herdr.ts'
 import { applyDraftAction } from '@/utils/interaction-picker.ts'
 import InteractionPickerSheet, {
-  type IPickerSheetTab,
+  type IPickerSheetTab
 } from './interaction-picker-sheet.tsx'
 import Button from '@/components/ui/button.tsx'
 import Textarea from '@/components/ui/textarea.tsx'
@@ -55,7 +56,7 @@ const PromptComposer: FC<IPromptComposerProps> = ({
   onDraftChange,
   isPickerOpen,
   onPickerOpenChange,
-  pickerInitialTab,
+  pickerInitialTab
 }) => {
   const effectiveMode: IExpectedPaneMode =
     expectedMode ?? (isBlocked ? 'blocked-agent' : hasAgent ? 'agent' : 'shell')
@@ -108,9 +109,20 @@ const PromptComposer: FC<IPromptComposerProps> = ({
       el.style.height = 'auto'
       const minHeight = Math.max(
         Number.parseFloat(window.getComputedStyle(el).minHeight) || 0,
-        COMPOSER_MIN_HEIGHT,
+        COMPOSER_MIN_HEIGHT
       )
-      const targetHeight = calculateComposerHeight(el.scrollHeight, minHeight)
+      const parsedMaxHeight = Number.parseFloat(
+        window.getComputedStyle(el).maxHeight
+      )
+      const maxHeight =
+        Number.isFinite(parsedMaxHeight) && parsedMaxHeight > 0
+          ? Math.min(parsedMaxHeight, COMPOSER_MAX_HEIGHT)
+          : COMPOSER_MAX_HEIGHT
+      const targetHeight = calculateComposerHeight(
+        el.scrollHeight,
+        minHeight,
+        maxHeight
+      )
       el.style.height = `${targetHeight}px`
       el.style.overflowY = el.scrollHeight > targetHeight ? 'auto' : 'hidden'
     }
@@ -156,8 +168,8 @@ const PromptComposer: FC<IPromptComposerProps> = ({
             currentPaneId,
             submittedPaneId,
             currentGeneration,
-            submittedGeneration,
-          ),
+            submittedGeneration
+          )
         )
       }
     } catch {
@@ -183,7 +195,7 @@ const PromptComposer: FC<IPromptComposerProps> = ({
       trimmed.length,
       isBusy,
       !paneId || !hasValidTarget || isControlActive,
-      e.keyCode,
+      e.keyCode
     )
 
     if (decision.shouldPreventDefault) {

@@ -1,6 +1,6 @@
 # Transport Architecture
 
-This document describes the transport architecture of Herdr Web, migrating from per-request CLI subprocess polling to a socket-first, event-driven integration with Herdr 0.9.1.
+This document describes Herdr Web's socket-first, event-driven integration with the installed Herdr 0.9.3 host, retaining the bounded CLI fallback.
 
 ## 1. High-Level Topology
 
@@ -59,6 +59,7 @@ The repository owns its generated protocol constants and tracked JSON schema wit
   - `server/generated/protocol.ts`: Constant exports for `HERDR_TRACKED_PROTOCOL = 22` and `HERDR_TRACKED_SCHEMA_VERSION = 1`.
 - `bun run schema:check`: Semantically compares the complete installed JSON schema with the tracked schema and validates generated protocol metadata. Formatting and object-key order are ignored; any schema-body drift exits non-zero.
 - Handwritten minimal runtime TypeScript interfaces (`server/types.ts` and `src/types/herdr.ts`) model the specific subsets used by the application to avoid generating 270KB+ of unused type boilerplate.
+- The current pin was regenerated against the installed 0.9.3 host on 2026-10-07. Protocol 22/schema 1 and existing Web request/result variants are unchanged. The host removed `pane.graphics.clear/info/set` and graphics result variants, added `pane.clear` and `server.ssh_agent.register`, and added optional restore/resume/completion metadata. Pinning these declarations does not expose new Web operations: SSH registration, pane clear, resume argv, and graphics remain outside the Web feature boundary. Other native builds must pass `schema:check`; a version string alone does not prove schema equality.
 
 ## 4. Transport Adapter & Fallback (`server/herdr-adapter.ts`)
 
@@ -87,7 +88,8 @@ The transport adapter provides a unified interface selected by `HERDR_TRANSPORT`
   - No automatic per-request fallback: transport mode is explicit to prevent masking protocol errors.
 - **Stream Observer Child (Fitted Live Grid)**:
   - Stream mode fits the actual native PTY grid to the browser canvas by spawning `herdr terminal session control <TARGET> --cols <N> --rows <N>` via `server/terminal-fit.ts` (bounded cols 1..500, rows 1..200, allowing mobile 35-col viewports without a min-40 restriction).
-  - Synchronized reservation guarantees exactly one fitted geometry producer per `terminalId`; concurrent viewers receive explicit `FIT_BUSY` (HTTP 409) rather than competing or pretending fit.
+  - Synchronized reservation guarantees exactly one fitted geometry producer per `terminalId`. Non-WebSocket callers retain HTTP 409 with `FIT_BUSY`/`FIT_BLOCKED_BY_CONTROL`. Browser upgrades receive a denial-only socket closed with application code `4409` and the exact reason: `FIT_BUSY`, `FIT_BLOCKED_BY_CONTROL`, or `FIT_RELEASING` while a prior producer retires. That socket allocates no fit session, spawns no native producer, and accepts no input. This is the Web transport's admission contract, not a native Herdr frame/schema change.
+  - Browser clients stop automatic retries for busy/control admission and show a manual Retry action. `FIT_RELEASING` uses the existing bounded backoff; it is not labelled as another active viewer. Busy suppression uses a socket-lifecycle ref rather than stale React error state. Manual Retry resets the block; no automatic takeover is introduced.
   - The browser stream hook debounces and dedupes `{ type: 'terminal.resize', cols, rows }` over the same WebSocket without reconnecting. Old fixed-grid layout watchers do not override browser-fitted dimensions.
   - The fitted WebSocket also accepts bounded native source scroll commands (`terminal.scroll` with signed `deltaRows`, `to: 'latest'`, or `reset: true`), clamped against current native `pane.get` scroll metadata and executed via canonical `pane.scroll`, emitting `terminal.scroll-state`.
   - Wheel and mobile touch drag in Live mode adjust native reading offset, with `Latest` restoring offset 0 and incoming updates preserving reading position when scrolled up (`offset > 0`).

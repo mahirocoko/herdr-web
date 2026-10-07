@@ -515,16 +515,21 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
   useEffect(() => {
     if (typeof window === 'undefined') return
     const mql = window.matchMedia('(min-width: 769px)')
-    const handleMediaChange = (e: MediaQueryListEvent | MediaQueryList) => {
-      if (e.matches) {
+    const compactLandscape = window.matchMedia(
+      '(max-width: 1023px) and (max-height: 500px) and (orientation: landscape)'
+    )
+    const handleMediaChange = () => {
+      if (mql.matches && !compactLandscape.matches) {
         setIsSpaceDrawerOpen(false)
       }
     }
-    if (mql.matches && isSpaceDrawerOpen) {
-      setIsSpaceDrawerOpen(false)
-    }
+    handleMediaChange()
     mql.addEventListener?.('change', handleMediaChange)
-    return () => mql.removeEventListener?.('change', handleMediaChange)
+    compactLandscape.addEventListener?.('change', handleMediaChange)
+    return () => {
+      mql.removeEventListener?.('change', handleMediaChange)
+      compactLandscape.removeEventListener?.('change', handleMediaChange)
+    }
   }, [isSpaceDrawerOpen])
 
   const handleOpenSpaceDrawer = useCallback(() => {

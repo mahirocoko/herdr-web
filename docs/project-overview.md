@@ -6,7 +6,7 @@ Herdr Web lets the operator inspect and steer existing Herdr panes from a phone 
 
 ## Current Slice
 
-- Socket-first backend integration using Herdr 0.9.1's public NDJSON Unix socket API (protocol 22) for health, snapshots, pane validation, actions, and reading.
+- Socket-first backend integration using the installed Herdr 0.9.3 host's public NDJSON Unix socket API (protocol 22) for health, snapshots, pane validation, actions, and reading.
 - Backend event-driven snapshot bridge (`server/snapshot-bridge.ts`) preflights pane IDs, subscribes to global lifecycle plus exact per-pane `pane.agent_status_changed` events, waits for acknowledgement, and then fetches the authoritative snapshot. Topology changes rebuild subscriptions before another authoritative snapshot.
 - Browser snapshot polling is halted only after the backend bridge reports `connected`; WebSocket open alone is not healthy. HTTP polling remains active during all other bridge states and is the session-snapshot fallback in explicit CLI mode.
 - Separate navigation by owner. The hamburger opens a Herdr-style Spaces side sheet containing only Space selection, truthful aggregate status/counts, and Space lifecycle actions. The header Tab trigger opens a bottom Tabs & Panes sheet scoped to the active Space, where panes remain grouped under canonical Herdr tabs. Initial browser bootstrap/reload follows Herdr's authoritative focused pane, tab, and workspace chain before blocked/first-pane fallback; later snapshot updates preserve a still-valid browser selection.
