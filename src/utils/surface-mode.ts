@@ -9,33 +9,22 @@ export interface IResolveSurfaceModeParams {
 
 /**
  * Pure function to resolve the active surface mode based on pane transitions.
- * - Newly selected non-blocked pane -> 'panel' (full current source snapshot)
- * - Newly selected blocked pane -> 'question' (detection snapshot)
- * - Transition from non-blocked to blocked -> 'question'
- * - Transition from blocked to non-blocked -> 'panel'
- * - Edge case: non-blocked pane currently in 'question' -> 'panel'
+ * - Newly selected pane -> live Terminal ('stream'), including blocked panes
+ * - Status changes never replace the surface the user is reading
+ * - An explicitly opened Question returns to Terminal once the asking ends
  * - Otherwise preserve current user-selected mode
  */
 export const resolveSurfaceMode = ({
   currentMode,
   isBlocked,
-  wasBlocked,
   paneChanged
 }: IResolveSurfaceModeParams): ISurfaceMode => {
   if (paneChanged) {
-    return isBlocked ? 'question' : 'panel'
-  }
-
-  if (isBlocked && !wasBlocked) {
-    return 'question'
-  }
-
-  if (!isBlocked && wasBlocked) {
-    return 'panel'
+    return 'stream'
   }
 
   if (!isBlocked && currentMode === 'question') {
-    return 'panel'
+    return 'stream'
   }
 
   return currentMode
@@ -43,13 +32,14 @@ export const resolveSurfaceMode = ({
 
 /**
  * Returns the list of surface modes available for a pane.
- * Blocked panes offer Question, Panel, History, and Stream.
- * Normal (non-blocked) panes offer Panel, History, and Stream.
+ * Terminal and History are the primary reading surfaces.
+ * Blocked panes additionally offer the explicit Question snapshot.
+ * Panel remains an internal snapshot fallback, not a competing primary mode.
  */
-export const getAvailableSurfaceModes = (isBlocked: boolean): ISurfaceMode[] => {
-  return isBlocked
-    ? ['question', 'panel', 'history', 'stream']
-    : ['panel', 'history', 'stream']
+export const getAvailableSurfaceModes = (
+  isBlocked: boolean
+): ISurfaceMode[] => {
+  return isBlocked ? ['stream', 'question', 'history'] : ['stream', 'history']
 }
 
 export interface IPaneReadConfig {

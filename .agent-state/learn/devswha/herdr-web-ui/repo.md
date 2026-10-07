@@ -34,6 +34,10 @@ Five independent read-only readers returned findings; Main is the single writer 
 - Main recovered the prior source-pattern file successfully; one reader could not access that external note. Prior documentation was not lost, and the full baseline SHA was independently confirmed.
 - Current study lives in this project's ignored .agent-state/learn. Old personal-workspace documents remain historical authorities for their pinned source, not current clone behavior.
 
+## Terminal-first follow-up — 2026-10-06 2227
+
+Mahiro selected the upstream UX/UI as stronger, deferred Chat and requested Main-only code analysis. [Terminal revamp comparison](2026-10-06/2227_TERMINAL-REVAMP-ANALYSIS.md) maps Keep/Adapt/Replace and transport/input boundaries. This is a recommendation, not implementation approval, new runtime proof or human acceptance of a local prototype.
+
 ## Existing deep study — canonical notes
 
 The previous complete five-reader study was performed in Mahiro's personal workspace on **2026-10-05 22:44**, pinned at `b498e7f053de3ac30318ac7d88b6fd21865edadf`. It was recovered here on October6 before the new pull/study. The new five-reader run above is separate and does not overwrite these notes.

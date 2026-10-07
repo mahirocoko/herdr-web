@@ -6,54 +6,78 @@ import {
 } from '../surface-mode.ts'
 
 describe('surface-mode: resolveSurfaceMode', () => {
-  it('defaults newly selected non-blocked pane to panel', () => {
+  it('returns to Terminal when selecting another pane from History', () => {
+    expect(
+      resolveSurfaceMode({
+        currentMode: 'history',
+        isBlocked: true,
+        wasBlocked: false,
+        paneChanged: true
+      })
+    ).toBe('stream')
+  })
+
+  it('preserves History through blocked and unblocked transitions', () => {
+    for (const isBlocked of [true, false]) {
+      expect(
+        resolveSurfaceMode({
+          currentMode: 'history',
+          isBlocked,
+          wasBlocked: !isBlocked,
+          paneChanged: false
+        })
+      ).toBe('history')
+    }
+  })
+
+  it('defaults newly selected non-blocked pane to live Terminal', () => {
     const result = resolveSurfaceMode({
       currentMode: 'stream',
       isBlocked: false,
       wasBlocked: false,
       paneChanged: true
     })
-    expect(result).toBe('panel')
+    expect(result).toBe('stream')
   })
 
-  it('defaults newly selected blocked pane to question', () => {
+  it('keeps a newly selected blocked pane in live Terminal', () => {
     const result = resolveSurfaceMode({
       currentMode: 'stream',
       isBlocked: true,
       wasBlocked: false,
       paneChanged: true
     })
-    expect(result).toBe('question')
+    expect(result).toBe('stream')
   })
 
-  it('transitions to question when pane becomes blocked', () => {
+  it('does not hijack the reading surface when pane becomes blocked', () => {
     const result = resolveSurfaceMode({
       currentMode: 'panel',
       isBlocked: true,
       wasBlocked: false,
       paneChanged: false
     })
-    expect(result).toBe('question')
+    expect(result).toBe('panel')
   })
 
-  it('transitions to panel when pane is no longer blocked', () => {
+  it('returns an explicitly opened question to Terminal when asking ends', () => {
     const result = resolveSurfaceMode({
       currentMode: 'question',
       isBlocked: false,
       wasBlocked: true,
       paneChanged: false
     })
-    expect(result).toBe('panel')
+    expect(result).toBe('stream')
   })
 
-  it('forces unblocked pane out of question mode into panel', () => {
+  it('returns stale question mode to Terminal', () => {
     const result = resolveSurfaceMode({
       currentMode: 'question',
       isBlocked: false,
       wasBlocked: false,
       paneChanged: false
     })
-    expect(result).toBe('panel')
+    expect(result).toBe('stream')
   })
 
   it('preserves user chosen stream mode on non-blocked pane', () => {
@@ -118,14 +142,14 @@ describe('surface-mode: resolveSurfaceMode', () => {
 })
 
 describe('surface-mode: getAvailableSurfaceModes', () => {
-  it('returns Panel, History, and Stream for non-blocked panes', () => {
+  it('offers Terminal and History for non-blocked panes', () => {
     const modes = getAvailableSurfaceModes(false)
-    expect(modes).toEqual(['panel', 'history', 'stream'])
+    expect(modes).toEqual(['stream', 'history'])
   })
 
-  it('returns Question, Panel, History, and Stream for blocked panes', () => {
+  it('adds an explicit Question view for blocked panes', () => {
     const modes = getAvailableSurfaceModes(true)
-    expect(modes).toEqual(['question', 'panel', 'history', 'stream'])
+    expect(modes).toEqual(['stream', 'question', 'history'])
   })
 })
 

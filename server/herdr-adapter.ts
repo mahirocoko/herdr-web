@@ -1,6 +1,4 @@
-import {
-  HERDR_TRACKED_PROTOCOL
-} from './generated/protocol.ts'
+import { HERDR_TRACKED_PROTOCOL } from './generated/protocol.ts'
 import {
   HerdrSocketError,
   executePing,
@@ -8,6 +6,7 @@ import {
 } from './herdr-socket.ts'
 import { CONSERVATIVE_TOKEN_REGEX } from './security.ts'
 import * as cli from './herdr-cli.ts'
+import { resolveNativeTerminalGeometry } from './terminal-geometry.ts'
 import type {
   IAgentExplainManifest,
   IAgentExplainMatchedRule,
@@ -31,23 +30,33 @@ import type {
 export type HerdrTransportMode = 'socket' | 'cli'
 type RawPaneReadSource = 'detection' | 'visible' | 'recent_unwrapped'
 
-export const parseTransportMode = (value: string | undefined): HerdrTransportMode => {
+export const parseTransportMode = (
+  value: string | undefined
+): HerdrTransportMode => {
   if (value === undefined || value === '') return 'socket'
   if (value === 'socket' || value === 'cli') return value
-  throw new Error(`Unsupported HERDR_TRANSPORT value: ${JSON.stringify(value)}. Expected "socket" or "cli".`)
+  throw new Error(
+    `Unsupported HERDR_TRANSPORT value: ${JSON.stringify(value)}. Expected "socket" or "cli".`
+  )
 }
 
-export const getTransportMode = (): HerdrTransportMode => parseTransportMode(process.env.HERDR_TRANSPORT)
+export const getTransportMode = (): HerdrTransportMode =>
+  parseTransportMode(process.env.HERDR_TRANSPORT)
 
 const assertSocketProtocol = async (timeoutMs: number): Promise<void> => {
   await executePing({ timeoutMs })
 }
 
-export const toRawPaneReadSource = (source: IPaneReadSource): RawPaneReadSource => {
+export const toRawPaneReadSource = (
+  source: IPaneReadSource
+): RawPaneReadSource => {
   return source === 'recent-unwrapped' ? 'recent_unwrapped' : source
 }
 
-export const validatePaneExists = async (paneId: string, timeoutMs = 3000): Promise<boolean> => {
+export const validatePaneExists = async (
+  paneId: string,
+  timeoutMs = 3000
+): Promise<boolean> => {
   if (getTransportMode() === 'cli') {
     const snap = await cli.getHerdrSnapshot(timeoutMs)
     return cli.validatePaneInSnapshot(snap, paneId)
@@ -70,7 +79,9 @@ export const validatePaneExists = async (paneId: string, timeoutMs = 3000): Prom
   }
 }
 
-export const getHerdrHealth = async (timeoutMs = 3000): Promise<IHerdrHealth> => {
+export const getHerdrHealth = async (
+  timeoutMs = 3000
+): Promise<IHerdrHealth> => {
   if (getTransportMode() === 'cli') {
     return cli.getHerdrHealth(timeoutMs)
   }
@@ -96,18 +107,27 @@ export const getHerdrHealth = async (timeoutMs = 3000): Promise<IHerdrHealth> =>
   }
 }
 
-export const getHerdrSnapshot = async (timeoutMs = 5000): Promise<ISnapshotResult> => {
+export const getHerdrSnapshot = async (
+  timeoutMs = 5000
+): Promise<ISnapshotResult> => {
   if (getTransportMode() === 'cli') {
     return cli.getHerdrSnapshot(timeoutMs)
   }
 
-  const res = await sendRawSocketRequest<any>('session.snapshot', {}, { timeoutMs })
-  const snapshot: ISnapshotResult = (res && typeof res === 'object' && 'snapshot' in res && res.snapshot)
-    ? res.snapshot
-    : res
+  const res = await sendRawSocketRequest<any>(
+    'session.snapshot',
+    {},
+    { timeoutMs }
+  )
+  const snapshot: ISnapshotResult =
+    res && typeof res === 'object' && 'snapshot' in res && res.snapshot
+      ? res.snapshot
+      : res
 
   if (!snapshot || typeof snapshot !== 'object') {
-    throw new Error('Herdr session.snapshot returned an invalid or empty snapshot payload')
+    throw new Error(
+      'Herdr session.snapshot returned an invalid or empty snapshot payload'
+    )
   }
 
   if (snapshot.protocol !== HERDR_TRACKED_PROTOCOL) {
@@ -116,8 +136,14 @@ export const getHerdrSnapshot = async (timeoutMs = 5000): Promise<ISnapshotResul
     )
   }
 
-  if (!Array.isArray(snapshot.workspaces) || !Array.isArray(snapshot.tabs) || !Array.isArray(snapshot.panes)) {
-    throw new Error('Herdr session.snapshot returned malformed topology: workspaces, tabs, and panes must be arrays')
+  if (
+    !Array.isArray(snapshot.workspaces) ||
+    !Array.isArray(snapshot.tabs) ||
+    !Array.isArray(snapshot.panes)
+  ) {
+    throw new Error(
+      'Herdr session.snapshot returned malformed topology: workspaces, tabs, and panes must be arrays'
+    )
   }
 
   return snapshot
@@ -134,7 +160,10 @@ export const executePrompt = async (
 
   const exists = await validatePaneExists(paneId, 3000)
   if (!exists) {
-    throw new HerdrSocketError('pane_not_found', `Pane "${paneId}" does not exist in the active Herdr session`)
+    throw new HerdrSocketError(
+      'pane_not_found',
+      `Pane "${paneId}" does not exist in the active Herdr session`
+    )
   }
 
   // Raw socket agent.prompt without wait
@@ -164,7 +193,10 @@ export const executeKeys = async (
 
   const exists = await validatePaneExists(paneId, 3000)
   if (!exists) {
-    throw new HerdrSocketError('pane_not_found', `Pane "${paneId}" does not exist in the active Herdr session`)
+    throw new HerdrSocketError(
+      'pane_not_found',
+      `Pane "${paneId}" does not exist in the active Herdr session`
+    )
   }
 
   await sendRawSocketRequest(
@@ -193,7 +225,10 @@ export const executeTerminalInput = async (
 
   const exists = await validatePaneExists(paneId, 3000)
   if (!exists) {
-    throw new HerdrSocketError('pane_not_found', `Pane "${paneId}" does not exist in the active Herdr session`)
+    throw new HerdrSocketError(
+      'pane_not_found',
+      `Pane "${paneId}" does not exist in the active Herdr session`
+    )
   }
 
   // Atomically brackets text + Enter in pane.send_input
@@ -224,7 +259,10 @@ export const readPaneContent = async (
 
   const exists = await validatePaneExists(paneId, 3000)
   if (!exists) {
-    throw new HerdrSocketError('pane_not_found', `Pane "${paneId}" does not exist in the active Herdr session`)
+    throw new HerdrSocketError(
+      'pane_not_found',
+      `Pane "${paneId}" does not exist in the active Herdr session`
+    )
   }
 
   const source: IPaneReadSource = options.source || 'detection'
@@ -238,7 +276,9 @@ export const readPaneContent = async (
     params.lines = options.lines
   }
 
-  const res = await sendRawSocketRequest<any>('pane.read', params, { timeoutMs })
+  const res = await sendRawSocketRequest<any>('pane.read', params, {
+    timeoutMs
+  })
   const content = res?.read?.text ?? res?.text ?? ''
 
   return {
@@ -251,29 +291,76 @@ export const readPaneContent = async (
 
 // Stream observer remains CLI subprocess and is the one intentional CLI transport in socket mode
 export const spawnObserverProcess = cli.spawnObserverProcess
+
+export const getNativeTerminalGeometry = async (
+  paneId: string,
+  timeoutMs = 3000
+) => {
+  if (getTransportMode() === 'cli') {
+    const result = await cli.runBoundedCommand(
+      ['herdr', 'pane', 'layout', '--pane', paneId],
+      timeoutMs
+    )
+    if (!result.ok) throw new Error('Native terminal geometry lookup failed')
+    return resolveNativeTerminalGeometry(
+      JSON.parse(result.stdout).result,
+      paneId
+    )
+  }
+  const result = await sendRawSocketRequest(
+    'pane.layout',
+    { pane_id: paneId },
+    { timeoutMs }
+  )
+  return resolveNativeTerminalGeometry(result, paneId)
+}
 export const validatePaneInSnapshot = cli.validatePaneInSnapshot
 
 const CONSERVATIVE_TOKEN_PATTERN = /^[a-zA-Z0-9_.:-]+$/
 const CONSERVATIVE_REGION_PATTERN = /^[a-zA-Z0-9_.:-]+(?:\([0-9]{1,4}\))?$/
 
-export const sanitizeConservativeToken = (val: unknown, maxLen = 128): string | undefined => {
+export const sanitizeConservativeToken = (
+  val: unknown,
+  maxLen = 128
+): string | undefined => {
   if (typeof val !== 'string') return undefined
   if (val.length === 0 || val.length > maxLen) return undefined
-  if (val.includes('.sock') || val.includes('..') || val.includes('/') || val.includes('\\') || val.includes('~')) return undefined
+  if (
+    val.includes('.sock') ||
+    val.includes('..') ||
+    val.includes('/') ||
+    val.includes('\\') ||
+    val.includes('~')
+  )
+    return undefined
   return CONSERVATIVE_TOKEN_PATTERN.test(val) ? val : undefined
 }
 
-export const sanitizeConservativeRegion = (val: unknown, maxLen = 64): string | undefined => {
+export const sanitizeConservativeRegion = (
+  val: unknown,
+  maxLen = 64
+): string | undefined => {
   if (typeof val !== 'string') return undefined
   if (val.length === 0 || val.length > maxLen) return undefined
-  if (val.includes('.sock') || val.includes('..') || val.includes('/') || val.includes('\\') || val.includes('~')) return undefined
+  if (
+    val.includes('.sock') ||
+    val.includes('..') ||
+    val.includes('/') ||
+    val.includes('\\') ||
+    val.includes('~')
+  )
+    return undefined
   return CONSERVATIVE_REGION_PATTERN.test(val) ? val : undefined
 }
 
-export const projectAgentExplain = (paneId: string, raw: any): IAgentExplainResult => {
-  const explain = (raw && typeof raw === 'object' && 'explain' in raw && raw.explain)
-    ? raw.explain
-    : raw
+export const projectAgentExplain = (
+  paneId: string,
+  raw: any
+): IAgentExplainResult => {
+  const explain =
+    raw && typeof raw === 'object' && 'explain' in raw && raw.explain
+      ? raw.explain
+      : raw
 
   if (!explain || typeof explain !== 'object') {
     return {
@@ -298,16 +385,26 @@ export const projectAgentExplain = (paneId: string, raw: any): IAgentExplainResu
   }
 
   let sourceKind: IManifestSourceKind = 'unknown'
-  const rawSource = typeof explain.manifest_source === 'string' ? explain.manifest_source : ''
+  const rawSource =
+    typeof explain.manifest_source === 'string' ? explain.manifest_source : ''
   if (rawSource.startsWith('remote:') || explain.source_kind === 'remote') {
     sourceKind = 'remote'
-  } else if (rawSource.startsWith('local:') || explain.source_kind === 'local') {
+  } else if (
+    rawSource.startsWith('local:') ||
+    explain.source_kind === 'local'
+  ) {
     sourceKind = 'local'
-  } else if (rawSource.startsWith('builtin:') || rawSource === 'builtin' || explain.source_kind === 'builtin') {
+  } else if (
+    rawSource.startsWith('builtin:') ||
+    rawSource === 'builtin' ||
+    explain.source_kind === 'builtin'
+  ) {
     sourceKind = 'builtin'
   }
 
-  const rawVersion = explain.manifest_version || (sourceKind === 'remote' ? explain.cached_remote_version : undefined)
+  const rawVersion =
+    explain.manifest_version ||
+    (sourceKind === 'remote' ? explain.cached_remote_version : undefined)
   const manifestVersion = sanitizeConservativeToken(rawVersion, 64)
   const manifest: IAgentExplainManifest = {
     sourceKind,
@@ -325,8 +422,13 @@ export const projectAgentExplain = (paneId: string, raw: any): IAgentExplainResu
     ...(explain.visible_blocker === true ? { visibleBlocker: true } : {}),
     ...(explain.visible_idle === true ? { visibleIdle: true } : {}),
     ...(explain.visible_working === true ? { visibleWorking: true } : {}),
-    ...(explain.screen_detection_skipped === true ? { screenDetectionSkipped: true } : {}),
-    ...((explain.skip_state_update === true || explain.state_update_skipped === true) ? { stateUpdateSkipped: true } : {})
+    ...(explain.screen_detection_skipped === true
+      ? { screenDetectionSkipped: true }
+      : {}),
+    ...(explain.skip_state_update === true ||
+    explain.state_update_skipped === true
+      ? { stateUpdateSkipped: true }
+      : {})
   }
 
   return result
@@ -352,7 +454,10 @@ export const getAgentExplain = async (
   // Socket mode: assert protocol first
   const exists = await validatePaneExists(paneId, 3000)
   if (!exists) {
-    throw new HerdrSocketError('pane_not_found', `Pane "${paneId}" does not exist in the active Herdr session`)
+    throw new HerdrSocketError(
+      'pane_not_found',
+      `Pane "${paneId}" does not exist in the active Herdr session`
+    )
   }
 
   try {
@@ -363,7 +468,10 @@ export const getAgentExplain = async (
     )
     return projectAgentExplain(paneId, res)
   } catch (err) {
-    if (err instanceof HerdrSocketError && (err.code === 'agent_not_found' || err.code === 'no_agent')) {
+    if (
+      err instanceof HerdrSocketError &&
+      (err.code === 'agent_not_found' || err.code === 'no_agent')
+    ) {
       return {
         ok: true,
         paneId,
@@ -382,7 +490,9 @@ type RawSocketRequester = (
 ) => Promise<unknown>
 
 const hasSnapshotArrays = (snapshot: ISnapshotResult): boolean =>
-  Array.isArray(snapshot.workspaces) && Array.isArray(snapshot.tabs) && Array.isArray(snapshot.panes)
+  Array.isArray(snapshot.workspaces) &&
+  Array.isArray(snapshot.tabs) &&
+  Array.isArray(snapshot.panes)
 
 const collectCanonicalMembership = <T>(
   values: T[],
@@ -394,8 +504,10 @@ const collectCanonicalMembership = <T>(
   for (const value of values) {
     if (!value || typeof value !== 'object' || !belongsToTarget(value)) continue
     const id = getNonEmptyString(getId(value))
-    if (!id) return { error: 'Target membership contains a missing or malformed ID' }
-    if (seen.has(id)) return { error: `Target membership contains duplicate ID "${id}"` }
+    if (!id)
+      return { error: 'Target membership contains a missing or malformed ID' }
+    if (seen.has(id))
+      return { error: `Target membership contains duplicate ID "${id}"` }
     seen.add(id)
     ids.push(id)
   }
@@ -407,19 +519,38 @@ const exactIdSetsMatch = (expected: string[], current: string[]): boolean => {
   if (expected.length !== current.length) return false
   const normalizedExpected = [...expected].sort()
   const normalizedCurrent = [...current].sort()
-  return normalizedExpected.every((id, index) => id === normalizedCurrent[index])
+  return normalizedExpected.every(
+    (id, index) => id === normalizedCurrent[index]
+  )
 }
 
-const validateCloseSnapshotTopology = (snapshot: ISnapshotResult): string | null => {
+const validateCloseSnapshotTopology = (
+  snapshot: ISnapshotResult
+): string | null => {
   const specifications: Array<{
     kind: string
     values: unknown[]
     idKey: string
     relationKeys: string[]
   }> = [
-    { kind: 'workspace', values: snapshot.workspaces, idKey: 'workspace_id', relationKeys: [] },
-    { kind: 'tab', values: snapshot.tabs, idKey: 'tab_id', relationKeys: ['workspace_id'] },
-    { kind: 'pane', values: snapshot.panes, idKey: 'pane_id', relationKeys: ['workspace_id', 'tab_id'] }
+    {
+      kind: 'workspace',
+      values: snapshot.workspaces,
+      idKey: 'workspace_id',
+      relationKeys: []
+    },
+    {
+      kind: 'tab',
+      values: snapshot.tabs,
+      idKey: 'tab_id',
+      relationKeys: ['workspace_id']
+    },
+    {
+      kind: 'pane',
+      values: snapshot.panes,
+      idKey: 'pane_id',
+      relationKeys: ['workspace_id', 'tab_id']
+    }
   ]
   for (const specification of specifications) {
     const seen = new Set<string>()
@@ -429,8 +560,10 @@ const validateCloseSnapshotTopology = (snapshot: ISnapshotResult): string | null
       }
       const record = value as Record<string, unknown>
       const id = getNonEmptyString(record[specification.idKey])
-      if (!id) return `${specification.kind} topology contains a missing or malformed ${specification.idKey}`
-      if (seen.has(id)) return `${specification.kind} topology contains duplicate ID "${id}"`
+      if (!id)
+        return `${specification.kind} topology contains a missing or malformed ${specification.idKey}`
+      if (seen.has(id))
+        return `${specification.kind} topology contains duplicate ID "${id}"`
       seen.add(id)
       for (const relationKey of specification.relationKeys) {
         if (!getNonEmptyString(record[relationKey])) {
@@ -454,12 +587,20 @@ const isExactOkResponse = (value: unknown): boolean => {
   return record.type === 'ok' && Object.keys(record).length === 1
 }
 
-const AGENT_STATUSES = new Set(['idle', 'working', 'blocked', 'done', 'unknown'])
+const AGENT_STATUSES = new Set([
+  'idle',
+  'working',
+  'blocked',
+  'done',
+  'unknown'
+])
 
 const isUnsignedInteger = (value: unknown): boolean =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0
 
-const isWorkspaceInfoShape = (value: unknown): value is Record<string, unknown> => {
+const isWorkspaceInfoShape = (
+  value: unknown
+): value is Record<string, unknown> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const workspace = value as Record<string, unknown>
   return (
@@ -523,7 +664,8 @@ export const executeTabCreate = async (
       ok: false,
       status: 409,
       outcome: 'rejected',
-      error: 'Tab creation is unavailable in CLI transport mode; socket transport is required.'
+      error:
+        'Tab creation is unavailable in CLI transport mode; socket transport is required.'
     }
   }
 
@@ -534,7 +676,7 @@ export const executeTabCreate = async (
   // 1. Authoritative preflight snapshot (reuse if passed from route to avoid redundant fetch)
   let preSnapshot: ISnapshotResult
   try {
-    preSnapshot = options.preSnapshot ?? await fetchSnapshot(3000)
+    preSnapshot = options.preSnapshot ?? (await fetchSnapshot(3000))
   } catch (err) {
     return {
       ok: false,
@@ -549,11 +691,14 @@ export const executeTabCreate = async (
       ok: false,
       status: 502,
       outcome: 'rejected',
-      error: 'Failed to validate snapshot before tab creation: workspaces, tabs, and panes must be arrays'
+      error:
+        'Failed to validate snapshot before tab creation: workspaces, tabs, and panes must be arrays'
     }
   }
 
-  const sourcePanes = preSnapshot.panes.filter((pane) => pane && pane.pane_id === target.paneId)
+  const sourcePanes = preSnapshot.panes.filter(
+    (pane) => pane && pane.pane_id === target.paneId
+  )
   if (sourcePanes.length === 0) {
     return {
       ok: false,
@@ -590,7 +735,9 @@ export const executeTabCreate = async (
     }
   }
 
-  const derivedCwd = getNonEmptyString(sourcePane.foreground_cwd) ?? getNonEmptyString(sourcePane.cwd)
+  const derivedCwd =
+    getNonEmptyString(sourcePane.foreground_cwd) ??
+    getNonEmptyString(sourcePane.cwd)
   if (!derivedCwd) {
     return {
       ok: false,
@@ -621,7 +768,10 @@ export const executeTabCreate = async (
 
   // If send threw: only a proven explicit pre-dispatch daemon rejection may be rejected; when uncertain, unknown
   if (sendError) {
-    if (sendError instanceof HerdrSocketError && (sendError.code === 'invalid_params' || sendError.code === 'unauthorized')) {
+    if (
+      sendError instanceof HerdrSocketError &&
+      (sendError.code === 'invalid_params' || sendError.code === 'unauthorized')
+    ) {
       return {
         ok: false,
         status: 400,
@@ -633,17 +783,23 @@ export const executeTabCreate = async (
       ok: false,
       status: 504,
       outcome: 'unknown',
-      error: 'Tab creation outcome unknown: operation may have timed out or resulted in ambiguous state'
+      error:
+        'Tab creation outcome unknown: operation may have timed out or resulted in ambiguous state'
     }
   }
 
   // 3. Correlated response identity extraction and validation
-  if (!rpcResponse || typeof rpcResponse !== 'object' || rpcResponse.type !== 'tab_created') {
+  if (
+    !rpcResponse ||
+    typeof rpcResponse !== 'object' ||
+    rpcResponse.type !== 'tab_created'
+  ) {
     return {
       ok: false,
       status: 504,
       outcome: 'unknown',
-      error: 'Tab creation outcome unknown: invalid or malformed response from daemon (expected type "tab_created")'
+      error:
+        'Tab creation outcome unknown: invalid or malformed response from daemon (expected type "tab_created")'
     }
   }
 
@@ -671,14 +827,19 @@ export const executeTabCreate = async (
       ok: false,
       status: 504,
       outcome: 'unknown',
-      error: 'Tab creation outcome unknown: response did not include valid correlated tab identity for requested workspace'
+      error:
+        'Tab creation outcome unknown: response did not include valid correlated tab identity for requested workspace'
     }
   }
 
   let returnedRootPaneId: string | null = null
   if (typeof rpcResponse.root_pane === 'string') {
     returnedRootPaneId = rpcResponse.root_pane
-  } else if (rpcResponse.root_pane && typeof rpcResponse.root_pane === 'object' && typeof rpcResponse.root_pane.pane_id === 'string') {
+  } else if (
+    rpcResponse.root_pane &&
+    typeof rpcResponse.root_pane === 'object' &&
+    typeof rpcResponse.root_pane.pane_id === 'string'
+  ) {
     returnedRootPaneId = rpcResponse.root_pane.pane_id
   }
 
@@ -691,7 +852,8 @@ export const executeTabCreate = async (
       ok: false,
       status: 504,
       outcome: 'unknown',
-      error: 'Tab creation outcome unknown: failed to fetch post-creation snapshot'
+      error:
+        'Tab creation outcome unknown: failed to fetch post-creation snapshot'
     }
   }
 
@@ -704,25 +866,35 @@ export const executeTabCreate = async (
     }
   }
 
-  const exactTabs = postSnapshot.tabs.filter((tab) => tab && tab.tab_id === returnedTabId)
+  const exactTabs = postSnapshot.tabs.filter(
+    (tab) => tab && tab.tab_id === returnedTabId
+  )
   if (exactTabs.length !== 1 || exactTabs[0].workspace_id !== workspaceId) {
     return {
       ok: false,
       status: 504,
       outcome: 'unknown',
-      error: exactTabs.length > 1
-        ? `Tab creation outcome unknown: duplicate correlated tab ID "${returnedTabId}" in post-creation snapshot`
-        : `Tab creation outcome unknown: correlated tab "${returnedTabId}" not found in post-creation snapshot`
+      error:
+        exactTabs.length > 1
+          ? `Tab creation outcome unknown: duplicate correlated tab ID "${returnedTabId}" in post-creation snapshot`
+          : `Tab creation outcome unknown: correlated tab "${returnedTabId}" not found in post-creation snapshot`
     }
   }
 
   const tabPanes = postSnapshot.panes.filter(
-    (p) => p && p.tab_id === returnedTabId && p.terminal_id && p.terminal_id.trim().length > 0
+    (p) =>
+      p &&
+      p.tab_id === returnedTabId &&
+      p.terminal_id &&
+      p.terminal_id.trim().length > 0
   )
 
   if (returnedRootPaneId) {
-    const rootPaneMatches = postSnapshot.panes.filter((pane) => pane && pane.pane_id === returnedRootPaneId)
-    const rootPaneMatch = rootPaneMatches.length === 1 ? rootPaneMatches[0] : undefined
+    const rootPaneMatches = postSnapshot.panes.filter(
+      (pane) => pane && pane.pane_id === returnedRootPaneId
+    )
+    const rootPaneMatch =
+      rootPaneMatches.length === 1 ? rootPaneMatches[0] : undefined
     if (
       !rootPaneMatch ||
       rootPaneMatch.tab_id !== returnedTabId ||
@@ -733,9 +905,10 @@ export const executeTabCreate = async (
         ok: false,
         status: 504,
         outcome: 'unknown',
-        error: rootPaneMatches.length > 1
-          ? `Tab creation outcome unknown: duplicate returned root pane ID "${returnedRootPaneId}" in post-creation snapshot`
-          : `Tab creation outcome unknown: returned root pane "${returnedRootPaneId}" does not match tab "${returnedTabId}" in post-creation snapshot`
+        error:
+          rootPaneMatches.length > 1
+            ? `Tab creation outcome unknown: duplicate returned root pane ID "${returnedRootPaneId}" in post-creation snapshot`
+            : `Tab creation outcome unknown: returned root pane "${returnedRootPaneId}" does not match tab "${returnedTabId}" in post-creation snapshot`
       }
     }
 
@@ -788,7 +961,8 @@ export const executeWorkspaceCreate = async (
       ok: false,
       status: 409,
       outcome: 'rejected',
-      error: 'Workspace creation is unavailable in CLI transport mode; socket transport is required.'
+      error:
+        'Workspace creation is unavailable in CLI transport mode; socket transport is required.'
     }
   }
 
@@ -799,7 +973,7 @@ export const executeWorkspaceCreate = async (
   // 1. Authoritative preflight snapshot
   let preSnapshot: ISnapshotResult
   try {
-    preSnapshot = options.preSnapshot ?? await fetchSnapshot(3000)
+    preSnapshot = options.preSnapshot ?? (await fetchSnapshot(3000))
   } catch (err) {
     return {
       ok: false,
@@ -814,13 +988,16 @@ export const executeWorkspaceCreate = async (
       ok: false,
       status: 502,
       outcome: 'rejected',
-      error: 'Failed to validate snapshot before workspace creation: workspaces, tabs, and panes must be arrays'
+      error:
+        'Failed to validate snapshot before workspace creation: workspaces, tabs, and panes must be arrays'
     }
   }
 
   let derivedCwd: string | undefined
   if (source) {
-    const sourceWorkspaces = preSnapshot.workspaces.filter((workspace) => workspace && workspace.workspace_id === source.workspaceId)
+    const sourceWorkspaces = preSnapshot.workspaces.filter(
+      (workspace) => workspace && workspace.workspace_id === source.workspaceId
+    )
     if (sourceWorkspaces.length === 0) {
       return {
         ok: false,
@@ -838,7 +1015,9 @@ export const executeWorkspaceCreate = async (
       }
     }
 
-    const sourcePanes = preSnapshot.panes.filter((pane) => pane && pane.pane_id === source.paneId)
+    const sourcePanes = preSnapshot.panes.filter(
+      (pane) => pane && pane.pane_id === source.paneId
+    )
     if (sourcePanes.length === 0) {
       return {
         ok: false,
@@ -875,7 +1054,9 @@ export const executeWorkspaceCreate = async (
       }
     }
 
-    derivedCwd = getNonEmptyString(sourcePane.foreground_cwd) ?? getNonEmptyString(sourcePane.cwd)
+    derivedCwd =
+      getNonEmptyString(sourcePane.foreground_cwd) ??
+      getNonEmptyString(sourcePane.cwd)
     if (!derivedCwd) {
       return {
         ok: false,
@@ -901,13 +1082,18 @@ export const executeWorkspaceCreate = async (
   let rpcResponse: any
   let sendError: unknown | null = null
   try {
-    rpcResponse = await sendRequest('workspace.create', createParams, { timeoutMs })
+    rpcResponse = await sendRequest('workspace.create', createParams, {
+      timeoutMs
+    })
   } catch (err) {
     sendError = err
   }
 
   if (sendError) {
-    if (sendError instanceof HerdrSocketError && (sendError.code === 'invalid_params' || sendError.code === 'unauthorized')) {
+    if (
+      sendError instanceof HerdrSocketError &&
+      (sendError.code === 'invalid_params' || sendError.code === 'unauthorized')
+    ) {
       return {
         ok: false,
         status: 400,
@@ -919,17 +1105,23 @@ export const executeWorkspaceCreate = async (
       ok: false,
       status: 504,
       outcome: 'unknown',
-      error: 'Workspace creation outcome unknown: operation may have timed out or resulted in ambiguous state'
+      error:
+        'Workspace creation outcome unknown: operation may have timed out or resulted in ambiguous state'
     }
   }
 
   // 3. Correlated response identity extraction and internal consistency validation
-  if (!rpcResponse || typeof rpcResponse !== 'object' || rpcResponse.type !== 'workspace_created') {
+  if (
+    !rpcResponse ||
+    typeof rpcResponse !== 'object' ||
+    rpcResponse.type !== 'workspace_created'
+  ) {
     return {
       ok: false,
       status: 504,
       outcome: 'unknown',
-      error: 'Workspace creation outcome unknown: invalid or malformed response from daemon (expected type "workspace_created")'
+      error:
+        'Workspace creation outcome unknown: invalid or malformed response from daemon (expected type "workspace_created")'
     }
   }
 
@@ -942,22 +1134,30 @@ export const executeWorkspaceCreate = async (
       ok: false,
       status: 504,
       outcome: 'unknown',
-      error: 'Workspace creation outcome unknown: response entities did not match required protocol-22 workspace/tab/root_pane shapes'
+      error:
+        'Workspace creation outcome unknown: response entities did not match required protocol-22 workspace/tab/root_pane shapes'
     }
   }
 
-  const returnedWorkspaceId = getNonEmptyString(rpcResponse.workspace.workspace_id)
+  const returnedWorkspaceId = getNonEmptyString(
+    rpcResponse.workspace.workspace_id
+  )
   const returnedTabId = getNonEmptyString(rpcResponse.tab.tab_id)
   const returnedTabWorkspaceId = getNonEmptyString(rpcResponse.tab.workspace_id)
   const returnedRootPaneId = getNonEmptyString(rpcResponse.root_pane.pane_id)
-  const returnedRootPaneWorkspaceId = getNonEmptyString(rpcResponse.root_pane.workspace_id)
+  const returnedRootPaneWorkspaceId = getNonEmptyString(
+    rpcResponse.root_pane.workspace_id
+  )
   const returnedRootPaneTabId = getNonEmptyString(rpcResponse.root_pane.tab_id)
 
   if (
-    !returnedWorkspaceId || !CONSERVATIVE_TOKEN_REGEX.test(returnedWorkspaceId) ||
-    !returnedTabId || !CONSERVATIVE_TOKEN_REGEX.test(returnedTabId) ||
+    !returnedWorkspaceId ||
+    !CONSERVATIVE_TOKEN_REGEX.test(returnedWorkspaceId) ||
+    !returnedTabId ||
+    !CONSERVATIVE_TOKEN_REGEX.test(returnedTabId) ||
     !returnedTabWorkspaceId ||
-    !returnedRootPaneId || !CONSERVATIVE_TOKEN_REGEX.test(returnedRootPaneId) ||
+    !returnedRootPaneId ||
+    !CONSERVATIVE_TOKEN_REGEX.test(returnedRootPaneId) ||
     !returnedRootPaneWorkspaceId ||
     !returnedRootPaneTabId
   ) {
@@ -965,7 +1165,8 @@ export const executeWorkspaceCreate = async (
       ok: false,
       status: 504,
       outcome: 'unknown',
-      error: 'Workspace creation outcome unknown: response did not include the exact workspace/tab/root_pane identity shape'
+      error:
+        'Workspace creation outcome unknown: response did not include the exact workspace/tab/root_pane identity shape'
     }
   }
 
@@ -978,7 +1179,8 @@ export const executeWorkspaceCreate = async (
       ok: false,
       status: 504,
       outcome: 'unknown',
-      error: 'Workspace creation outcome unknown: response returned inconsistent relationship between workspace, tab, and root_pane'
+      error:
+        'Workspace creation outcome unknown: response returned inconsistent relationship between workspace, tab, and root_pane'
     }
   }
 
@@ -991,7 +1193,8 @@ export const executeWorkspaceCreate = async (
       ok: false,
       status: 504,
       outcome: 'unknown',
-      error: 'Workspace creation outcome unknown: failed to fetch post-creation snapshot'
+      error:
+        'Workspace creation outcome unknown: failed to fetch post-creation snapshot'
     }
   }
 
@@ -1000,36 +1203,49 @@ export const executeWorkspaceCreate = async (
       ok: false,
       status: 504,
       outcome: 'unknown',
-      error: 'Workspace creation outcome unknown: post-creation snapshot is malformed'
+      error:
+        'Workspace creation outcome unknown: post-creation snapshot is malformed'
     }
   }
 
-  const exactWorkspaces = postSnapshot.workspaces.filter((workspace) => workspace && workspace.workspace_id === returnedWorkspaceId)
+  const exactWorkspaces = postSnapshot.workspaces.filter(
+    (workspace) => workspace && workspace.workspace_id === returnedWorkspaceId
+  )
   if (exactWorkspaces.length !== 1) {
     return {
       ok: false,
       status: 504,
       outcome: 'unknown',
-      error: exactWorkspaces.length > 1
-        ? `Workspace creation outcome unknown: duplicate correlated workspace ID "${returnedWorkspaceId}" in post-creation snapshot`
-        : `Workspace creation outcome unknown: correlated workspace "${returnedWorkspaceId}" not found in post-creation snapshot`
+      error:
+        exactWorkspaces.length > 1
+          ? `Workspace creation outcome unknown: duplicate correlated workspace ID "${returnedWorkspaceId}" in post-creation snapshot`
+          : `Workspace creation outcome unknown: correlated workspace "${returnedWorkspaceId}" not found in post-creation snapshot`
     }
   }
 
-  const exactTabs = postSnapshot.tabs.filter((tab) => tab && tab.tab_id === returnedTabId)
-  if (exactTabs.length !== 1 || exactTabs[0].workspace_id !== returnedWorkspaceId) {
+  const exactTabs = postSnapshot.tabs.filter(
+    (tab) => tab && tab.tab_id === returnedTabId
+  )
+  if (
+    exactTabs.length !== 1 ||
+    exactTabs[0].workspace_id !== returnedWorkspaceId
+  ) {
     return {
       ok: false,
       status: 504,
       outcome: 'unknown',
-      error: exactTabs.length > 1
-        ? `Workspace creation outcome unknown: duplicate correlated tab ID "${returnedTabId}" in post-creation snapshot`
-        : `Workspace creation outcome unknown: correlated tab "${returnedTabId}" not found in post-creation snapshot`
+      error:
+        exactTabs.length > 1
+          ? `Workspace creation outcome unknown: duplicate correlated tab ID "${returnedTabId}" in post-creation snapshot`
+          : `Workspace creation outcome unknown: correlated tab "${returnedTabId}" not found in post-creation snapshot`
     }
   }
 
-  const exactRootPanes = postSnapshot.panes.filter((pane) => pane && pane.pane_id === returnedRootPaneId)
-  const exactRootPane = exactRootPanes.length === 1 ? exactRootPanes[0] : undefined
+  const exactRootPanes = postSnapshot.panes.filter(
+    (pane) => pane && pane.pane_id === returnedRootPaneId
+  )
+  const exactRootPane =
+    exactRootPanes.length === 1 ? exactRootPanes[0] : undefined
   if (
     !exactRootPane ||
     exactRootPane.workspace_id !== returnedWorkspaceId ||
@@ -1072,7 +1288,8 @@ export const executeWorkspaceClose = async (
       ok: false,
       status: 409,
       outcome: 'rejected',
-      error: 'Workspace close is unavailable in CLI transport mode; socket transport is required.'
+      error:
+        'Workspace close is unavailable in CLI transport mode; socket transport is required.'
     }
   }
 
@@ -1083,7 +1300,7 @@ export const executeWorkspaceClose = async (
   // 1. Authoritative preflight snapshot (target existence check)
   let preSnapshot: ISnapshotResult
   try {
-    preSnapshot = options.preSnapshot ?? await fetchSnapshot(3000)
+    preSnapshot = options.preSnapshot ?? (await fetchSnapshot(3000))
   } catch (err) {
     return {
       ok: false,
@@ -1098,11 +1315,14 @@ export const executeWorkspaceClose = async (
       ok: false,
       status: 502,
       outcome: 'rejected',
-      error: 'Failed to validate snapshot before workspace close: workspaces, tabs, and panes must be arrays'
+      error:
+        'Failed to validate snapshot before workspace close: workspaces, tabs, and panes must be arrays'
     }
   }
 
-  const targetWorkspaces = preSnapshot.workspaces.filter((workspace) => workspace && workspace.workspace_id === target.workspaceId)
+  const targetWorkspaces = preSnapshot.workspaces.filter(
+    (workspace) => workspace && workspace.workspace_id === target.workspaceId
+  )
   if (targetWorkspaces.length === 0) {
     return {
       ok: false,
@@ -1156,7 +1376,8 @@ export const executeWorkspaceClose = async (
       ok: false,
       status: 409,
       outcome: 'rejected',
-      error: 'Workspace membership changed after confirmation. Refresh and reconfirm before closing.'
+      error:
+        'Workspace membership changed after confirmation. Refresh and reconfirm before closing.'
     }
   }
 
@@ -1175,7 +1396,10 @@ export const executeWorkspaceClose = async (
 
   if (sendError) {
     if (sendError instanceof HerdrSocketError) {
-      if (sendError.code === 'workspace_not_found' || sendError.code === 'not_found') {
+      if (
+        sendError.code === 'workspace_not_found' ||
+        sendError.code === 'not_found'
+      ) {
         return {
           ok: false,
           status: 404,
@@ -1183,7 +1407,10 @@ export const executeWorkspaceClose = async (
           error: sendError.message
         }
       }
-      if (sendError.code === 'group_required' || sendError.code === 'close_group_required') {
+      if (
+        sendError.code === 'group_required' ||
+        sendError.code === 'close_group_required'
+      ) {
         return {
           ok: false,
           status: 409,
@@ -1204,7 +1431,8 @@ export const executeWorkspaceClose = async (
       ok: false,
       status: 504,
       outcome: 'unknown',
-      error: 'Workspace close outcome unknown: operation may have timed out or resulted in ambiguous state'
+      error:
+        'Workspace close outcome unknown: operation may have timed out or resulted in ambiguous state'
     }
   }
 
@@ -1214,7 +1442,8 @@ export const executeWorkspaceClose = async (
       ok: false,
       status: 504,
       outcome: 'unknown',
-      error: 'Workspace close outcome unknown: invalid or malformed response from daemon (expected type "ok")'
+      error:
+        'Workspace close outcome unknown: invalid or malformed response from daemon (expected type "ok")'
     }
   }
 
@@ -1227,7 +1456,8 @@ export const executeWorkspaceClose = async (
       ok: false,
       status: 504,
       outcome: 'unknown',
-      error: 'Workspace close outcome unknown: failed to fetch post-close snapshot'
+      error:
+        'Workspace close outcome unknown: failed to fetch post-close snapshot'
     }
   }
 
@@ -1254,10 +1484,9 @@ export const executeWorkspaceClose = async (
 
   const confirmedTabIds = new Set(target.expected.tabIds)
   const descendantTabsRemain = postSnapshot.tabs.some(
-    (t) => t && (
-      t.workspace_id === target.workspaceId ||
-      confirmedTabIds.has(t.tab_id)
-    )
+    (t) =>
+      t &&
+      (t.workspace_id === target.workspaceId || confirmedTabIds.has(t.tab_id))
   )
   if (descendantTabsRemain) {
     return {
@@ -1270,10 +1499,9 @@ export const executeWorkspaceClose = async (
 
   const confirmedPaneIds = new Set(target.expected.paneIds)
   const descendantPanesRemain = postSnapshot.panes.some(
-    (p) => p && (
-      p.workspace_id === target.workspaceId ||
-      confirmedPaneIds.has(p.pane_id)
-    )
+    (p) =>
+      p &&
+      (p.workspace_id === target.workspaceId || confirmedPaneIds.has(p.pane_id))
   )
   if (descendantPanesRemain) {
     return {
@@ -1310,7 +1538,8 @@ export const executeTabClose = async (
       ok: false,
       status: 409,
       outcome: 'rejected',
-      error: 'Tab close is unavailable in CLI transport mode; socket transport is required.'
+      error:
+        'Tab close is unavailable in CLI transport mode; socket transport is required.'
     }
   }
 
@@ -1321,7 +1550,7 @@ export const executeTabClose = async (
   // 1. Authoritative preflight snapshot
   let preSnapshot: ISnapshotResult
   try {
-    preSnapshot = options.preSnapshot ?? await fetchSnapshot(3000)
+    preSnapshot = options.preSnapshot ?? (await fetchSnapshot(3000))
   } catch (err) {
     return {
       ok: false,
@@ -1336,11 +1565,14 @@ export const executeTabClose = async (
       ok: false,
       status: 502,
       outcome: 'rejected',
-      error: 'Failed to validate snapshot before tab close: workspaces, tabs, and panes must be arrays'
+      error:
+        'Failed to validate snapshot before tab close: workspaces, tabs, and panes must be arrays'
     }
   }
 
-  const targetWorkspaces = preSnapshot.workspaces.filter((workspace) => workspace && workspace.workspace_id === target.workspaceId)
+  const targetWorkspaces = preSnapshot.workspaces.filter(
+    (workspace) => workspace && workspace.workspace_id === target.workspaceId
+  )
   if (targetWorkspaces.length === 0) {
     return {
       ok: false,
@@ -1358,7 +1590,9 @@ export const executeTabClose = async (
     }
   }
 
-  const targetTabs = preSnapshot.tabs.filter((tab) => tab && tab.tab_id === target.tabId)
+  const targetTabs = preSnapshot.tabs.filter(
+    (tab) => tab && tab.tab_id === target.tabId
+  )
   if (targetTabs.length === 0) {
     return {
       ok: false,
@@ -1398,7 +1632,8 @@ export const executeTabClose = async (
 
   const currentPanes = collectCanonicalMembership(
     preSnapshot.panes,
-    (pane) => pane.workspace_id === target.workspaceId && pane.tab_id === target.tabId,
+    (pane) =>
+      pane.workspace_id === target.workspaceId && pane.tab_id === target.tabId,
     (pane) => pane.pane_id
   )
   if (!currentPanes.ids) {
@@ -1414,7 +1649,8 @@ export const executeTabClose = async (
       ok: false,
       status: 409,
       outcome: 'rejected',
-      error: 'Tab membership changed after confirmation. Refresh and reconfirm before closing.'
+      error:
+        'Tab membership changed after confirmation. Refresh and reconfirm before closing.'
     }
   }
 
@@ -1446,7 +1682,10 @@ export const executeTabClose = async (
 
   if (sendError) {
     if (sendError instanceof HerdrSocketError) {
-      if (sendError.code === 'tab_not_found' || sendError.code === 'not_found') {
+      if (
+        sendError.code === 'tab_not_found' ||
+        sendError.code === 'not_found'
+      ) {
         return {
           ok: false,
           status: 404,
@@ -1467,7 +1706,8 @@ export const executeTabClose = async (
       ok: false,
       status: 504,
       outcome: 'unknown',
-      error: 'Tab close outcome unknown: operation may have timed out or resulted in ambiguous state'
+      error:
+        'Tab close outcome unknown: operation may have timed out or resulted in ambiguous state'
     }
   }
 
@@ -1477,7 +1717,8 @@ export const executeTabClose = async (
       ok: false,
       status: 504,
       outcome: 'unknown',
-      error: 'Tab close outcome unknown: invalid or malformed response from daemon (expected type "ok")'
+      error:
+        'Tab close outcome unknown: invalid or malformed response from daemon (expected type "ok")'
     }
   }
 
@@ -1529,10 +1770,7 @@ export const executeTabClose = async (
 
   const confirmedPaneIds = new Set(target.expected.paneIds)
   const descendantPanesRemain = postSnapshot.panes.some(
-    (p) => p && (
-      p.tab_id === target.tabId ||
-      confirmedPaneIds.has(p.pane_id)
-    )
+    (p) => p && (p.tab_id === target.tabId || confirmedPaneIds.has(p.pane_id))
   )
   if (descendantPanesRemain) {
     return {
@@ -1552,4 +1790,67 @@ export const executeTabClose = async (
       tabId: target.tabId
     }
   }
+}
+
+export interface IPaneScrollMetadata {
+  offset_from_bottom: number
+  max_offset_from_bottom: number
+  viewport_rows: number
+}
+
+export const getPaneScrollMetadata = async (
+  paneId: string,
+  timeoutMs = 2000
+): Promise<IPaneScrollMetadata> => {
+  const res = await sendRawSocketRequest<{
+    type: string
+    pane?: {
+      pane_id: string
+      scroll?: {
+        offset_from_bottom?: number
+        max_offset_from_bottom?: number
+        viewport_rows?: number
+      }
+    }
+  }>('pane.get', { pane_id: paneId }, { timeoutMs })
+
+  const scroll = res?.pane?.scroll
+  if (
+    res?.type !== 'pane_info' ||
+    res.pane?.pane_id !== paneId ||
+    !Number.isSafeInteger(scroll?.offset_from_bottom) ||
+    !Number.isSafeInteger(scroll?.max_offset_from_bottom) ||
+    !Number.isSafeInteger(scroll?.viewport_rows) ||
+    (scroll?.offset_from_bottom ?? -1) < 0 ||
+    (scroll?.max_offset_from_bottom ?? -1) < 0 ||
+    (scroll?.viewport_rows ?? 0) < 1
+  ) {
+    throw new Error('Native scroll metadata unavailable or invalid')
+  }
+  return {
+    offset_from_bottom:
+      typeof scroll?.offset_from_bottom === 'number'
+        ? scroll.offset_from_bottom
+        : 0,
+    max_offset_from_bottom:
+      typeof scroll?.max_offset_from_bottom === 'number'
+        ? scroll.max_offset_from_bottom
+        : 0,
+    viewport_rows:
+      typeof scroll?.viewport_rows === 'number' ? scroll.viewport_rows : 24
+  }
+}
+
+export const executePaneScroll = async (
+  paneId: string,
+  offsetFromBottom: number,
+  timeoutMs = 2000
+): Promise<{ ok: boolean; offset_from_bottom: number }> => {
+  const boundedOffset = Math.max(0, Math.floor(offsetFromBottom))
+  await sendRawSocketRequest<{ type: string }>(
+    'pane.scroll',
+    { pane_id: paneId, offset_from_bottom: boundedOffset },
+    { timeoutMs }
+  )
+  return { ok: true, offset_from_bottom: boundedOffset }
 }

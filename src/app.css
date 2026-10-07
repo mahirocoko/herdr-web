@@ -1045,7 +1045,7 @@ body {
   position: relative;
   display: flex;
   flex-direction: column;
-  background-color: var(--color-bg-surface);
+  background-color: var(--color-bg-base);
 }
 
 .terminal-canvas__scope-bar {
@@ -1111,6 +1111,10 @@ body {
   color: var(--color-status-done);
 }
 
+.terminal-scope-badge--paused {
+  color: var(--color-text-secondary);
+}
+
 .terminal-scope-badge--connecting {
   color: var(--color-status-working);
 }
@@ -1162,18 +1166,48 @@ body {
   flex-shrink: 0;
 }
 
+/* Preserve every scope action on narrow screens without clipping the owner tag. */
+@media (max-width: 600px) {
+  .terminal-canvas__scope-tag {
+    flex-shrink: 0;
+  }
+
+  .terminal-canvas__scope-status .terminal-scope-btn {
+    padding-inline: var(--space-2);
+  }
+
+  .terminal-canvas__scope-status .terminal-scope-btn > span {
+    display: none;
+  }
+}
+
 .terminal-canvas {
   width: 100%;
   flex: 1 1 0%;
   min-height: 0;
-  padding: 6px;
+  padding: 0;
   overflow: hidden;
-  background-color: var(--color-bg-surface);
+  background-color: var(--color-bg-base);
+}
+
+.terminal-canvas[data-adopted-grid] {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+  overscroll-behavior: contain;
 }
 
 .terminal-canvas .xterm {
   height: 100%;
-  padding: 2px;
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--color-bg-base);
+}
+
+.terminal-canvas[data-adopted-grid] .xterm {
+  height: auto;
+  min-height: 100%;
+  width: max-content;
+  min-width: 100%;
 }
 
 .herdr-empty-canvas {

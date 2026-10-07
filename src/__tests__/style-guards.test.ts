@@ -5,19 +5,18 @@ import * as path from 'node:path'
 describe('forwarded mobile header, key rail and Working spinner scope', () => {
   const css = fs.readFileSync(
     path.resolve(import.meta.dir, '../app.css'),
-    'utf8',
+    'utf8'
   )
   const header = fs.readFileSync(
     path.resolve(import.meta.dir, '../components/horizon-header.tsx'),
-    'utf8',
+    'utf8'
   )
 
   it('hides the complete breadcrumb on mobile without deleting the desktop Tab handler', () => {
     expect(header).toContain('className="context-sub header-desktop-only"')
-    expect(header).toContain(
-      'className="context-title-text header-mobile-only"',
-    )
-    expect(header).toContain('Mahiro Code')
+    expect(header).toContain('className="context-title-text"')
+    expect(header).toContain('activeWorkspace?.label')
+    expect(header).not.toContain('Mahiro Code')
     expect(header).toContain('onClick={onOpenTabs}')
     expect(css).toContain('.header-mobile-only')
     expect(css).toContain('@media (max-width: 768px)')
@@ -52,7 +51,7 @@ describe('forwarded mobile header, key rail and Working spinner scope', () => {
     expect(nested).toContain('margin-left: 12px')
     expect(nested).toContain('padding-left: 10px')
     const rowRail = css.match(
-      /\.sidebar-workspace-row \.space-drawer-item--selected::before\s*\{([^}]+)\}/,
+      /\.sidebar-workspace-row \.space-drawer-item--selected::before\s*\{([^}]+)\}/
     )?.[1]
     expect(rowRail).toContain('content: none')
     expect(css).toContain('.sidebar-workspace-item.is-selected::before')
@@ -60,20 +59,20 @@ describe('forwarded mobile header, key rail and Working spinner scope', () => {
 
   it('starts the mobile composer as one row without changing desktop markup or IME handlers', () => {
     expect(css.replace(/\s/g, '')).toContain(
-      'grid-template-columns:var(--touch-target)minmax(0,1fr)var(--touch-target)',
+      'grid-template-columns:var(--touch-target)minmax(0,1fr)var(--touch-target)'
     )
     expect(css).toContain(
-      'min-height: calc(var(--touch-target) + var(--space-1))',
+      'min-height: calc(var(--touch-target) + var(--space-1))'
     )
     const composer = fs.readFileSync(
       path.resolve(import.meta.dir, '../components/prompt-composer.tsx'),
-      'utf8',
+      'utf8'
     )
     expect(composer).toContain('window.getComputedStyle(el).minHeight')
     expect(composer).toContain('const minHeight = Math.max(')
     expect(composer).toContain('COMPOSER_MIN_HEIGHT,')
     expect(composer).toContain(
-      "window.addEventListener('resize', resizeTextarea)",
+      "window.addEventListener('resize', resizeTextarea)"
     )
     expect(composer).toContain('onCompositionStart=')
     expect(composer).toContain('onCompositionEnd=')
@@ -84,11 +83,11 @@ describe('style-guards: portaled modal layer ownership', () => {
   it('keeps backdrop below both sheets and floating selects without feature overrides', () => {
     const recipes = fs.readFileSync(
       path.resolve(import.meta.dir, '../components/ui/recipes.css'),
-      'utf8',
+      'utf8'
     )
     const appStyles = fs.readFileSync(
       path.resolve(import.meta.dir, '../app.css'),
-      'utf8',
+      'utf8'
     )
     const layer = (name: string) => {
       const value = recipes.match(new RegExp(`--ui-layer-${name}:\\s*(\\d+)`))
@@ -99,7 +98,7 @@ describe('style-guards: portaled modal layer ownership', () => {
     expect(layer('popover')).toBeGreaterThan(layer('sheet'))
     for (const selector of ['drawer-overlay', 'side-drawer-overlay']) {
       const block = appStyles.match(
-        new RegExp(`\\.${selector}\\s*\\{([^}]+)\\}`),
+        new RegExp(`\\.${selector}\\s*\\{([^}]+)\\}`)
       )
       expect(block).not.toBeNull()
       expect(block?.[1]).not.toMatch(/z-index\s*:|background(?:-color)?\s*:/)
@@ -115,12 +114,12 @@ describe('style-guards: loader spinner classes', () => {
   const cssContent = fs.readFileSync(cssPath, 'utf8')
   const paneDrawerPath = path.resolve(
     import.meta.dir,
-    '../components/pane-drawer.tsx',
+    '../components/pane-drawer.tsx'
   )
   const paneDrawerContent = fs.readFileSync(paneDrawerPath, 'utf8')
   const spaceDrawerPath = path.resolve(
     import.meta.dir,
-    '../components/space-drawer.tsx',
+    '../components/space-drawer.tsx'
   )
   const spaceDrawerContent = fs.readFileSync(spaceDrawerPath, 'utf8')
 
@@ -163,7 +162,7 @@ describe('style-guards: loader spinner classes', () => {
 
   it('proves prefers-reduced-motion includes .spin to stop rotation when reduced motion is requested', () => {
     const startIndex = cssContent.indexOf(
-      '@media (prefers-reduced-motion: reduce)',
+      '@media (prefers-reduced-motion: reduce)'
     )
     expect(startIndex).toBeGreaterThan(-1)
     let braceCount = 0
@@ -185,11 +184,11 @@ describe('style-guards: loader spinner classes', () => {
 
   it('keeps lifecycle controls touch-safe and assigns non-overlapping Tab header ownership', () => {
     expect(extractClassBlock('space-drawer-action')).toContain(
-      'min-height: 44px',
+      'min-height: 44px'
     )
     expect(extractClassBlock('tab-close-action')).toContain('min-height: 44px')
     expect(cssContent).toContain(
-      '.lifecycle-cancel-btn,\n.lifecycle-danger-btn {\n  min-height: 44px',
+      '.lifecycle-cancel-btn,\n.lifecycle-danger-btn {\n  min-height: 44px'
     )
     expect(extractClassBlock('tab-group__info')).toContain('min-width: 0')
     expect(extractClassBlock('tab-group__info')).toContain('flex: 1 1 auto')
@@ -203,11 +202,11 @@ describe('style-guards: loader spinner classes', () => {
   it('renders per-Tab notifications as a genuine Base UI Switch', () => {
     expect(paneDrawerContent).toContain('<Switch')
     expect(paneDrawerContent).toContain(
-      'checked={isReady ? isNotifyEnabled : false}',
+      'checked={isReady ? isNotifyEnabled : false}'
     )
     expect(paneDrawerContent).toContain('disabled={!isReady}')
     expect(
-      /\n\s+disabled=\{!isReady \|\| isPending\}/.test(paneDrawerContent),
+      /\n\s+disabled=\{!isReady \|\| isPending\}/.test(paneDrawerContent)
     ).toBe(false)
     expect(paneDrawerContent).toContain('tab-notify-switch')
     expect(paneDrawerContent).not.toContain('role="switch"')
@@ -225,7 +224,7 @@ describe('style-guards: loader spinner classes', () => {
     // Verify .ui-switch in recipes.css owns the 40x22 pill track and 16px thumb
     const recipes = fs.readFileSync(
       path.resolve(import.meta.dir, '../components/ui/recipes.css'),
-      'utf8',
+      'utf8'
     )
     expect(recipes).toContain('width: 40px')
     expect(recipes).toContain('height: 22px')
@@ -258,10 +257,10 @@ describe('style-guards: iPhone keyboard viewport ownership', () => {
 
     expect(readSource('../app.tsx')).toContain(keyboardAttribute)
     expect(readSource('../../app/routes/_index.tsx')).toContain(
-      keyboardAttribute,
+      keyboardAttribute
     )
     expect(readSource('../../app/routes/settings.tsx')).toContain(
-      keyboardAttribute,
+      keyboardAttribute
     )
   })
 
@@ -272,7 +271,7 @@ describe('style-guards: iPhone keyboard viewport ownership', () => {
     expect(cssContent).toContain(".herdr-app[data-keyboard-open='true']")
     expect(cssContent).toContain('--footer-safe-bottom: 0px;')
     expect(cssContent).toContain(
-      'padding-bottom: max(6px, var(--footer-safe-bottom));',
+      'padding-bottom: max(6px, var(--footer-safe-bottom));'
     )
   })
 })
@@ -289,7 +288,7 @@ describe('style-guards: Base UI canonical controls and zero role impersonation',
       (f) =>
         f.endsWith('.tsx') &&
         !f.includes('components/ui/') &&
-        !f.includes('__tests__'),
+        !f.includes('__tests__')
     )
 
     for (const f of prodFiles) {
@@ -324,7 +323,7 @@ describe('style-guards: Base UI canonical controls and zero role impersonation',
   it('verifies .surface-header__tab and .interaction-picker__tab do not duplicate button/border/focus recipes in app.css', () => {
     const cssContent = readSource('../app.css')
     const surfaceTabMatch = cssContent.match(
-      /\.surface-header__tab\s*\{([^}]+)\}/,
+      /\.surface-header__tab\s*\{([^}]+)\}/
     )
     expect(surfaceTabMatch).toBeTruthy()
     const surfaceTabBody = surfaceTabMatch![1]
@@ -333,7 +332,7 @@ describe('style-guards: Base UI canonical controls and zero role impersonation',
     expect(surfaceTabBody).not.toContain('cursor:')
 
     const pickerTabMatch = cssContent.match(
-      /\.interaction-picker__tab\s*\{([^}]+)\}/,
+      /\.interaction-picker__tab\s*\{([^}]+)\}/
     )
     expect(pickerTabMatch).toBeTruthy()
     const pickerTabBody = pickerTabMatch![1]
@@ -359,7 +358,7 @@ describe('style-guards: zero duplicate control-paint on feature classes across p
 
   it('rejects duplicate paint, focus, and state overrides on prompt composer controls', () => {
     const composerInputs = extractBlock(
-      '.prompt-composer__input,\n.prompt-composer__textarea',
+      '.prompt-composer__input,\n.prompt-composer__textarea'
     )
     expect(composerInputs).not.toContain('background:')
     expect(composerInputs).not.toContain('border:')
@@ -424,7 +423,7 @@ describe('style-guards: zero duplicate control-paint on feature classes across p
     expect(cssContent).not.toContain('.new-tab-submit-btn:disabled')
 
     const lifecycleBtns = extractBlock(
-      '.lifecycle-cancel-btn,\n.lifecycle-danger-btn',
+      '.lifecycle-cancel-btn,\n.lifecycle-danger-btn'
     )
     expect(lifecycleBtns).not.toContain('background:')
     expect(lifecycleBtns).not.toContain('border:')
@@ -487,7 +486,7 @@ describe('style-guards: zero duplicate control-paint on feature classes across p
     expect(cssContent).not.toContain('.surface-header__refresh-btn:active')
     expect(cssContent).not.toContain('.surface-header__refresh-btn:disabled')
     expect(cssContent).not.toContain(
-      '.surface-header__refresh-btn:focus-visible',
+      '.surface-header__refresh-btn:focus-visible'
     )
   })
 
@@ -515,11 +514,11 @@ describe('style-guards: zero duplicate control-paint on feature classes across p
     expect(latestBtn).not.toContain('border:')
     expect(latestBtn).not.toContain('cursor:')
     expect(cssContent).not.toContain(
-      '.text-surface-view__latest-btn:focus-visible',
+      '.text-surface-view__latest-btn:focus-visible'
     )
 
     const retryBtn = extractBlock(
-      '.text-surface-view__retry-btn,\n.text-surface-view__toggle-stream-btn',
+      '.text-surface-view__retry-btn,\n.text-surface-view__toggle-stream-btn'
     )
     expect(retryBtn).not.toContain('background:')
     expect(retryBtn).not.toContain('border:')
@@ -541,7 +540,7 @@ describe('style-guards: zero duplicate control-paint on feature classes across p
     expect(searchInput).not.toContain('border:')
     expect(searchInput).not.toContain('color:')
     expect(cssContent).not.toContain(
-      '.interaction-picker__search-input:focus-visible',
+      '.interaction-picker__search-input:focus-visible'
     )
 
     const itemBtn = extractBlock('.ui-button.interaction-picker__item-btn')
@@ -559,7 +558,7 @@ describe('style-guards: zero duplicate control-paint on feature classes across p
     expect(cssContent).not.toContain('.interaction-picker__edit-btn:hover')
 
     const pickerInputs = extractBlock(
-      '.interaction-picker__input,\n.interaction-picker__textarea',
+      '.interaction-picker__input,\n.interaction-picker__textarea'
     )
     expect(pickerInputs).not.toContain('background:')
     expect(pickerInputs).not.toContain('border:')
@@ -614,13 +613,13 @@ describe('style-guards: zero duplicate control-paint on feature classes across p
 describe('style-guards: Base UI mobile touch target contract in recipes.css', () => {
   const recipesPath = path.resolve(
     import.meta.dir,
-    '../components/ui/recipes.css',
+    '../components/ui/recipes.css'
   )
   const recipesContent = fs.readFileSync(recipesPath, 'utf8')
 
   it('decouples mobile touch targets on coarse pointers while preserving compact visual density', () => {
     const mobileSection = recipesContent.slice(
-      recipesContent.indexOf('@media (pointer: coarse)'),
+      recipesContent.indexOf('@media (pointer: coarse)')
     )
     expect(mobileSection).toContain('.ui-button--icon')
     expect(mobileSection).toContain('var(--touch-target, 40px)')
@@ -647,7 +646,7 @@ describe('style-guards: segmented view controls and multi-line row geometry', ()
   const cssContent = fs.readFileSync(cssPath, 'utf8')
   const recipesPath = path.resolve(
     import.meta.dir,
-    '../components/ui/recipes.css',
+    '../components/ui/recipes.css'
   )
   const recipesContent = fs.readFileSync(recipesPath, 'utf8')
 
@@ -665,7 +664,7 @@ describe('style-guards: segmented view controls and multi-line row geometry', ()
     expect(cssContent).toContain('height: auto;')
     expect(cssContent).toContain('min-height: 58px;')
     expect(recipesContent).toContain(
-      '.ui-button--default-size.space-drawer-item',
+      '.ui-button--default-size.space-drawer-item'
     )
     expect(recipesContent).toContain('height: auto;')
   })
@@ -674,12 +673,12 @@ describe('style-guards: segmented view controls and multi-line row geometry', ()
 describe('style-guards: Select positioning and layer stacking context ownership', () => {
   const selectPath = path.resolve(
     import.meta.dir,
-    '../components/ui/select.tsx',
+    '../components/ui/select.tsx'
   )
   const selectContent = fs.readFileSync(selectPath, 'utf8')
   const recipesPath = path.resolve(
     import.meta.dir,
-    '../components/ui/recipes.css',
+    '../components/ui/recipes.css'
   )
   const recipesContent = fs.readFileSync(recipesPath, 'utf8')
   const appCssPath = path.resolve(import.meta.dir, '../app.css')

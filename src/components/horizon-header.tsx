@@ -11,25 +11,20 @@ import {
   RotateCw,
   Search,
   Terminal,
-  X,
+  X
 } from 'lucide-react'
-import type {
-  IPane,
-  ISnapshotStatus,
-  ITab,
-  IWorkspace,
-} from '@/types/herdr.ts'
+import type { IPane, ISnapshotStatus, ITab, IWorkspace } from '@/types/herdr.ts'
 import type { ILifecycleTicket } from '@/utils/lifecycle-operations.ts'
 import { formatTabLabel, isAgentPane } from '@/utils/workspace-helpers.ts'
 import Button from '@/components/ui/button.tsx'
 import TabActionsMenu from '@/components/tab-actions-menu.tsx'
 import {
   getConnectionStatusLabel,
-  getStatusDotClass,
+  getStatusDotClass
 } from '@/utils/connection-status.ts'
 import {
   getAvailableSurfaceModes,
-  type ISurfaceMode,
+  type ISurfaceMode
 } from '@/utils/surface-mode.ts'
 
 export interface IHorizonHeaderProps {
@@ -63,14 +58,14 @@ const MODE_LABELS: Record<ISurfaceMode, string> = {
   question: 'Question',
   panel: 'Panel',
   history: 'History',
-  stream: 'Stream',
+  stream: 'Terminal'
 }
 
 const MODE_ICONS: Record<ISurfaceMode, typeof Terminal> = {
   question: HelpCircle,
   panel: Columns,
   history: History,
-  stream: Terminal,
+  stream: Terminal
 }
 
 const cwdBasename = (cwd?: string | null): string => {
@@ -103,11 +98,9 @@ const HorizonHeader: FC<IHorizonHeaderProps> = ({
   onCloseCurrentTab,
   onReviewOperation,
   isLastTab = false,
-  lifecycleTicket,
+  lifecycleTicket
 }) => {
-  const availableModes = getAvailableSurfaceModes(isBlocked).filter(
-    (mode) => mode !== 'stream',
-  )
+  const availableModes = getAvailableSurfaceModes(isBlocked)
 
   return (
     <header className="app-header horizon-header is-zoned">
