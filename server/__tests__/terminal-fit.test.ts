@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'bun:test'
+import { describe, expect, it, spyOn } from 'bun:test'
 import {
+  defaultSpawnTerminalFitProcess,
   TerminalFitManager,
   validateTerminalFitParams,
   validateTerminalFitClientMessage
@@ -10,6 +11,34 @@ import {
   TerminalControlLeaseManager
 } from '../terminal-control.ts'
 import { getSharedOperationCoordinator } from '../operation-coordinator.ts'
+
+describe('server/terminal-fit: native producer invocation', () => {
+  it('spawns exact mobile dimensions with pipe transport, without takeover or shell interpretation', () => {
+    const process = {} as any
+    const spawn = spyOn(Bun, 'spawn').mockReturnValue(process)
+    try {
+      expect(defaultSpawnTerminalFitProcess('term_fixture_only', 35, 15)).toBe(
+        process
+      )
+      expect(spawn).toHaveBeenCalledWith(
+        [
+          'herdr',
+          'terminal',
+          'session',
+          'control',
+          'term_fixture_only',
+          '--cols',
+          '35',
+          '--rows',
+          '15'
+        ],
+        { stdin: 'pipe', stdout: 'pipe', stderr: 'pipe' }
+      )
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+})
 
 describe('server/terminal-fit: parameter and message validation', () => {
   it('validates correct fit query parameters with mobile 35x15 dimensions', () => {
