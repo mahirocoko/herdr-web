@@ -47,6 +47,7 @@ import {
 } from './operation-coordinator.ts'
 import { resolveNearestRepoCatalog } from './catalog.ts'
 import { projectBrowserSnapshot } from './snapshot-projection.ts'
+import { handleImagePreviewRequest } from './image-preview.ts'
 
 import {
   MAX_LEASE_DURATION_MS,
@@ -1500,6 +1501,14 @@ export const createServer = (
         } finally {
           coordinator.releaseSharedTopology(topoClaim.token)
         }
+      }
+
+      // POST /api/media/image (image preview endpoint)
+      if (req.method === 'POST' && pathname === '/api/media/image') {
+        return handleImagePreviewRequest(req, {
+          ownerLogin: getConfiguredOwnerLogin(),
+          fetchSnapshot: options.deps?.fetchSnapshot ?? getHerdrSnapshot
+        })
       }
 
       // WebSocket /api/events (strict-origin browser event transport)

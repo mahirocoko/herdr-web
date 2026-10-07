@@ -39,6 +39,8 @@ import {
   shouldFollowLatest
 } from '@/utils/terminal-panning.ts'
 import { attachTerminalTouchSelection } from '@/utils/terminal-touch-selection.ts'
+import { createTerminalImageLinkProvider } from '@/utils/terminal-image-links.ts'
+import TerminalImagePreview from '@/components/terminal-image-preview.tsx'
 import type { ITerminalFrame } from '@/types/herdr.ts'
 
 export type TerminalMode = 'observer' | 'control'
@@ -75,6 +77,8 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
   onControlOwnershipChangeRef.current = onControlOwnershipChange
 
   const controlledPaneIdRef = useRef<string | null>(null)
+  const currentPaneRef = useRef(paneId)
+  currentPaneRef.current = paneId
 
   const notifyOwnership = useCallback(
     (ownership: ITerminalControlOwnership, overridePaneId?: string) => {
@@ -129,6 +133,13 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
   const isTouchSelectingRef = useRef(false)
   const [clipboardNotice, setClipboardNotice] = useState<string | null>(null)
   const clipboardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Image preview state
+  const [previewTarget, setPreviewTarget] = useState<{
+    path: string
+    paneId: string | null
+  } | null>(null)
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false)
 
   // Clear clipboard notice timer on unmount
   useEffect(() => {
@@ -354,6 +365,25 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
       term.textarea.name = 'terminal-helper'
     }
 
+    // Register terminal image preview link provider
+    const linkProvider = createTerminalImageLinkProvider({
+      isControlMode: () => modeRef.current === 'control',
+      getBufferLine: (lineIndex: number) => {
+        return term.buffer.active.getLine(lineIndex)
+      },
+      onActivate: (candidatePath: string) => {
+        if (term.hasSelection() || isTouchSelectingRef.current) {
+          return
+        }
+        setPreviewTarget({
+          path: candidatePath,
+          paneId: currentPaneRef.current
+        })
+        setIsPreviewOpen(true)
+      }
+    })
+    const linkDisposable = term.registerLinkProvider(linkProvider)
+
     // Track text selection for copy affordance
     const selectionDisposable = term.onSelectionChange(() => {
       if (term.hasSelection()) {
@@ -419,6 +449,7 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
       debouncedResize.cancel()
       resizeObserver.disconnect()
       container.removeEventListener('click', handleContainerClick)
+      linkDisposable.dispose()
       selectionDisposable.dispose()
       term.dispose()
       terminalRef.current = null
@@ -869,6 +900,17 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
         tabIndex={mode === 'observer' ? 0 : -1}
         role="region"
         aria-label="Terminal canvas view"
+      />
+
+      <TerminalImagePreview
+        imagePath={previewTarget?.path ?? null}
+        paneId={previewTarget?.paneId ?? null}
+        open={isPreviewOpen}
+        onClose={() => {
+          setIsPreviewOpen(false)
+          setPreviewTarget(null)
+          terminalRef.current?.focus()
+        }}
       />
     </div>
   )
