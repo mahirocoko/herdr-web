@@ -283,6 +283,25 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
     if (container.clientWidth <= 0 || container.clientHeight <= 0) return
 
     try {
+      const fontSize = Number.parseFloat(
+        getComputedStyle(container).getPropertyValue('--terminal-font-size')
+      )
+      if (
+        Number.isFinite(fontSize) &&
+        fontSize > 0 &&
+        terminalRef.current.options.fontSize !== fontSize
+      ) {
+        terminalRef.current.options.fontSize = fontSize
+      }
+      // Mobile Live history belongs to pane.scroll, not xterm's local buffer/scrollbar.
+      const localScrollback =
+        modeRef.current === 'observer' &&
+        window.matchMedia('(max-width: 600px)').matches
+          ? 0
+          : 1000
+      if (terminalRef.current.options.scrollback !== localScrollback) {
+        terminalRef.current.options.scrollback = localScrollback
+      }
       fitAddonRef.current.fit()
       const term = terminalRef.current
       if (term.cols > 0 && term.rows > 0) {
@@ -315,7 +334,7 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
       disableStdin: true,
       convertEol: true,
       fontFamily: token('--font-mono'),
-      fontSize: Number.parseFloat(token('--fs-md')) || 15,
+      fontSize: Number.parseFloat(token('--terminal-font-size')) || 14,
       lineHeight: 1.25,
       theme: {
         background: token('--color-bg-base'),
