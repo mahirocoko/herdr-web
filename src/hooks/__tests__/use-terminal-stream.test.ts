@@ -4,8 +4,29 @@ import {
   closeTerminalSocketSafely,
   INITIAL_STREAM_RETRY_DELAY_MS,
   MAX_STREAM_RETRIES,
-  MAX_STREAM_RETRY_DELAY_MS
+  MAX_STREAM_RETRY_DELAY_MS,
+  resolveFitAdmissionClose
 } from '../use-terminal-stream.ts'
+
+describe('fit admission close classification', () => {
+  it('stops busy/control retries without treating transient retirement as another viewer', () => {
+    expect(resolveFitAdmissionClose(4409, 'FIT_BUSY')).toMatchObject({
+      stopRetry: true
+    })
+    expect(resolveFitAdmissionClose(4409, 'FIT_BUSY')?.error).toContain(
+      'Another viewer'
+    )
+    expect(
+      resolveFitAdmissionClose(4409, 'FIT_BLOCKED_BY_CONTROL')?.error
+    ).toContain('Release control')
+    expect(resolveFitAdmissionClose(4409, 'FIT_RELEASING')).toEqual({
+      stopRetry: false,
+      error: null
+    })
+    expect(resolveFitAdmissionClose(1006, 'FIT_BUSY')).toBeNull()
+    expect(resolveFitAdmissionClose(4409, 'unknown')?.stopRetry).toBe(true)
+  })
+})
 
 describe('calculateNextStreamRetry', () => {
   it('advances retry count and calculates capped exponential delay', () => {
@@ -14,7 +35,10 @@ describe('calculateNextStreamRetry', () => {
     expect(first.nextRetryCount).toBe(1)
     expect(first.nextDelayMs).toBe(750)
 
-    const second = calculateNextStreamRetry(first.nextRetryCount, first.nextDelayMs)
+    const second = calculateNextStreamRetry(
+      first.nextRetryCount,
+      first.nextDelayMs
+    )
     expect(second.shouldRetry).toBe(true)
     expect(second.nextRetryCount).toBe(2)
     expect(second.nextDelayMs).toBe(1125)
@@ -37,7 +61,10 @@ describe('calculateNextStreamRetry', () => {
   })
 
   it('allows resetting retry count cleanly back to zero', () => {
-    const resetResult = calculateNextStreamRetry(0, INITIAL_STREAM_RETRY_DELAY_MS)
+    const resetResult = calculateNextStreamRetry(
+      0,
+      INITIAL_STREAM_RETRY_DELAY_MS
+    )
     expect(resetResult.shouldRetry).toBe(true)
     expect(resetResult.nextRetryCount).toBe(1)
     expect(resetResult.nextDelayMs).toBe(750)
@@ -53,7 +80,9 @@ const createSocket = (readyState: number) => {
     onmessage: () => {},
     onerror: () => {},
     onclose: () => {},
-    close: () => { closeCalls++ },
+    close: () => {
+      closeCalls++
+    },
     addEventListener: (type: string, listener: () => void) => {
       if (type === 'open') openListener = listener
     }

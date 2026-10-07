@@ -296,7 +296,9 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
       // Mobile Live history belongs to pane.scroll, not xterm's local buffer/scrollbar.
       const localScrollback =
         modeRef.current === 'observer' &&
-        window.matchMedia('(max-width: 600px)').matches
+        window.matchMedia(
+          '(max-width: 600px), (max-width: 1023px) and (max-height: 500px) and (orientation: landscape)'
+        ).matches
           ? 0
           : 1000
       if (terminalRef.current.options.scrollback !== localScrollback) {

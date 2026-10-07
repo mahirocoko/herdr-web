@@ -7,7 +7,8 @@
 ## Server Services
 
 `server/herdr-adapter.ts` provides the unified interface between HTTP/WebSocket routes and Herdr:
-- Defaults to socket mode (`server/herdr-socket.ts`) using Herdr 0.9.1's public NDJSON Unix socket API (protocol 22).
+
+- Defaults to socket mode (`server/herdr-socket.ts`) using the installed Herdr 0.9.3 host's public NDJSON Unix socket API (protocol 22).
 - Delegates to `server/herdr-cli.ts` when `HERDR_TRANSPORT=cli` is explicitly configured.
 - `server/snapshot-bridge.ts` manages long-lived `events.subscribe` connections for event-driven snapshot invalidation and broadcasts over WebSocket `/api/events`.
 - In socket mode, `spawnObserverProcess` is the sole intentional CLI transport because the raw socket API does not expose terminal session observation.

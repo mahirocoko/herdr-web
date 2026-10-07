@@ -72,6 +72,11 @@ import {
 
 export type IWebSocketData =
   | {
+      kind: 'terminal-rejected'
+      code: string
+      closed?: boolean
+    }
+  | {
       kind: 'terminal'
       pane: string
       terminalId: string
@@ -1558,6 +1563,21 @@ export const createServer = (
         // Synchronous reservation by terminalId before await!
         const reservation = fitManager.reserveFit(terminalId, pane)
         if (!reservation.ok) {
+          // A browser cannot read the HTTP body of a rejected WS handshake.
+          // Admit only a denial socket: it owns no fit session or native producer.
+          const code =
+            reservation.code === 'FIT_BUSY' &&
+            fitManager.getSession(terminalId)?.status === 'retiring'
+              ? 'FIT_RELEASING'
+              : reservation.code
+          if (
+            req.headers.get('upgrade')?.toLowerCase() === 'websocket' &&
+            server.upgrade(req, {
+              data: { kind: 'terminal-rejected', code }
+            })
+          ) {
+            return undefined
+          }
           return new Response(
             JSON.stringify({
               error: reservation.error,
@@ -1972,6 +1992,10 @@ export const createServer = (
     },
     websocket: {
       async open(ws) {
+        if (ws.data.kind === 'terminal-rejected') {
+          ws.close(4409, ws.data.code)
+          return
+        }
         if (ws.data.kind === 'events') {
           const bridge =
             options.deps?.snapshotBridge ?? getSharedSnapshotBridge()
@@ -2527,6 +2551,7 @@ export const createServer = (
         }
       },
       message(ws, message) {
+        if (ws.data.kind === 'terminal-rejected') return
         if (ws.data.kind === 'events') {
           return
         }

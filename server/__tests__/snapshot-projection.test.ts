@@ -12,9 +12,32 @@ import { verifyTargetAgainstSnapshot } from '../security.ts'
 import { deriveActionTarget } from '../../src/utils/action-target.ts'
 
 describe('server/snapshot-projection', () => {
+  it('keeps native 0.9.3 restore/resume/completion metadata outside the browser allowlist', () => {
+    const pane = projectBrowserPane({
+      pane_id: 'fixture:p1',
+      restore_error: 'private restore diagnostic',
+      resume_argv: ['fixture-resume'],
+      agent_status: 'idle'
+    })
+    expect(pane).not.toHaveProperty('restore_error')
+    expect(pane).not.toHaveProperty('resume_argv')
+    const agents = projectBrowserAgents([
+      {
+        target: 'fixture:p1',
+        pane_id: 'fixture:p1',
+        completion_seq: 42,
+        resume_argv: ['fixture-resume']
+      }
+    ])
+    expect(agents?.[0]).not.toHaveProperty('completion_seq')
+    expect(agents?.[0]).not.toHaveProperty('resume_argv')
+  })
+
   describe('sanitizeBoundedText and isAbsolutePath', () => {
     it('strips ASCII control characters and trims whitespace', () => {
-      expect(sanitizeBoundedText('  hello\x00\x1b\r\n\tworld\x7f  ')).toBe('helloworld')
+      expect(sanitizeBoundedText('  hello\x00\x1b\r\n\tworld\x7f  ')).toBe(
+        'helloworld'
+      )
       expect(sanitizeBoundedText(' \x00 ')).toBeUndefined()
       expect(sanitizeBoundedText(123 as any)).toBeUndefined()
       expect(sanitizeBoundedText(null)).toBeUndefined()
@@ -136,7 +159,13 @@ describe('server/snapshot-projection', () => {
       })
       expect(safe?.tokens?.mahiro_workspace_worktree).toBe('feature-checkout')
 
-      for (const label of ['relative/path', '..\\private\\repo', 'C:relative', '.', '..']) {
+      for (const label of [
+        'relative/path',
+        '..\\private\\repo',
+        'C:relative',
+        '.',
+        '..'
+      ]) {
         const projected = projectBrowserWorkspace({
           workspace_id: 'ws-path-label',
           tokens: { mahiro_workspace_worktree: label }
@@ -298,8 +327,12 @@ describe('server/snapshot-projection', () => {
         value: 'session-xyz-123',
         id: 'session-xyz-123'
       })
-      expect((projected?.agent_session as any).raw_internal_token).toBeUndefined()
-      expect((projected?.agent_session as any).system_prompt_dump).toBeUndefined()
+      expect(
+        (projected?.agent_session as any).raw_internal_token
+      ).toBeUndefined()
+      expect(
+        (projected?.agent_session as any).system_prompt_dump
+      ).toBeUndefined()
 
       // Allowlisted pane tokens only
       expect(projected?.tokens).toEqual({
@@ -378,7 +411,9 @@ describe('server/snapshot-projection', () => {
             value: '123'
           }
         }
-        expect(projectBrowserPane(paneEmptySource)?.agent_session).toBeUndefined()
+        expect(
+          projectBrowserPane(paneEmptySource)?.agent_session
+        ).toBeUndefined()
       })
 
       it('omits agent_session when agent is missing, empty, or non-string', () => {
@@ -407,7 +442,9 @@ describe('server/snapshot-projection', () => {
             value: '123'
           }
         }
-        expect(projectBrowserPane(paneNumericAgent)?.agent_session).toBeUndefined()
+        expect(
+          projectBrowserPane(paneNumericAgent)?.agent_session
+        ).toBeUndefined()
       })
 
       it('omits agent_session when kind is missing or outside the schema enum', () => {
@@ -436,7 +473,9 @@ describe('server/snapshot-projection', () => {
             value: '123'
           }
         }
-        expect(projectBrowserPane(paneInvalidKind)?.agent_session).toBeUndefined()
+        expect(
+          projectBrowserPane(paneInvalidKind)?.agent_session
+        ).toBeUndefined()
       })
 
       it('omits agent_session when value is missing, empty, or whitespace', () => {
@@ -465,7 +504,9 @@ describe('server/snapshot-projection', () => {
             value: '    '
           }
         }
-        expect(projectBrowserPane(paneWhitespaceValue)?.agent_session).toBeUndefined()
+        expect(
+          projectBrowserPane(paneWhitespaceValue)?.agent_session
+        ).toBeUndefined()
       })
 
       it('omits agent_session when session object contains only malicious or unknown properties', () => {
@@ -563,10 +604,15 @@ describe('server/snapshot-projection', () => {
       }
 
       const browserSnapshot = projectBrowserSnapshot(rawSnapshot)
-      const derived = deriveActionTarget(browserSnapshot.panes[0], browserSnapshot.agents)
+      const derived = deriveActionTarget(
+        browserSnapshot.panes[0],
+        browserSnapshot.agents
+      )
       expect(derived.target?.agentSessionId).toBe('session-only-on-agent')
       expect(
-        verifyTargetAgainstSnapshot(rawSnapshot, derived.target!, { actionType: 'prompt' }).ok
+        verifyTargetAgainstSnapshot(rawSnapshot, derived.target!, {
+          actionType: 'prompt'
+        }).ok
       ).toBe(true)
     })
   })

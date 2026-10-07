@@ -121,6 +121,18 @@ export const MAX_STREAM_RETRIES = 6
 export const INITIAL_STREAM_RETRY_DELAY_MS = 500
 export const MAX_STREAM_RETRY_DELAY_MS = 5000
 
+export const resolveFitAdmissionClose = (code: number, reason: string) => {
+  if (code !== 4409) return null
+  if (reason === 'FIT_RELEASING') return { stopRetry: false, error: null }
+  const error =
+    reason === 'FIT_BUSY'
+      ? 'Another viewer is fitting this terminal. Pause or close that viewer, then tap Retry.'
+      : reason === 'FIT_BLOCKED_BY_CONTROL'
+        ? 'Terminal input control is active. Release control, then tap Retry.'
+        : 'Terminal fit admission was rejected. Tap Retry after the terminal is available.'
+  return { stopRetry: true, error }
+}
+
 export interface IStreamRetryDecision {
   shouldRetry: boolean
   nextRetryCount: number
@@ -202,6 +214,7 @@ export const useTerminalStream = ({
   const retryDelayRef = useRef<number>(INITIAL_STREAM_RETRY_DELAY_MS)
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isManuallyClosedRef = useRef<boolean>(false)
+  const admissionBlockedRef = useRef(false)
   const connectRef = useRef<(() => void) | null>(null)
   const onDataRef = useRef(onData)
   onDataRef.current = onData
@@ -296,6 +309,7 @@ export const useTerminalStream = ({
     const connect = () => {
       if (isManuallyClosedRef.current) return
       if (paneGenerationRef.current !== currentGeneration) return
+      admissionBlockedRef.current = false
 
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
@@ -443,6 +457,7 @@ export const useTerminalStream = ({
                 closed.reason.includes('BUSY') ||
                 closed.reason.includes('blocked')
               ) {
+                admissionBlockedRef.current = true
                 setConnectionState('disconnected')
               }
             }
@@ -462,19 +477,22 @@ export const useTerminalStream = ({
         setLastError('Terminal stream socket error')
       }
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         if (ws !== socketRef.current) return
         if (isManuallyClosedRef.current) {
           setConnectionState('disconnected')
           return
         }
 
-        if (
-          lastError &&
-          (lastError.includes('BUSY') ||
-            lastError.includes('busy') ||
-            lastError.includes('blocked'))
-        ) {
+        const admission = resolveFitAdmissionClose(event.code, event.reason)
+        if (admission?.stopRetry) {
+          admissionBlockedRef.current = true
+          setConnectionState('error')
+          setLastError(admission.error)
+          return
+        }
+
+        if (admissionBlockedRef.current) {
           setConnectionState('disconnected')
           return
         }

@@ -582,7 +582,17 @@ body {
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px),
+  (max-width: 1023px) and (max-height: 500px) and (orientation: landscape) {
+  .app:not(.sidebar-collapsed) .header-side,
+  .herdr-app:not(.sidebar-collapsed) .header-side {
+    display: contents;
+    margin: 0;
+    padding: 0;
+    border-right: none;
+    background: transparent;
+  }
+
   .header-mobile-only {
     display: inline;
   }
@@ -1204,7 +1214,8 @@ body {
   background-color: var(--color-bg-base);
 }
 
-@media (max-width: 600px) {
+@media (max-width: 600px),
+  (max-width: 1023px) and (max-height: 500px) and (orientation: landscape) {
   .terminal-canvas {
     --terminal-font-size: var(--fs-sm);
   }
@@ -1336,7 +1347,8 @@ body {
   border-radius: var(--radius-pill);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px),
+  (max-width: 1023px) and (max-height: 500px) and (orientation: landscape) {
   .prompt-composer__form {
     display: grid;
     grid-template-columns: var(--touch-target) minmax(0, 1fr) var(
@@ -1373,6 +1385,19 @@ body {
 
   .prompt-composer__controls-right {
     grid-column: 3;
+  }
+}
+
+@media (max-width: 1023px) and (max-height: 500px) and (orientation: landscape) {
+  .prompt-composer__form .ui-textarea {
+    max-height: 80px;
+    font-size: 16px; /* Preserve iOS no-zoom input sizing in landscape. */
+  }
+
+  .herdr-footer {
+    padding-top: var(--space-1);
+    padding-bottom: calc(var(--space-1) + var(--footer-safe-bottom, 0px));
+    gap: var(--space-1);
   }
 }
 

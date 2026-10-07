@@ -27,7 +27,7 @@
 ## Prerequisites
 
 - **[Bun](https://bun.sh)**: `1.3.11` or repo-compatible. Required for package management, runtime, and tests; Node.js and Deno are not runtime targets.
-- **[Herdr](https://github.com/ogulcancelik/herdr)**: `0.9.1` running locally with tracked protocol 22 (`schema_version: 1`).
+- **[Herdr](https://github.com/ogulcancelik/herdr)**: the installed `0.9.3` host with tracked protocol 22 (`schema_version: 1`). Run `bun run schema:check` to verify the complete host schema, not just its version.
 - **Tailscale** _(optional)_: For private remote access via host-managed Tailscale Serve.
 - **Platform Scope**: Current host and runtime target is macOS with an active local Herdr Unix domain socket. Other host platforms are not established.
 
@@ -179,7 +179,7 @@ Technical documentation is in [`docs/`](docs/):
 
 ## Status & Known Limitations
 
-- **Strict Protocol Lock**: Tracks Herdr 0.9.1 protocol 22 (`schema_version: 1`). Mismatches fail closed during preflight.
+- **Strict Protocol Lock**: Tracks the installed Herdr 0.9.3 host's protocol 22 (`schema_version: 1`). Protocol mismatches fail closed during preflight; `schema:check` separately detects complete schema drift.
 - **Single Local Session Scope**: Single-user companion observing one active local Herdr daemon.
 - **Socket-Only Features**: New Shell Tab, New Space, Close Tab, Close Space, and Web Push require Unix socket transport; unavailable in CLI fallback.
 - **Stream Mode Scope**: Real-time ANSI observer fitting the actual native PTY grid to the browser canvas via `herdr terminal session control <TARGET> --cols <N> --rows <N>` into `@xterm/xterm`, with debounced same-socket resize and bounded native source scrolling (valid 1..500 cols, 1..200 rows without a min-40 restriction, allowing mobile 35-col viewports). Wheel and touch drag adjust native reading offset (`pane.scroll`), Latest restores offset 0, and incoming frames preserve reading position when scrolled up. Fit automatically releases on document hide/unmount/pane switch or via the scope bar Pause fit button, restoring native desktop dimensions automatically. Local 2D panning and Latest affordance remain available. Native source scrolling is distinct from internal agent-app scrolling; alternate-screen applications expose only their current screen with zero source scrollback.

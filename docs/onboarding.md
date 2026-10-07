@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Bun 1.3.11 or a repo-compatible version
-- Herdr 0.9.1 running locally (protocol 22)
+- The installed Herdr 0.9.3 host running locally (protocol 22); verify its schema with `bun run schema:check`.
 - Tailscale only when testing private remote access
 
 ## First Run
