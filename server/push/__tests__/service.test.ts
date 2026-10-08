@@ -7,6 +7,7 @@ import { PushService } from '../service.ts'
 import { PushSubscriptionStore } from '../store.ts'
 import { PushTransitionDetector } from '../transition-detector.ts'
 import type { IPushConfig, IPushSubscription } from '../types.ts'
+import type { ISnapshotResult } from '../../types.ts'
 
 describe('server/push/service: push orchestration and test dispatch', () => {
   const curve = createECDH('prime256v1')
@@ -19,6 +20,75 @@ describe('server/push/service: push orchestration and test dispatch', () => {
     privateKey: 'mock-synthetic-private-key-test',
     subject: 'mailto:test@example.com'
   }
+
+  test('snapshot delivery waits for muted Tab agents and sends one Space-only Done per round', async () => {
+    const payloads: any[] = []
+    const service = new PushService({
+      config: mockConfig,
+      store: {
+        getSubscriptions: async () => [
+          {
+            endpoint: 'https://push.example.com/send/test',
+            keys: { p256dh, auth: authKey }
+          }
+        ]
+      } as any,
+      tabPolicyStore: { getOverrides: async () => [] } as any,
+      webPushClient: {
+        setVapidDetails: () => {},
+        sendNotification: async (_sub: any, payload: any) => {
+          payloads.push(JSON.parse(payload))
+          return { statusCode: 201 }
+        }
+      } as any
+    })
+    const snapshot = (first: string, second: string): ISnapshotResult => ({
+      protocol: 22,
+      version: '0.9.3',
+      workspaces: [
+        {
+          workspace_id: 'ws1',
+          label: 'Main Space',
+          number: 1,
+          agent_status: 'done',
+          tab_count: 2,
+          pane_count: 2,
+          focused: false
+        }
+      ],
+      tabs: [1, 2].map((n) => ({
+        tab_id: `t${n}`,
+        workspace_id: 'ws1',
+        number: n,
+        label: `Tab ${n}`,
+        agent_status: 'done',
+        pane_count: 1,
+        focused: false
+      })),
+      panes: [first, second].map((status, index) => ({
+        pane_id: `p${index + 1}`,
+        workspace_id: 'ws1',
+        tab_id: `t${index + 1}`,
+        agent: 'letta',
+        agent_status: status,
+        cwd: null,
+        focused: false
+      }))
+    })
+    await service.handleSnapshot(snapshot('working', 'working'))
+    await service.handleSnapshot(snapshot('done', 'working'))
+    expect(payloads).toEqual([])
+    await service.handleSnapshot(snapshot('done', 'idle'))
+    await service.handleSnapshot(snapshot('idle', 'done'))
+    expect(payloads).toHaveLength(1)
+    expect(payloads[0].type).toBe('done')
+    expect(payloads[0].url).toBe('/spaces/ws1')
+    expect(payloads[0].sourceTabId).toBeUndefined()
+    expect(JSON.stringify(payloads[0])).not.toContain('p1')
+    await service.handleSnapshot(snapshot('working', 'idle'))
+    await service.handleSnapshot(snapshot('idle', 'idle'))
+    expect(payloads).toHaveLength(2)
+  })
 
   test('reports public config safely without disclosing privateKey', () => {
     const service = new PushService({ config: mockConfig })
@@ -69,7 +139,9 @@ describe('server/push/service: push orchestration and test dispatch', () => {
       }
 
       // Test sending to non-existent endpoint -> rejected
-      const failRes = await service.sendTest('https://push.example.com/send/not-in-store')
+      const failRes = await service.sendTest(
+        'https://push.example.com/send/not-in-store'
+      )
       expect(failRes.ok).toBe(false)
       expect(failRes.error).toContain('Subscription not found in store')
 
@@ -77,16 +149,22 @@ describe('server/push/service: push orchestration and test dispatch', () => {
       await service.registerSubscription(sub)
 
       // Test sending to persisted endpoint -> succeeds
-      const successRes = await service.sendTest('https://push.example.com/send/persisted-user')
+      const successRes = await service.sendTest(
+        'https://push.example.com/send/persisted-user'
+      )
       expect(successRes.ok).toBe(true)
-      expect(sentEndpoint as string | null).toBe('https://push.example.com/send/persisted-user')
+      expect(sentEndpoint as string | null).toBe(
+        'https://push.example.com/send/persisted-user'
+      )
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true })
     }
   })
 
   test('handleSnapshot triggers delivery and cleans up 410 expired subscriptions', async () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-push-service-snap-'))
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'herdr-push-service-snap-')
+    )
     const storePath = path.join(tmpDir, 'push-subscriptions.json')
 
     try {
@@ -128,16 +206,38 @@ describe('server/push/service: push orchestration and test dispatch', () => {
       await service.handleSnapshot({
         protocol: 22,
         version: '0.9.1',
-        workspaces: [{ workspace_id: 'ws1', label: 'Main Space', number: 0, agent_status: 'working', tab_count: 1, pane_count: 1, focused: true }],
-        tabs: [{ tab_id: 't1', workspace_id: 'ws1', label: 'Tab 1', number: 0, pane_count: 1, focused: true, agent_status: 'working' }],
-        panes: [{
-          pane_id: 'p1',
-          workspace_id: 'ws1',
-          tab_id: 't1',
-          agent_status: 'working',
-          cwd: '/',
-          focused: false
-        }]
+        workspaces: [
+          {
+            workspace_id: 'ws1',
+            label: 'Main Space',
+            number: 0,
+            agent_status: 'working',
+            tab_count: 1,
+            pane_count: 1,
+            focused: true
+          }
+        ],
+        tabs: [
+          {
+            tab_id: 't1',
+            workspace_id: 'ws1',
+            label: 'Tab 1',
+            number: 0,
+            pane_count: 1,
+            focused: true,
+            agent_status: 'working'
+          }
+        ],
+        panes: [
+          {
+            pane_id: 'p1',
+            workspace_id: 'ws1',
+            tab_id: 't1',
+            agent_status: 'working',
+            cwd: '/',
+            focused: false
+          }
+        ]
       })
       expect(callsCount).toBe(0)
 
@@ -145,16 +245,38 @@ describe('server/push/service: push orchestration and test dispatch', () => {
       await service.handleSnapshot({
         protocol: 22,
         version: '0.9.1',
-        workspaces: [{ workspace_id: 'ws1', label: 'Main Space', number: 0, agent_status: 'working', tab_count: 1, pane_count: 1, focused: true }],
-        tabs: [{ tab_id: 't1', workspace_id: 'ws1', label: 'Tab 1', number: 0, pane_count: 1, focused: true, agent_status: 'blocked' }],
-        panes: [{
-          pane_id: 'p1',
-          workspace_id: 'ws1',
-          tab_id: 't1',
-          agent_status: 'blocked',
-          cwd: '/',
-          focused: false
-        }]
+        workspaces: [
+          {
+            workspace_id: 'ws1',
+            label: 'Main Space',
+            number: 0,
+            agent_status: 'working',
+            tab_count: 1,
+            pane_count: 1,
+            focused: true
+          }
+        ],
+        tabs: [
+          {
+            tab_id: 't1',
+            workspace_id: 'ws1',
+            label: 'Tab 1',
+            number: 0,
+            pane_count: 1,
+            focused: true,
+            agent_status: 'blocked'
+          }
+        ],
+        panes: [
+          {
+            pane_id: 'p1',
+            workspace_id: 'ws1',
+            tab_id: 't1',
+            agent_status: 'blocked',
+            cwd: '/',
+            focused: false
+          }
+        ]
       })
 
       expect(callsCount).toBe(2)
@@ -179,7 +301,9 @@ describe('server/push/service: push orchestration and test dispatch', () => {
     const mockStore = {
       getSubscriptions: async () => {
         if (storeThrows) {
-          throw new Error('Push subscription store is corrupt at /secret/path/store.json')
+          throw new Error(
+            'Push subscription store is corrupt at /secret/path/store.json'
+          )
         }
         return [activeSub]
       },
@@ -210,10 +334,26 @@ describe('server/push/service: push orchestration and test dispatch', () => {
       })
 
       const canonicalWorkspaces = [
-        { workspace_id: 'ws-1', label: 'Alpha Space', number: 0, agent_status: 'working', tab_count: 1, pane_count: 1, focused: true }
+        {
+          workspace_id: 'ws-1',
+          label: 'Alpha Space',
+          number: 0,
+          agent_status: 'working',
+          tab_count: 1,
+          pane_count: 1,
+          focused: true
+        }
       ]
       const canonicalTabs = [
-        { tab_id: 't1', workspace_id: 'ws-1', label: 'Tab 1', number: 0, pane_count: 1, focused: true, agent_status: 'working' }
+        {
+          tab_id: 't1',
+          workspace_id: 'ws-1',
+          label: 'Tab 1',
+          number: 0,
+          pane_count: 1,
+          focused: true,
+          agent_status: 'working'
+        }
       ]
 
       // 1. Initial snapshot establishes baseline
@@ -222,7 +362,16 @@ describe('server/push/service: push orchestration and test dispatch', () => {
         version: '0.9.1',
         workspaces: canonicalWorkspaces,
         tabs: canonicalTabs,
-        panes: [{ pane_id: 'p1', workspace_id: 'ws-1', tab_id: 't1', agent_status: 'working', cwd: '/', focused: true }]
+        panes: [
+          {
+            pane_id: 'p1',
+            workspace_id: 'ws-1',
+            tab_id: 't1',
+            agent_status: 'working',
+            cwd: '/',
+            focused: true
+          }
+        ]
       })
       expect(dispatchedPayloads.length).toBe(0)
 
@@ -233,15 +382,28 @@ describe('server/push/service: push orchestration and test dispatch', () => {
         version: '0.9.1',
         workspaces: canonicalWorkspaces,
         tabs: canonicalTabs.map((tab) => ({ ...tab, agent_status: 'blocked' })),
-        panes: [{ pane_id: 'p1', workspace_id: 'ws-1', tab_id: 't1', agent_status: 'blocked', cwd: '/', focused: true }]
+        panes: [
+          {
+            pane_id: 'p1',
+            workspace_id: 'ws-1',
+            tab_id: 't1',
+            agent_status: 'blocked',
+            cwd: '/',
+            focused: true
+          }
+        ]
       })
       // No push dispatched because store was corrupt
       expect(dispatchedPayloads.length).toBe(0)
 
       // Diagnostic must be sanitized: must not contain path or raw error
-      const storeWarn = warnings.find((w) => w.includes('[herdr-push] Store read failed'))
+      const storeWarn = warnings.find((w) =>
+        w.includes('[herdr-push] Store read failed')
+      )
       expect(storeWarn).toBeDefined()
-      expect(storeWarn).toBe('[herdr-push] Store read failed during snapshot check; preserving transition state')
+      expect(storeWarn).toBe(
+        '[herdr-push] Store read failed during snapshot check; preserving transition state'
+      )
       expect(storeWarn).not.toContain('/secret/path')
       expect(storeWarn).not.toContain('store is corrupt')
 
@@ -252,7 +414,16 @@ describe('server/push/service: push orchestration and test dispatch', () => {
         version: '0.9.1',
         workspaces: canonicalWorkspaces,
         tabs: canonicalTabs.map((tab) => ({ ...tab, agent_status: 'blocked' })),
-        panes: [{ pane_id: 'p1', workspace_id: 'ws-1', tab_id: 't1', agent_status: 'blocked', cwd: '/', focused: true }]
+        panes: [
+          {
+            pane_id: 'p1',
+            workspace_id: 'ws-1',
+            tab_id: 't1',
+            agent_status: 'blocked',
+            cwd: '/',
+            focused: true
+          }
+        ]
       })
 
       // The transition must NOT have been consumed when store failed, so it emits now!
@@ -281,7 +452,9 @@ describe('server/push/service: push orchestration and test dispatch', () => {
     const mockTabPolicyStore = {
       getOverrides: async () => {
         if (policyThrows) {
-          throw new Error('Tab policy store is corrupt at /secret/path/push-tab-policy.json')
+          throw new Error(
+            'Tab policy store is corrupt at /secret/path/push-tab-policy.json'
+          )
         }
         return []
       }
@@ -312,10 +485,26 @@ describe('server/push/service: push orchestration and test dispatch', () => {
 
     try {
       const canonicalWorkspaces = [
-        { workspace_id: 'ws-1', label: 'Alpha Space', number: 0, agent_status: 'working', tab_count: 1, pane_count: 1, focused: true }
+        {
+          workspace_id: 'ws-1',
+          label: 'Alpha Space',
+          number: 0,
+          agent_status: 'working',
+          tab_count: 1,
+          pane_count: 1,
+          focused: true
+        }
       ]
       const canonicalTabs = [
-        { tab_id: 't1', workspace_id: 'ws-1', label: 'Tab 1', number: 0, pane_count: 1, focused: true, agent_status: 'working' }
+        {
+          tab_id: 't1',
+          workspace_id: 'ws-1',
+          label: 'Tab 1',
+          number: 0,
+          pane_count: 1,
+          focused: true,
+          agent_status: 'working'
+        }
       ]
 
       // 1. Initial baseline
@@ -324,7 +513,16 @@ describe('server/push/service: push orchestration and test dispatch', () => {
         version: '0.9.1',
         workspaces: canonicalWorkspaces,
         tabs: canonicalTabs,
-        panes: [{ pane_id: 'p1', workspace_id: 'ws-1', tab_id: 't1', agent_status: 'working', cwd: '/', focused: true }]
+        panes: [
+          {
+            pane_id: 'p1',
+            workspace_id: 'ws-1',
+            tab_id: 't1',
+            agent_status: 'working',
+            cwd: '/',
+            focused: true
+          }
+        ]
       })
 
       // 2. Corrupt tab policy store throws
@@ -334,16 +532,29 @@ describe('server/push/service: push orchestration and test dispatch', () => {
         version: '0.9.1',
         workspaces: canonicalWorkspaces,
         tabs: canonicalTabs.map((tab) => ({ ...tab, agent_status: 'blocked' })),
-        panes: [{ pane_id: 'p1', workspace_id: 'ws-1', tab_id: 't1', agent_status: 'blocked', cwd: '/', focused: true }]
+        panes: [
+          {
+            pane_id: 'p1',
+            workspace_id: 'ws-1',
+            tab_id: 't1',
+            agent_status: 'blocked',
+            cwd: '/',
+            focused: true
+          }
+        ]
       })
 
       // Zero pushes dispatched
       expect(dispatchedPayloads.length).toBe(0)
 
       // Warning logged without paths
-      const tabWarn = warnings.find((w) => w.includes('[herdr-push] Tab policy store read failed'))
+      const tabWarn = warnings.find((w) =>
+        w.includes('[herdr-push] Tab policy store read failed')
+      )
       expect(tabWarn).toBeDefined()
-      expect(tabWarn).toBe('[herdr-push] Tab policy store read failed during snapshot check; preserving transition state')
+      expect(tabWarn).toBe(
+        '[herdr-push] Tab policy store read failed during snapshot check; preserving transition state'
+      )
       expect(tabWarn).not.toContain('/secret/path')
 
       // 3. Tab policy store recovers! Next snapshot emits
@@ -353,7 +564,16 @@ describe('server/push/service: push orchestration and test dispatch', () => {
         version: '0.9.1',
         workspaces: canonicalWorkspaces,
         tabs: canonicalTabs.map((tab) => ({ ...tab, agent_status: 'blocked' })),
-        panes: [{ pane_id: 'p1', workspace_id: 'ws-1', tab_id: 't1', agent_status: 'blocked', cwd: '/', focused: true }]
+        panes: [
+          {
+            pane_id: 'p1',
+            workspace_id: 'ws-1',
+            tab_id: 't1',
+            agent_status: 'blocked',
+            cwd: '/',
+            focused: true
+          }
+        ]
       })
 
       expect(dispatchedPayloads.length).toBe(1)
@@ -383,7 +603,9 @@ describe('server/push/service: push orchestration and test dispatch', () => {
     const mockClient = {
       setVapidDetails: () => {},
       sendNotification: async () => {
-        const err: any = new Error(`Connection reset by provider to ${activeSub.endpoint} auth=${authKey} p256dh=${p256dh}`)
+        const err: any = new Error(
+          `Connection reset by provider to ${activeSub.endpoint} auth=${authKey} p256dh=${p256dh}`
+        )
         err.code = 'ECONNRESET'
         throw err
       }
@@ -404,10 +626,26 @@ describe('server/push/service: push orchestration and test dispatch', () => {
       })
 
       const canonicalWorkspaces = [
-        { workspace_id: 'ws-1', label: 'Beta Space', number: 0, agent_status: 'working', tab_count: 1, pane_count: 1, focused: true }
+        {
+          workspace_id: 'ws-1',
+          label: 'Beta Space',
+          number: 0,
+          agent_status: 'working',
+          tab_count: 1,
+          pane_count: 1,
+          focused: true
+        }
       ]
       const canonicalTabs = [
-        { tab_id: 't1', workspace_id: 'ws-1', label: 'Tab 1', number: 0, pane_count: 1, focused: true, agent_status: 'working' }
+        {
+          tab_id: 't1',
+          workspace_id: 'ws-1',
+          label: 'Tab 1',
+          number: 0,
+          pane_count: 1,
+          focused: true,
+          agent_status: 'working'
+        }
       ]
 
       await service.handleSnapshot({
@@ -415,7 +653,17 @@ describe('server/push/service: push orchestration and test dispatch', () => {
         version: '0.9.1',
         workspaces: canonicalWorkspaces,
         tabs: canonicalTabs,
-        panes: [{ pane_id: 'p1', workspace_id: 'ws-1', tab_id: 't1', agent_status: 'working', cwd: '/', focused: true }]
+        panes: [
+          {
+            pane_id: 'p1',
+            workspace_id: 'ws-1',
+            tab_id: 't1',
+            agent: 'letta',
+            agent_status: 'working',
+            cwd: '/',
+            focused: true
+          }
+        ]
       })
 
       await service.handleSnapshot({
@@ -423,10 +671,22 @@ describe('server/push/service: push orchestration and test dispatch', () => {
         version: '0.9.1',
         workspaces: canonicalWorkspaces,
         tabs: canonicalTabs.map((tab) => ({ ...tab, agent_status: 'done' })),
-        panes: [{ pane_id: 'p1', workspace_id: 'ws-1', tab_id: 't1', agent_status: 'done', cwd: '/', focused: true }]
+        panes: [
+          {
+            pane_id: 'p1',
+            workspace_id: 'ws-1',
+            tab_id: 't1',
+            agent: 'letta',
+            agent_status: 'done',
+            cwd: '/',
+            focused: true
+          }
+        ]
       })
 
-      const deliveryWarn = warnings.find((w) => w.includes('[herdr-push] Nonterminal delivery error'))
+      const deliveryWarn = warnings.find((w) =>
+        w.includes('[herdr-push] Nonterminal delivery error')
+      )
       expect(deliveryWarn).toBeDefined()
       expect(deliveryWarn).toContain('done')
       expect(deliveryWarn).not.toContain('secret-token-12345')
@@ -464,10 +724,26 @@ describe('server/push/service: push orchestration and test dispatch', () => {
       })
 
       const canonicalWorkspaces = [
-        { workspace_id: 'ws-1', label: 'Space', number: 0, agent_status: 'working', tab_count: 1, pane_count: 1, focused: true }
+        {
+          workspace_id: 'ws-1',
+          label: 'Space',
+          number: 0,
+          agent_status: 'working',
+          tab_count: 1,
+          pane_count: 1,
+          focused: true
+        }
       ]
       const canonicalTabs = [
-        { tab_id: 't1', workspace_id: 'ws-1', label: 'Tab 1', number: 0, pane_count: 1, focused: true, agent_status: 'working' }
+        {
+          tab_id: 't1',
+          workspace_id: 'ws-1',
+          label: 'Tab 1',
+          number: 0,
+          pane_count: 1,
+          focused: true,
+          agent_status: 'working'
+        }
       ]
 
       // 1. Initial snapshot establishes baseline
@@ -476,7 +752,16 @@ describe('server/push/service: push orchestration and test dispatch', () => {
         version: '0.9.1',
         workspaces: canonicalWorkspaces,
         tabs: canonicalTabs,
-        panes: [{ pane_id: 'p1', workspace_id: 'ws-1', tab_id: 't1', agent_status: 'working', cwd: '/', focused: true }]
+        panes: [
+          {
+            pane_id: 'p1',
+            workspace_id: 'ws-1',
+            tab_id: 't1',
+            agent_status: 'working',
+            cwd: '/',
+            focused: true
+          }
+        ]
       })
 
       // 2. Second snapshot has a transition, and throwingOptions throws during option resolution
@@ -492,15 +777,33 @@ describe('server/push/service: push orchestration and test dispatch', () => {
           protocol: 22,
           version: '0.9.1',
           workspaces: canonicalWorkspaces,
-          tabs: canonicalTabs.map((tab) => ({ ...tab, agent_status: 'blocked' })),
-          panes: [{ pane_id: 'p1', workspace_id: 'ws-1', tab_id: 't1', agent_status: 'blocked', cwd: '/', focused: true }]
+          tabs: canonicalTabs.map((tab) => ({
+            ...tab,
+            agent_status: 'blocked'
+          })),
+          panes: [
+            {
+              pane_id: 'p1',
+              workspace_id: 'ws-1',
+              tab_id: 't1',
+              agent_status: 'blocked',
+              cwd: '/',
+              focused: true
+            }
+          ]
         },
         throwingOptions as any
       )
 
-      const bgWarn = warnings.find((w) => w.includes('[herdr-push] Unexpected background snapshot processing error'))
+      const bgWarn = warnings.find((w) =>
+        w.includes(
+          '[herdr-push] Unexpected background snapshot processing error'
+        )
+      )
       expect(bgWarn).toBeDefined()
-      expect(bgWarn).toBe('[herdr-push] Unexpected background snapshot processing error')
+      expect(bgWarn).toBe(
+        '[herdr-push] Unexpected background snapshot processing error'
+      )
       expect(bgWarn).not.toContain('/secret/path')
       expect(bgWarn).not.toContain('Unexpected crash')
     } finally {
