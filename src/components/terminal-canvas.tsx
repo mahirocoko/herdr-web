@@ -680,7 +680,7 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
                   ? 'Fit paused · native desktop display active'
                   : scrollState && scrollState.maxOffset === 0
                     ? 'Native output · no scrollback in current screen'
-                    : 'Native output · bounded History'}
+                    : 'Native output · bounded scrollback'}
               </span>
               {controlNotice && (
                 <span className="terminal-canvas__scope-notice" role="alert">

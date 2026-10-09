@@ -50,6 +50,10 @@ This document describes Herdr Web's socket-first, event-driven integration with 
 - **Fail-Closed Validation**: `executePing()` verifies `res.protocol === 22`. On protocol mismatch, the transport fails closed rather than attempting silent degradation.
 - **Operation Gate**: Every socket-mode pane read or mutation performs the protocol-22 handshake before pane validation and before the requested operation. A mismatched daemon cannot reach `pane.read`, `agent.prompt`, `pane.send_keys`, or `pane.send_input`.
 
+## Interactive prompt boundary
+
+Chat reads owner-authenticated, no-store `GET /api/pane/prompt?pane=<id>` and answers through the existing `POST /api/action` pipeline using `type: 'prompt-answer'`, exact target/session, an occurrence ID and one typed answer intent. Native keys/plans never come from the browser. The complete pinned source pure parser/answer graph is server-owned; native Codex queue and OmO open-call evidence is replayed through the existing exact descriptor/session/history/branch reader, never newest-file or CWD selection. One coordinator claim spans navigation, answer and permitted queue cleanup. Target/session and observed cursor/checks/form phase are revalidated per write. Possibly-applied failures are cached unknown and not automatically replayed. Unverifiable transitions stop rather than continue into another question. Reads and writes are not native CAS: an identical prompt answered and repeated wholly between observations remains indistinguishable. Question stays read-only; generic input and raw keys authority is unchanged. The internal text-only answer adapter deliberately omits Enter.
+
 ## 3. Schema Ownership & Sync (`scripts/sync-herdr-schema.ts`)
 
 The repository owns its generated protocol constants and tracked JSON schema without introducing external code-generation dependencies:
@@ -93,7 +97,7 @@ The transport adapter provides a unified interface selected by `HERDR_TRANSPORT`
   - The browser stream hook debounces and dedupes `{ type: 'terminal.resize', cols, rows }` over the same WebSocket without reconnecting. Old fixed-grid layout watchers do not override browser-fitted dimensions.
   - The fitted WebSocket also accepts bounded native source scroll commands (`terminal.scroll` with signed `deltaRows`, `to: 'latest'`, or `reset: true`), clamped against current native `pane.get` scroll metadata and executed via canonical `pane.scroll`, emitting `terminal.scroll-state`.
   - Wheel and mobile touch drag in Live mode adjust native reading offset, with `Latest` restoring offset 0 and incoming updates preserving reading position when scrolled up (`offset > 0`).
-  - Terminal fit automatically releases on document hidden/pagehide/unmount/History/pane switch and on manual pause, terminating the fitted producer child and restoring native desktop PTY dimensions automatically without calling `pane.resize`.
+  - Terminal fit automatically releases on document hidden/pagehide/unmount/Chat/pane switch and on manual pause, terminating the fitted producer child and restoring native desktop PTY dimensions automatically without calling `pane.resize`.
   - Resize and scroll authority do NOT acquire `operation-coordinator` pane claims, allowing Composer Send and agent prompts to execute concurrently without contention.
   - Shell input control (`/api/terminal/control`) uses a break-before-make transition: it exclusively blocks fit admission for the terminal and confirms fit-producer exit before activating an input lease; fit admission remains blocked until lease release or quarantine clearance.
   - The backend verifies the target against authoritative snapshot preflight before spawn and re-checks post-spawn.
@@ -124,10 +128,10 @@ The snapshot bridge maintains an efficient, shared event-driven invalidation loo
   - If a snapshot fetch is currently in flight, arriving events coalesce into a single follow-up fetch:
     ```ts
     do {
-      isDirty = false;
-      const snap = await fetchSnapshot();
-      emitSnapshot(snap);
-    } while (isDirty);
+      isDirty = false
+      const snap = await fetchSnapshot()
+      emitSnapshot(snap)
+    } while (isDirty)
     ```
   - This prevents overlapping snapshot queries during event bursts in the same active subscription generation. A stale fetch from a lost connection cannot publish because generation checks reject it; reconnect preflight is allowed to proceed without waiting for an unresponsive stale request to time out.
 - **Resilience**:
@@ -150,7 +154,7 @@ The snapshot bridge maintains an efficient, shared event-driven invalidation loo
   - Fallback HTTP polling remains active while connecting, reconnecting, disconnected, errored, closed, or when CLI mode rejects the event upgrade.
   - Immediate `refreshSnapshot()` remains available for post-mutation updates.
 - **Reading Surfaces Polling Truthfulness**:
-  - Panel, History, and Question views continue active HTTP polling (`/api/pane/read`).
+  - Panel and Question views continue active HTTP polling (`/api/pane/read`), while Chat uses its dedicated conversation endpoint (`/api/conversation`).
   - Terminal buffer text changes are not modeled as lifecycle events; truthful polling on active reading surfaces ensures responsive text viewing without fake full-stream subscriptions.
 
 ## 7. Web Push Notification Subsystem (`server/push/`)

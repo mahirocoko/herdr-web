@@ -33,7 +33,11 @@ export class CatalogError extends Error {
   }
 }
 
-export const fetchHealth = async (): Promise<{ ok: boolean; version: string; serverStatus: string }> => {
+export const fetchHealth = async (): Promise<{
+  ok: boolean
+  version: string
+  serverStatus: string
+}> => {
   const res = await fetch('/api/health')
   if (!res.ok) {
     throw new Error(`Health check failed with status ${res.status}`)
@@ -44,8 +48,12 @@ export const fetchHealth = async (): Promise<{ ok: boolean; version: string; ser
 export const fetchSnapshot = async (): Promise<ISnapshotResult> => {
   const res = await fetch('/api/snapshot')
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
-    throw new Error(errorData.error || `Failed to fetch snapshot (status ${res.status})`)
+    const errorData = await res
+      .json()
+      .catch(() => ({ error: `HTTP ${res.status}` }))
+    throw new Error(
+      errorData.error || `Failed to fetch snapshot (status ${res.status})`
+    )
   }
   const data = await res.json()
   if (!data.ok || !data.snapshot) {
@@ -54,13 +62,22 @@ export const fetchSnapshot = async (): Promise<ISnapshotResult> => {
   return data.snapshot
 }
 
-const ACTION_OUTCOMES = new Set<IActionOutcome>(['acknowledged', 'observed', 'rejected', 'unknown'])
+const ACTION_OUTCOMES = new Set<IActionOutcome>([
+  'acknowledged',
+  'observed',
+  'rejected',
+  'unknown'
+])
 
 const isActionResponse = (value: unknown): value is IActionResponse => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const data = value as Record<string, unknown>
   if (typeof data.ok !== 'boolean') return false
-  if (data.outcome !== undefined && (typeof data.outcome !== 'string' || !ACTION_OUTCOMES.has(data.outcome as IActionOutcome))) {
+  if (
+    data.outcome !== undefined &&
+    (typeof data.outcome !== 'string' ||
+      !ACTION_OUTCOMES.has(data.outcome as IActionOutcome))
+  ) {
     return false
   }
   if (data.error !== undefined && typeof data.error !== 'string') return false
@@ -68,34 +85,51 @@ const isActionResponse = (value: unknown): value is IActionResponse => {
 }
 
 const hasStringField = (value: unknown, key: string): boolean =>
-  Boolean(value && typeof value === 'object' && typeof (value as Record<string, unknown>)[key] === 'string')
+  Boolean(
+    value &&
+    typeof value === 'object' &&
+    typeof (value as Record<string, unknown>)[key] === 'string'
+  )
 
-const hasValidObservedResult = (action: IActionRequest, response: IActionResponse): boolean => {
+const hasValidObservedResult = (
+  action: IActionRequest,
+  response: IActionResponse
+): boolean => {
   if (action.type === 'workspace-create') {
-    return response.outcome === 'observed' &&
+    return (
+      response.outcome === 'observed' &&
       hasStringField(response.result, 'workspaceId') &&
       hasStringField(response.result, 'tabId') &&
       hasStringField(response.result, 'paneId')
+    )
   }
   if (action.type === 'workspace-close') {
-    return response.outcome === 'observed' &&
+    return (
+      response.outcome === 'observed' &&
       hasStringField(response.result, 'workspaceId') &&
       response.result?.workspaceId === action.target.workspaceId
+    )
   }
   if (action.type === 'tab-close') {
-    return response.outcome === 'observed' &&
+    return (
+      response.outcome === 'observed' &&
       response.result?.workspaceId === action.target.workspaceId &&
       response.result?.tabId === action.target.tabId
+    )
   }
   if (action.type === 'tab-create') {
-    return response.outcome === 'observed' &&
+    return (
+      response.outcome === 'observed' &&
       hasStringField(response.result, 'tabId') &&
       hasStringField(response.result, 'paneId')
+    )
   }
   return true
 }
 
-export const sendAction = async (action: IActionRequest): Promise<IActionResponse> => {
+export const sendAction = async (
+  action: IActionRequest
+): Promise<IActionResponse> => {
   let res: Response
   try {
     res = await fetch('/api/action', {
@@ -106,9 +140,10 @@ export const sendAction = async (action: IActionRequest): Promise<IActionRespons
       body: JSON.stringify(action)
     })
   } catch (err) {
-    const message = err instanceof Error && err.name === 'AbortError'
-      ? 'Action request was aborted before its outcome could be confirmed'
-      : 'Action request failed before its outcome could be confirmed'
+    const message =
+      err instanceof Error && err.name === 'AbortError'
+        ? 'Action request was aborted before its outcome could be confirmed'
+        : 'Action request failed before its outcome could be confirmed'
     throw new ActionError(message, 0, 'unknown')
   }
 
@@ -116,23 +151,58 @@ export const sendAction = async (action: IActionRequest): Promise<IActionRespons
   try {
     parsed = await res.json()
   } catch {
-    throw new ActionError('Action response was malformed; its outcome could not be confirmed', res.status, 'unknown')
+    throw new ActionError(
+      'Action response was malformed; its outcome could not be confirmed',
+      res.status,
+      'unknown'
+    )
   }
 
   if (!isActionResponse(parsed)) {
-    throw new ActionError('Action response was malformed; its outcome could not be confirmed', res.status, 'unknown')
+    throw new ActionError(
+      'Action response was malformed; its outcome could not be confirmed',
+      res.status,
+      'unknown'
+    )
   }
 
   if (!res.ok || !parsed.ok) {
     const outcome = parsed.outcome ?? (res.ok ? 'unknown' : 'rejected')
-    throw new ActionError(parsed.error || `Action failed with status ${res.status}`, res.status, outcome)
+    throw new ActionError(
+      parsed.error || `Action failed with status ${res.status}`,
+      res.status,
+      outcome
+    )
   }
 
   if (!parsed.outcome || !hasValidObservedResult(action, parsed)) {
-    throw new ActionError('Action response was malformed; its outcome could not be confirmed', res.status, 'unknown')
+    throw new ActionError(
+      'Action response was malformed; its outcome could not be confirmed',
+      res.status,
+      'unknown'
+    )
   }
 
   return parsed
+}
+
+export const fetchInteractivePrompt = async (
+  paneId: string,
+  signal?: AbortSignal
+): Promise<
+  import('../types/interactive-prompt.ts').IInteractivePromptRead & {
+    target: import('../types/herdr.ts').IActionTargetIdentity
+  }
+> => {
+  const response = await fetch(
+    `/api/pane/prompt?${new URLSearchParams({ pane: paneId })}`,
+    { cache: 'no-store', signal }
+  )
+  if (!response.ok)
+    throw new Error(
+      'Interactive prompt evidence unavailable; inspect the terminal.'
+    )
+  return response.json()
 }
 
 export const fetchPaneRead = async (
@@ -146,8 +216,12 @@ export const fetchPaneRead = async (
   }
   const res = await fetch(`/api/pane/read?${params.toString()}`)
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
-    throw new Error(errorData.error || `Failed to read pane (status ${res.status})`)
+    const errorData = await res
+      .json()
+      .catch(() => ({ error: `HTTP ${res.status}` }))
+    throw new Error(
+      errorData.error || `Failed to read pane (status ${res.status})`
+    )
   }
   const data = await res.json()
   if (!data.ok) {
@@ -163,8 +237,12 @@ export const fetchAgentExplain = async (
   const params = new URLSearchParams({ pane: paneId })
   const res = await fetch(`/api/agent/explain?${params.toString()}`, { signal })
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
-    throw new Error(errorData.error || `Failed to explain agent (status ${res.status})`)
+    const errorData = await res
+      .json()
+      .catch(() => ({ error: `HTTP ${res.status}` }))
+    throw new Error(
+      errorData.error || `Failed to explain agent (status ${res.status})`
+    )
   }
   const data = await res.json()
   if (!data.ok) {
@@ -180,12 +258,21 @@ export const fetchInteractionCatalog = async (
   const params = new URLSearchParams({ pane: paneId, terminalId })
   const res = await fetch(`/api/interactions/catalog?${params.toString()}`)
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
-    throw new CatalogError(errorData.error || `Failed to fetch interaction catalog (status ${res.status})`, res.status)
+    const errorData = await res
+      .json()
+      .catch(() => ({ error: `HTTP ${res.status}` }))
+    throw new CatalogError(
+      errorData.error ||
+        `Failed to fetch interaction catalog (status ${res.status})`,
+      res.status
+    )
   }
   const data = await res.json()
   if (!data.ok) {
-    throw new CatalogError(data.error || 'Invalid interaction catalog payload from server', res.status)
+    throw new CatalogError(
+      data.error || 'Invalid interaction catalog payload from server',
+      res.status
+    )
   }
   return data
 }
@@ -203,7 +290,10 @@ export const fetchTerminalControlStatus = async (
   })
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({}))
-    throw new Error(errorBody.error || `Failed to fetch terminal control status: ${res.status}`)
+    throw new Error(
+      errorBody.error ||
+        `Failed to fetch terminal control status: ${res.status}`
+    )
   }
   const data: unknown = await res.json()
   return parseTerminalControlStatusResponse(data, paneId)

@@ -3,6 +3,25 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import PromptComposer from '../prompt-composer.tsx'
 
 describe('PromptComposer: static rendering and controls', () => {
+  it('blocks unread prompt input without falsely claiming terminal identity is missing', () => {
+    const html = renderToStaticMarkup(
+      <PromptComposer
+        paneId="ws1:p1"
+        terminalId="term-1"
+        isBusy={false}
+        hasValidTarget
+        isPromptEvidenceReady={false}
+        draftText="preserved"
+        onSubmitText={async () => {}}
+      />
+    )
+    expect(html).toContain(
+      'Inspect or re-read the current prompt before sending'
+    )
+    expect(html).toContain('disabled=""')
+    expect(html).toContain('preserved')
+    expect(html).not.toContain('Terminal identity missing')
+  })
   it('renders textarea, quick commands trigger, and send button when active and valid', () => {
     const html = renderToStaticMarkup(
       <PromptComposer
@@ -12,7 +31,7 @@ describe('PromptComposer: static rendering and controls', () => {
         hasValidTarget={true}
         draftText="hello"
         onSubmitText={async () => {}}
-      />,
+      />
     )
     expect(html).toContain('prompt-composer__quick-btn')
     expect(html).toContain('Quick Commands')
@@ -29,7 +48,7 @@ describe('PromptComposer: static rendering and controls', () => {
         isBusy={true}
         hasValidTarget={true}
         onSubmitText={async () => {}}
-      />,
+      />
     )
     expect(html).toContain('disabled=""')
   })
@@ -42,7 +61,7 @@ describe('PromptComposer: static rendering and controls', () => {
         isBusy={false}
         hasValidTarget={false}
         onSubmitText={async () => {}}
-      />,
+      />
     )
     expect(html).toContain('disabled=""')
   })
@@ -56,7 +75,7 @@ describe('PromptComposer: static rendering and controls', () => {
         hasValidTarget={true}
         isControlActive={true}
         onSubmitText={async () => {}}
-      />,
+      />
     )
     expect(html).toContain('disabled=""')
   })
@@ -70,7 +89,7 @@ describe('PromptComposer: static rendering and controls', () => {
         hasValidTarget={true}
         draftText="git status --short"
         onSubmitText={async () => {}}
-      />,
+      />
     )
     expect(html).toContain('git status --short')
   })
@@ -83,7 +102,7 @@ describe('PromptComposer: static rendering and controls', () => {
         isBusy={false}
         hasValidTarget={true}
         onSubmitText={async () => {}}
-      />,
+      />
     )
     expect(html).toContain('prompt-composer__toolbar')
     expect(html).toContain('prompt-composer__controls-left')

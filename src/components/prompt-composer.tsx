@@ -22,12 +22,14 @@ export interface IPromptComposerProps {
   terminalId?: string | null
   workspaceId?: string | null
   agentName?: string
+  promptPlaceholder?: string
   isBlocked?: boolean
   hasAgent?: boolean
   expectedMode?: IExpectedPaneMode
   isBusy: boolean
   isControlActive?: boolean
   hasValidTarget?: boolean
+  isPromptEvidenceReady?: boolean
   error?: string | null
   onSubmitText: (text: string) => Promise<ActionResultStatus | void>
   onSendKeys?: (keys: string[]) => void
@@ -43,12 +45,14 @@ const PromptComposer: FC<IPromptComposerProps> = ({
   terminalId,
   workspaceId,
   agentName,
+  promptPlaceholder,
   isBlocked = false,
   hasAgent = true,
   expectedMode,
   isBusy,
   isControlActive = false,
   hasValidTarget = true,
+  isPromptEvidenceReady = true,
   error,
   onSubmitText,
   onSendKeys,
@@ -148,7 +152,14 @@ const PromptComposer: FC<IPromptComposerProps> = ({
 
     const trimmed = text.trim()
     // Prevent duplicate submission while already sending or empty or disabled target
-    if (!trimmed || !paneId || !hasValidTarget || isBusy || isControlActive)
+    if (
+      !trimmed ||
+      !paneId ||
+      !hasValidTarget ||
+      !isPromptEvidenceReady ||
+      isBusy ||
+      isControlActive
+    )
       return
 
     const submittedPaneId = paneId
@@ -194,7 +205,7 @@ const PromptComposer: FC<IPromptComposerProps> = ({
       isComposing,
       trimmed.length,
       isBusy,
-      !paneId || !hasValidTarget || isControlActive,
+      !paneId || !hasValidTarget || !isPromptEvidenceReady || isControlActive,
       e.keyCode
     )
 
@@ -215,6 +226,8 @@ const PromptComposer: FC<IPromptComposerProps> = ({
     placeholder = 'Select a pane to send input'
   } else if (!hasValidTarget) {
     placeholder = 'Terminal identity missing — refresh snapshot'
+  } else if (!isPromptEvidenceReady) {
+    placeholder = 'Inspect or re-read the current prompt before sending'
   } else if (isBusy) {
     placeholder = 'Sending...'
   } else if (effectiveIsBlocked) {
@@ -227,10 +240,16 @@ const PromptComposer: FC<IPromptComposerProps> = ({
 
   // Never disable textarea during submission so mobile keyboard stays up and caret is preserved.
   // Textarea is disabled only when there is no pane selected or no valid target identity.
-  const isInputDisabled = !paneId || !hasValidTarget || isControlActive
+  const isInputDisabled =
+    !paneId || !hasValidTarget || !isPromptEvidenceReady || isControlActive
   const isSubmitDisabled = isInputDisabled || isBusy || text.trim().length === 0
   const isQuickDisabled =
-    !paneId || !terminalId || !hasValidTarget || isBusy || isControlActive
+    !paneId ||
+    !terminalId ||
+    !hasValidTarget ||
+    !isPromptEvidenceReady ||
+    isBusy ||
+    isControlActive
 
   const pickerMode: 'agent' | 'shell' = effectiveHasAgent ? 'agent' : 'shell'
   const subtleRoleTag = effectiveIsBlocked
@@ -256,7 +275,7 @@ const PromptComposer: FC<IPromptComposerProps> = ({
             rows={1}
             maxLength={4096}
             className="prompt-composer__input prompt-composer__textarea"
-            placeholder={placeholder}
+            placeholder={promptPlaceholder ?? placeholder}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}

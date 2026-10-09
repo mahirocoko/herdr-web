@@ -3,10 +3,10 @@ import {
   ChevronDown,
   Columns,
   HelpCircle,
-  History,
   Layers,
   Loader2,
   Menu,
+  MessageSquare,
   PanelLeft,
   RotateCw,
   Search,
@@ -57,14 +57,14 @@ export interface IHorizonHeaderProps {
 const MODE_LABELS: Record<ISurfaceMode, string> = {
   question: 'Question',
   panel: 'Panel',
-  history: 'History',
+  chat: 'Chat',
   stream: 'Terminal'
 }
 
 const MODE_ICONS: Record<ISurfaceMode, typeof Terminal> = {
   question: HelpCircle,
   panel: Columns,
-  history: History,
+  chat: MessageSquare,
   stream: Terminal
 }
 
@@ -250,7 +250,7 @@ const HorizonHeader: FC<IHorizonHeaderProps> = ({
         </div>
       )}
 
-      {/* Refresh Action for Panel / History / Question */}
+      {/* Refresh Action for Panel / Chat / Question */}
       {viewMode && viewMode !== 'stream' && onRefresh && (
         <Button
           variant="ghost"

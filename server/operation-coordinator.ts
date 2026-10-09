@@ -56,6 +56,20 @@ export const computePayloadFingerprint = (action: IActionRequest): string => {
     })
   }
 
+  if (action.type === 'prompt-answer') {
+    return JSON.stringify({
+      type: action.type,
+      target: {
+        paneId: action.target.paneId,
+        terminalId: action.target.terminalId,
+        expectedMode: action.target.expectedMode,
+        agentSessionId: action.target.agentSessionId ?? null
+      },
+      promptId: action.promptId,
+      answer: action.answer
+    })
+  }
+
   if (action.type === 'keys') {
     return JSON.stringify({
       type: action.type,
@@ -133,7 +147,10 @@ export type BeginActionResult =
 
 export class OperationCoordinator {
   private activeAttempts = new Map<string, IActiveAttempt>() // token -> IActiveAttempt
-  private activeOperationIds = new Map<string, { token: string; payloadFingerprint: string; targetKey: string }>() // operationId -> info
+  private activeOperationIds = new Map<
+    string,
+    { token: string; payloadFingerprint: string; targetKey: string }
+  >() // operationId -> info
   private paneClaims = new Map<string, IPaneClaim>() // paneId -> IPaneClaim
   private exclusiveTopologyClaim: ITopologyClaim | null = null
   private sharedTopologyClaims = new Map<string, ITopologyClaim>() // token -> ITopologyClaim
@@ -163,10 +180,15 @@ export class OperationCoordinator {
     const now = Date.now()
     const options: IBeginActionOptions =
       typeof targetOrOptions === 'string'
-        ? { paneId: targetOrOptions, topology: 'shared', targetKey: targetOrOptions }
+        ? {
+            paneId: targetOrOptions,
+            topology: 'shared',
+            targetKey: targetOrOptions
+          }
         : targetOrOptions
 
-    const topology = options.topology ?? (options.paneId ? 'shared' : 'exclusive')
+    const topology =
+      options.topology ?? (options.paneId ? 'shared' : 'exclusive')
     const paneId = options.paneId
     const targetKey = options.targetKey ?? paneId ?? 'global'
 
@@ -217,7 +239,8 @@ export class OperationCoordinator {
         return {
           kind: 'contention',
           status: 409,
-          error: 'Cannot perform action: exclusive topology mutation is currently in-flight'
+          error:
+            'Cannot perform action: exclusive topology mutation is currently in-flight'
         }
       }
       if (this.sharedTopologyClaims.size > 0) {
@@ -233,7 +256,8 @@ export class OperationCoordinator {
         return {
           kind: 'contention',
           status: 409,
-          error: 'Cannot perform action: exclusive topology mutation is currently in-flight'
+          error:
+            'Cannot perform action: exclusive topology mutation is currently in-flight'
         }
       }
       if (paneId) {
@@ -243,7 +267,8 @@ export class OperationCoordinator {
             return {
               kind: 'contention',
               status: 409,
-              error: 'Cannot perform action: pane is currently controlled by a terminal control session'
+              error:
+                'Cannot perform action: pane is currently controlled by a terminal control session'
             }
           }
           return {
@@ -268,7 +293,11 @@ export class OperationCoordinator {
     }
 
     this.activeAttempts.set(token, attempt)
-    this.activeOperationIds.set(operationId, { token, payloadFingerprint, targetKey })
+    this.activeOperationIds.set(operationId, {
+      token,
+      payloadFingerprint,
+      targetKey
+    })
 
     if (topology === 'exclusive') {
       this.exclusiveTopologyClaim = {
@@ -302,25 +331,30 @@ export class OperationCoordinator {
    * then frees operationId, topology claim, and pane claim.
    * Only matching attempt token may complete.
    */
-  public completeAction(
-    token: string,
-    status: number,
-    body: any
-  ): boolean {
+  public completeAction(token: string, status: number, body: any): boolean {
     const attempt = this.activeAttempts.get(token)
     if (!attempt) {
       return false
     }
 
     // Store terminal result before releasing claim
-    this.cacheResult(attempt.operationId, attempt.targetKey, attempt.payloadFingerprint, status, body)
+    this.cacheResult(
+      attempt.operationId,
+      attempt.targetKey,
+      attempt.payloadFingerprint,
+      status,
+      body
+    )
 
     // Release claim
     this.activeAttempts.delete(token)
     if (this.activeOperationIds.get(attempt.operationId)?.token === token) {
       this.activeOperationIds.delete(attempt.operationId)
     }
-    if (attempt.paneId && this.paneClaims.get(attempt.paneId)?.token === token) {
+    if (
+      attempt.paneId &&
+      this.paneClaims.get(attempt.paneId)?.token === token
+    ) {
       this.paneClaims.delete(attempt.paneId)
     }
     if (this.exclusiveTopologyClaim?.token === token) {
@@ -348,7 +382,10 @@ export class OperationCoordinator {
     if (this.activeOperationIds.get(attempt.operationId)?.token === token) {
       this.activeOperationIds.delete(attempt.operationId)
     }
-    if (attempt.paneId && this.paneClaims.get(attempt.paneId)?.token === token) {
+    if (
+      attempt.paneId &&
+      this.paneClaims.get(attempt.paneId)?.token === token
+    ) {
       this.paneClaims.delete(attempt.paneId)
     }
     if (this.exclusiveTopologyClaim?.token === token) {
@@ -368,12 +405,14 @@ export class OperationCoordinator {
   public claimPaneForControl(
     paneId: string,
     leaseId: string
-  ): { ok: true; token: string } | { ok: false; status: number; error: string } {
+  ):
+    { ok: true; token: string } | { ok: false; status: number; error: string } {
     if (this.exclusiveTopologyClaim !== null) {
       return {
         ok: false,
         status: 409,
-        error: 'Cannot control terminal: exclusive topology mutation is currently in-flight'
+        error:
+          'Cannot control terminal: exclusive topology mutation is currently in-flight'
       }
     }
 
@@ -432,12 +471,16 @@ export class OperationCoordinator {
   /**
    * Acquires a transient shared topology claim (e.g. for Tab-policy mutation).
    */
-  public claimSharedTopology(ownerId = 'tab-policy'): { ok: true; token: string } | { ok: false; status: number; error: string } {
+  public claimSharedTopology(
+    ownerId = 'tab-policy'
+  ):
+    { ok: true; token: string } | { ok: false; status: number; error: string } {
     if (this.exclusiveTopologyClaim !== null) {
       return {
         ok: false,
         status: 409,
-        error: 'Cannot update tab policy: exclusive topology mutation is currently in-flight'
+        error:
+          'Cannot update tab policy: exclusive topology mutation is currently in-flight'
       }
     }
 
@@ -507,7 +550,9 @@ export class OperationCoordinator {
 
   // --- Read-only test inspectors (no unrestricted write path) ---
 
-  public getCachedOperationForTesting(operationId: string): ICachedOperation | undefined {
+  public getCachedOperationForTesting(
+    operationId: string
+  ): ICachedOperation | undefined {
     return this.cachedOperations.get(operationId)
   }
 

@@ -24,8 +24,8 @@ app/
     settings.tsx        Web Push settings, diagnostics, and subscription management route
 src/
   app.tsx               SpaceDashboard component (rendered by Space route)
-  components/           product surfaces (Panel, Question, History, Stream/Control, SettingsView, SpaceDrawer, PaneDrawer)
-  hooks/                useSnapshot, Root-owned useLifecycleOperations, usePushSubscription, useTabNotificationPolicy, useTerminalStream, useTerminalControl, read
+  components/           product surfaces (Panel, Question, ChatView, Stream/Control, SettingsView, SpaceDrawer, PaneDrawer)
+  hooks/                useSnapshot, Root-owned useLifecycleOperations, usePushSubscription, useTabNotificationPolicy, useTerminalStream, useTerminalControl, useConversation, read
   services/             browser-to-server API client (api-client, push-client with tab-policy)
   types/                browser contracts
   utils/                event-stream parser, push helpers, lifecycle reducers/membership, pure selection, and geometry helpers

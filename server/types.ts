@@ -155,6 +155,13 @@ export interface ITabCloseTargetIdentity {
 
 export type IActionRequest =
   | {
+      type: 'prompt-answer'
+      operationId: string
+      target: IActionTargetIdentity
+      promptId: string
+      answer: import('../src/types/interactive-prompt.ts').PromptAnswerIntent
+    }
+  | {
       type: 'prompt'
       operationId: string
       target: IActionTargetIdentity
@@ -240,7 +247,8 @@ export interface ITabCloseExecutionResult {
   }
 }
 
-export type ICatalogSourceKind = 'repo-config' | 'native-agent' | 'server-preset'
+export type ICatalogSourceKind =
+  'repo-config' | 'native-agent' | 'server-preset'
 
 export interface ICatalogItem {
   id: string
@@ -281,7 +289,8 @@ export interface INativeChoiceResponse {
   revision: number
 }
 
-export type IActionOutcome = 'acknowledged' | 'observed' | 'rejected' | 'unknown'
+export type IActionOutcome =
+  'acknowledged' | 'observed' | 'rejected' | 'unknown'
 
 export interface IActionResponse {
   ok: boolean

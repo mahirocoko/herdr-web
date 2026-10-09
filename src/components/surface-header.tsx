@@ -2,7 +2,7 @@ import type { FC } from 'react'
 import { Loader2, RotateCw } from 'lucide-react'
 import {
   getAvailableSurfaceModes,
-  type ISurfaceMode,
+  type ISurfaceMode
 } from '@/utils/surface-mode.ts'
 import Button from '@/components/ui/button.tsx'
 import { ToggleGroup } from '@/components/ui/toggle-group.tsx'
@@ -19,8 +19,8 @@ export interface ISurfaceHeaderProps {
 const MODE_LABELS: Record<ISurfaceMode, string> = {
   question: 'Question',
   panel: 'Panel',
-  history: 'History',
-  stream: 'Stream',
+  chat: 'Chat',
+  stream: 'Stream'
 }
 
 const SurfaceHeader: FC<ISurfaceHeaderProps> = ({
@@ -28,7 +28,7 @@ const SurfaceHeader: FC<ISurfaceHeaderProps> = ({
   onSelectMode,
   isBlocked,
   isLoading = false,
-  onRefresh,
+  onRefresh
 }) => {
   const availableModes = getAvailableSurfaceModes(isBlocked)
 
@@ -74,12 +74,12 @@ const SurfaceHeader: FC<ISurfaceHeaderProps> = ({
           Full source panel
         </span>
       )}
-      {mode === 'history' && (
+      {mode === 'chat' && (
         <span
           className="surface-header__meta"
-          title="Bounded to latest 1000 unwrapped rows"
+          title="Provider-native conversation transcript"
         >
-          Latest 1000 lines
+          Chat lens
         </span>
       )}
       {mode === 'stream' && (
