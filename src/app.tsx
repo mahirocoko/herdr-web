@@ -34,7 +34,11 @@ import Button from '@/components/ui/button.tsx'
 import TabRail from '@/components/tab-rail.tsx'
 import NavigationSearchSheet from '@/components/navigation-search-sheet.tsx'
 import type { IPickerSheetTab } from '@/components/interaction-picker-sheet.tsx'
-import { resolveSurfaceMode, type ISurfaceMode } from '@/utils/surface-mode.ts'
+import {
+  getDefaultSurfaceMode,
+  resolveSurfaceMode,
+  type ISurfaceMode
+} from '@/utils/surface-mode.ts'
 import {
   executeGuardedAction,
   type ActionResultStatus
@@ -102,7 +106,9 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
   const isBusyRef = useRef(isBusy)
   isBusyRef.current = isBusy
   const [actionError, setActionError] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<ISurfaceMode>('stream')
+  const [viewMode, setViewMode] = useState<ISurfaceMode>(() =>
+    getDefaultSurfaceMode(isAgentPane(selectedPane, snapshot?.agents))
+  )
   useEffect(() => setIsChatKeysOpen(false), [selectedPaneId, viewMode])
   const viewModeRef = useRef<ISurfaceMode>(viewMode)
   viewModeRef.current = viewMode
@@ -356,6 +362,8 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
   const prevPaneIdRef = useRef<string | null>(null)
 
   useEffect(() => {
+    // Do not consume the selection transition before its pane metadata arrives.
+    if (!selectedPane || selectedPane.pane_id !== selectedPaneId) return
     const paneChanged = selectedPaneId !== prevPaneIdRef.current
     const wasBlocked = prevBlockedRef.current
 
@@ -363,7 +371,8 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
       currentMode: viewMode,
       isBlocked: isSelectedPaneBlocked,
       wasBlocked,
-      paneChanged
+      paneChanged,
+      isAgent: isAgentPane(selectedPane, snapshot?.agents)
     })
 
     if (nextMode !== viewMode) {
@@ -372,7 +381,13 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
 
     prevPaneIdRef.current = selectedPaneId
     prevBlockedRef.current = isSelectedPaneBlocked
-  }, [selectedPaneId, isSelectedPaneBlocked, viewMode])
+  }, [
+    selectedPaneId,
+    selectedPane,
+    snapshot?.agents,
+    isSelectedPaneBlocked,
+    viewMode
+  ])
 
   const {
     content: questionContent,

@@ -5,11 +5,15 @@ export interface IResolveSurfaceModeParams {
   isBlocked: boolean
   wasBlocked: boolean
   paneChanged: boolean
+  isAgent?: boolean
 }
+
+export const getDefaultSurfaceMode = (isAgent: boolean): ISurfaceMode =>
+  isAgent ? 'chat' : 'stream'
 
 /**
  * Pure function to resolve the active surface mode based on pane transitions.
- * - Newly selected pane -> live Terminal ('stream'), including blocked panes
+ * - Newly selected agent pane -> Chat; shell pane -> live Terminal ('stream')
  * - Status changes never replace the surface the user is reading
  * - An explicitly opened Question returns to Terminal once the asking ends
  * - Otherwise preserve current user-selected mode
@@ -17,10 +21,11 @@ export interface IResolveSurfaceModeParams {
 export const resolveSurfaceMode = ({
   currentMode,
   isBlocked,
-  paneChanged
+  paneChanged,
+  isAgent = false
 }: IResolveSurfaceModeParams): ISurfaceMode => {
   if (paneChanged) {
-    return 'stream'
+    return getDefaultSurfaceMode(isAgent)
   }
 
   if (!isBlocked && currentMode === 'question') {
@@ -32,7 +37,7 @@ export const resolveSurfaceMode = ({
 
 /**
  * Returns the list of surface modes available for a pane.
- * Terminal is default for all panes. Agent panes additionally offer Chat.
+ * Chat is default for agent panes; Terminal is default for shell panes.
  * Blocked agent panes offer Question. Passing isAgent=false returns Terminal only;
  * existing callers using the default may offer Chat's truthful shell fallback.
  * Panel remains an internal snapshot fallback, not a competing primary mode.
