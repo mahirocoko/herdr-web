@@ -21,7 +21,9 @@ describe('drift-guards: retired absolute claims verification', () => {
       const fullPath = path.join(REPO_ROOT, relPath)
       if (fs.existsSync(fullPath)) {
         const content = fs.readFileSync(fullPath, 'utf8')
-        expect(content).not.toContain('reaches Herdr only through bounded argv-based CLI calls')
+        expect(content).not.toContain(
+          'reaches Herdr only through bounded argv-based CLI calls'
+        )
         expect(content).not.toContain('reaches Herdr only through')
       }
     }
@@ -32,8 +34,12 @@ describe('drift-guards: retired absolute claims verification', () => {
       const fullPath = path.join(REPO_ROOT, relPath)
       if (fs.existsSync(fullPath)) {
         const content = fs.readFileSync(fullPath, 'utf8')
-        expect(content).not.toContain('Prefer Herdr public CLI contracts to internal socket')
-        expect(content).not.toContain('prefer Herdr public CLI contracts to internal socket')
+        expect(content).not.toContain(
+          'Prefer Herdr public CLI contracts to internal socket'
+        )
+        expect(content).not.toContain(
+          'prefer Herdr public CLI contracts to internal socket'
+        )
       }
     }
   })
@@ -54,7 +60,10 @@ describe('drift-guards: retired absolute claims verification', () => {
     expect(agentsMd).toContain('HERDR_TRANSPORT=cli')
     expect(agentsMd).toContain('/api/events')
 
-    const archMd = fs.readFileSync(path.join(REPO_ROOT, 'docs/transport-architecture.md'), 'utf8')
+    const archMd = fs.readFileSync(
+      path.join(REPO_ROOT, 'docs/transport-architecture.md'),
+      'utf8'
+    )
     expect(archMd).toContain('HERDR_TRACKED_PROTOCOL = 22')
     expect(archMd).toContain('events.subscribe')
     expect(archMd).toContain('SnapshotBridge')
@@ -63,24 +72,41 @@ describe('drift-guards: retired absolute claims verification', () => {
   it('keeps lifecycle safety and upstream status semantics in active docs', () => {
     const agentsMd = fs.readFileSync(path.join(REPO_ROOT, 'AGENTS.md'), 'utf8')
     const readme = fs.readFileSync(path.join(REPO_ROOT, 'README.md'), 'utf8')
-    const archMd = fs.readFileSync(path.join(REPO_ROOT, 'docs/transport-architecture.md'), 'utf8')
+    const archMd = fs.readFileSync(
+      path.join(REPO_ROOT, 'docs/transport-architecture.md'),
+      'utf8'
+    )
 
-    for (const actionType of ['workspace-create', 'workspace-close', 'tab-close']) {
+    for (const actionType of [
+      'workspace-create',
+      'workspace-close',
+      'tab-close'
+    ]) {
       expect(agentsMd).toContain(actionType)
       expect(archMd).toContain(actionType)
     }
     expect(agentsMd).toContain('raw membership manifest')
-    expect(archMd).toContain('changed membership returns a definitive 409 rejection and zero RPC')
+    expect(archMd).toContain(
+      'changed membership returns a definitive 409 rejection and zero RPC'
+    )
     expect(agentsMd).toContain('attention aggregates')
     expect(readme).toContain('upstream attention aggregates')
-    expect(archMd).toContain('a Space can truthfully aggregate to `done` while another Tab is `working`')
+    expect(archMd).toContain(
+      'a Space can truthfully aggregate to `done` while another Tab is `working`'
+    )
   })
 
   it('keeps Space and Tab navigation ownership separated across source and active docs', () => {
     const agentsMd = fs.readFileSync(path.join(REPO_ROOT, 'AGENTS.md'), 'utf8')
     const readme = fs.readFileSync(path.join(REPO_ROOT, 'README.md'), 'utf8')
-    const spaceDrawer = fs.readFileSync(path.join(REPO_ROOT, 'src/components/space-drawer.tsx'), 'utf8')
-    const paneDrawer = fs.readFileSync(path.join(REPO_ROOT, 'src/components/pane-drawer.tsx'), 'utf8')
+    const spaceDrawer = fs.readFileSync(
+      path.join(REPO_ROOT, 'src/components/space-drawer.tsx'),
+      'utf8'
+    )
+    const paneDrawer = fs.readFileSync(
+      path.join(REPO_ROOT, 'src/components/pane-drawer.tsx'),
+      'utf8'
+    )
 
     expect(agentsMd).toContain('Herdr-style Spaces side sheet')
     expect(readme).toContain('active-Space Tabs & Panes sheet')
@@ -116,7 +142,9 @@ describe('drift-guards: retired absolute claims verification', () => {
       const fullPath = path.join(REPO_ROOT, relPath)
       if (fs.existsSync(fullPath)) {
         const content = fs.readFileSync(fullPath, 'utf8')
-        expect(content).not.toContain('only the first canonical tab in each Space is enabled')
+        expect(content).not.toContain(
+          'only the first canonical tab in each Space is enabled'
+        )
         expect(content).not.toContain('other tabs (e.g. Direct CLI) never emit')
       }
     }
@@ -124,11 +152,16 @@ describe('drift-guards: retired absolute claims verification', () => {
 
   it('ensures tab policy store, routes, and hooks are documented', () => {
     const agentsMd = fs.readFileSync(path.join(REPO_ROOT, 'AGENTS.md'), 'utf8')
-    expect(agentsMd).toContain('first canonical tab in each Space is enabled by default')
+    expect(agentsMd).toContain(
+      'first canonical tab in each Space is enabled by default'
+    )
     expect(agentsMd).toContain('push-tab-policy.json')
     expect(agentsMd).toContain('/api/push/tab-policy')
 
-    const fileOrgMd = fs.readFileSync(path.join(REPO_ROOT, 'docs/file-organization.md'), 'utf8')
+    const fileOrgMd = fs.readFileSync(
+      path.join(REPO_ROOT, 'docs/file-organization.md'),
+      'utf8'
+    )
     expect(fileOrgMd).toContain('tab-policy-store')
     expect(fileOrgMd).toContain('useTabNotificationPolicy')
   })
@@ -153,14 +186,26 @@ describe('drift-guards: retired absolute claims verification', () => {
     const agentsMd = fs.readFileSync(path.join(REPO_ROOT, 'AGENTS.md'), 'utf8')
     expect(agentsMd).toContain('/api/terminal/control')
     expect(agentsMd).toContain('verified idle shell panes')
-    expect(agentsMd).toContain('Stream observer remains default')
+    expect(agentsMd).toContain(
+      'Chat is the default reading surface for newly selected agent panes'
+    )
+    expect(agentsMd).toContain('is default for shell panes')
+    expect(agentsMd).not.toContain(
+      'Stream observer remains default for all panes'
+    )
 
-    const archMd = fs.readFileSync(path.join(REPO_ROOT, 'docs/transport-architecture.md'), 'utf8')
+    const archMd = fs.readFileSync(
+      path.join(REPO_ROOT, 'docs/transport-architecture.md'),
+      'utf8'
+    )
     expect(archMd).toContain('Terminal Control Child')
     expect(archMd).toContain('herdr terminal session control')
     expect(archMd).toContain('Preflight validates')
 
-    const fileOrgMd = fs.readFileSync(path.join(REPO_ROOT, 'docs/file-organization.md'), 'utf8')
+    const fileOrgMd = fs.readFileSync(
+      path.join(REPO_ROOT, 'docs/file-organization.md'),
+      'utf8'
+    )
     expect(fileOrgMd).toContain('terminal-control.ts')
     expect(fileOrgMd).toContain('useTerminalControl')
   })

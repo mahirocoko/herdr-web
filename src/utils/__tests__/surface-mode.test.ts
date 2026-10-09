@@ -1,11 +1,56 @@
 import { describe, expect, it } from 'bun:test'
 import {
   getAvailableSurfaceModes,
+  getDefaultSurfaceMode,
   getPaneReadConfigForMode,
   resolveSurfaceMode
 } from '../surface-mode.ts'
 
 describe('surface-mode: resolveSurfaceMode', () => {
+  it('opens agents in Chat and shells in Terminal, including blocked agents', () => {
+    expect(getDefaultSurfaceMode(true)).toBe('chat')
+    expect(getDefaultSurfaceMode(false)).toBe('stream')
+    for (const isBlocked of [true, false]) {
+      for (const currentMode of [
+        'stream',
+        'chat',
+        'question',
+        'panel'
+      ] as const) {
+        expect(
+          resolveSurfaceMode({
+            currentMode,
+            isBlocked,
+            wasBlocked: false,
+            paneChanged: true,
+            isAgent: true
+          })
+        ).toBe('chat')
+        expect(
+          resolveSurfaceMode({
+            currentMode,
+            isBlocked,
+            wasBlocked: false,
+            paneChanged: true,
+            isAgent: false
+          })
+        ).toBe('stream')
+      }
+    }
+  })
+  it('does not override manually chosen Terminal when agent status changes', () => {
+    for (const isBlocked of [true, false]) {
+      expect(
+        resolveSurfaceMode({
+          currentMode: 'stream',
+          isBlocked,
+          wasBlocked: !isBlocked,
+          paneChanged: false,
+          isAgent: true
+        })
+      ).toBe('stream')
+    }
+  })
   it('returns to Terminal when selecting another pane from Chat', () => {
     expect(
       resolveSurfaceMode({
