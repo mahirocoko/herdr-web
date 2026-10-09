@@ -6,10 +6,10 @@ import {
 } from '../surface-mode.ts'
 
 describe('surface-mode: resolveSurfaceMode', () => {
-  it('returns to Terminal when selecting another pane from History', () => {
+  it('returns to Terminal when selecting another pane from Chat', () => {
     expect(
       resolveSurfaceMode({
-        currentMode: 'history',
+        currentMode: 'chat',
         isBlocked: true,
         wasBlocked: false,
         paneChanged: true
@@ -17,16 +17,16 @@ describe('surface-mode: resolveSurfaceMode', () => {
     ).toBe('stream')
   })
 
-  it('preserves History through blocked and unblocked transitions', () => {
+  it('preserves Chat through blocked and unblocked transitions', () => {
     for (const isBlocked of [true, false]) {
       expect(
         resolveSurfaceMode({
-          currentMode: 'history',
+          currentMode: 'chat',
           isBlocked,
           wasBlocked: !isBlocked,
           paneChanged: false
         })
-      ).toBe('history')
+      ).toBe('chat')
     }
   })
 
@@ -90,14 +90,14 @@ describe('surface-mode: resolveSurfaceMode', () => {
     expect(result).toBe('stream')
   })
 
-  it('preserves user chosen history mode on non-blocked pane', () => {
+  it('preserves user chosen chat mode on non-blocked pane', () => {
     const result = resolveSurfaceMode({
-      currentMode: 'history',
+      currentMode: 'chat',
       isBlocked: false,
       wasBlocked: false,
       paneChanged: false
     })
-    expect(result).toBe('history')
+    expect(result).toBe('chat')
   })
 
   it('preserves user chosen panel mode on non-blocked pane', () => {
@@ -120,14 +120,14 @@ describe('surface-mode: resolveSurfaceMode', () => {
     expect(result).toBe('stream')
   })
 
-  it('preserves user chosen history mode while pane remains blocked', () => {
+  it('preserves user chosen chat mode while pane remains blocked', () => {
     const result = resolveSurfaceMode({
-      currentMode: 'history',
+      currentMode: 'chat',
       isBlocked: true,
       wasBlocked: true,
       paneChanged: false
     })
-    expect(result).toBe('history')
+    expect(result).toBe('chat')
   })
 
   it('preserves user chosen panel mode while pane remains blocked', () => {
@@ -142,14 +142,19 @@ describe('surface-mode: resolveSurfaceMode', () => {
 })
 
 describe('surface-mode: getAvailableSurfaceModes', () => {
-  it('offers Terminal and History for non-blocked panes', () => {
-    const modes = getAvailableSurfaceModes(false)
-    expect(modes).toEqual(['stream', 'history'])
+  it('offers Terminal and Chat for non-blocked agent panes', () => {
+    const modes = getAvailableSurfaceModes(false, true)
+    expect(modes).toEqual(['stream', 'chat'])
   })
 
-  it('adds an explicit Question view for blocked panes', () => {
-    const modes = getAvailableSurfaceModes(true)
-    expect(modes).toEqual(['stream', 'question', 'history'])
+  it('adds an explicit Question view for blocked agent panes', () => {
+    const modes = getAvailableSurfaceModes(true, true)
+    expect(modes).toEqual(['stream', 'question', 'chat'])
+  })
+
+  it('offers only Terminal for shell panes', () => {
+    expect(getAvailableSurfaceModes(false, false)).toEqual(['stream'])
+    expect(getAvailableSurfaceModes(true, false)).toEqual(['stream'])
   })
 })
 
@@ -159,15 +164,6 @@ describe('surface-mode: getPaneReadConfigForMode', () => {
     expect(config).toEqual({
       source: 'visible',
       pollIntervalMs: 1000
-    })
-  })
-
-  it('configures history with recent-unwrapped source, 1000 lines, and 2000ms polling', () => {
-    const config = getPaneReadConfigForMode('history')
-    expect(config).toEqual({
-      source: 'recent-unwrapped',
-      lines: 1000,
-      pollIntervalMs: 2000
     })
   })
 
@@ -185,8 +181,8 @@ describe('surface-mode: getPaneReadConfigForMode', () => {
     })
   })
 
-  it('returns null for stream mode because it uses WebSocket observer instead of pane read', () => {
-    const config = getPaneReadConfigForMode('stream')
-    expect(config).toBeNull()
+  it('returns null for chat and stream mode because they do not use text pane read', () => {
+    expect(getPaneReadConfigForMode('chat')).toBeNull()
+    expect(getPaneReadConfigForMode('stream')).toBeNull()
   })
 })

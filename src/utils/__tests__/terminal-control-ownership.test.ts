@@ -134,7 +134,10 @@ describe('terminal-control-ownership pure state machine', () => {
         targetPaneId: 'ws1:p1',
         statusResult: { ok: true, pane: 'ws1:p2', leased: false, status: null }
       })
-      expect(res).toEqual({ action: 'remain_releasing', reason: 'pane_mismatch' })
+      expect(res).toEqual({
+        action: 'remain_releasing',
+        reason: 'pane_mismatch'
+      })
     })
 
     it('remains releasing while server reports leased: true (pending, active, or releasing/quarantined)', () => {
@@ -142,25 +145,49 @@ describe('terminal-control-ownership pure state machine', () => {
         currentGeneration: 3,
         activeGeneration: 3,
         targetPaneId: 'ws1:p1',
-        statusResult: { ok: true, pane: 'ws1:p1', leased: true, status: 'pending' }
+        statusResult: {
+          ok: true,
+          pane: 'ws1:p1',
+          leased: true,
+          status: 'pending'
+        }
       })
-      expect(resPending).toEqual({ action: 'remain_releasing', reason: 'leased' })
+      expect(resPending).toEqual({
+        action: 'remain_releasing',
+        reason: 'leased'
+      })
 
       const resActive = evaluateControlStatusResponse({
         currentGeneration: 3,
         activeGeneration: 3,
         targetPaneId: 'ws1:p1',
-        statusResult: { ok: true, pane: 'ws1:p1', leased: true, status: 'active' }
+        statusResult: {
+          ok: true,
+          pane: 'ws1:p1',
+          leased: true,
+          status: 'active'
+        }
       })
-      expect(resActive).toEqual({ action: 'remain_releasing', reason: 'leased' })
+      expect(resActive).toEqual({
+        action: 'remain_releasing',
+        reason: 'leased'
+      })
 
       const resQuarantined = evaluateControlStatusResponse({
         currentGeneration: 3,
         activeGeneration: 3,
         targetPaneId: 'ws1:p1',
-        statusResult: { ok: true, pane: 'ws1:p1', leased: true, status: 'releasing' }
+        statusResult: {
+          ok: true,
+          pane: 'ws1:p1',
+          leased: true,
+          status: 'releasing'
+        }
       })
-      expect(resQuarantined).toEqual({ action: 'remain_releasing', reason: 'leased' })
+      expect(resQuarantined).toEqual({
+        action: 'remain_releasing',
+        reason: 'leased'
+      })
     })
 
     it('transitions to idle only when server explicitly returns leased: false for exact matching pane', () => {
@@ -176,7 +203,9 @@ describe('terminal-control-ownership pure state machine', () => {
 
   describe('footer notice copy', () => {
     it('returns concise notice copy for engaging state', () => {
-      expect(getTerminalControlFooterNotice('engaging')).toBe('Connecting terminal control session...')
+      expect(getTerminalControlFooterNotice('engaging')).toBe(
+        'Connecting terminal control session...'
+      )
     })
 
     it('returns concise notice copy for active state', () => {
@@ -186,7 +215,9 @@ describe('terminal-control-ownership pure state machine', () => {
     })
 
     it('returns concise notice copy for releasing state', () => {
-      expect(getTerminalControlFooterNotice('releasing')).toBe('Releasing terminal control session...')
+      expect(getTerminalControlFooterNotice('releasing')).toBe(
+        'Releasing terminal control session...'
+      )
     })
 
     it('returns null notice for idle state', () => {
@@ -197,51 +228,95 @@ describe('terminal-control-ownership pure state machine', () => {
   describe('navigation fallback pure predicates (regression guard)', () => {
     describe('shouldReleaseControlOnPaneChange', () => {
       it('does not request release when pane is unchanged across ownership progression', () => {
-        expect(shouldReleaseControlOnPaneChange('w5N:pB', 'w5N:pB', 'idle')).toBe(false)
-        expect(shouldReleaseControlOnPaneChange('w5N:pB', 'w5N:pB', 'engaging')).toBe(false)
-        expect(shouldReleaseControlOnPaneChange('w5N:pB', 'w5N:pB', 'active')).toBe(false)
+        expect(
+          shouldReleaseControlOnPaneChange('w5N:pB', 'w5N:pB', 'idle')
+        ).toBe(false)
+        expect(
+          shouldReleaseControlOnPaneChange('w5N:pB', 'w5N:pB', 'engaging')
+        ).toBe(false)
+        expect(
+          shouldReleaseControlOnPaneChange('w5N:pB', 'w5N:pB', 'active')
+        ).toBe(false)
       })
 
       it('does not request release on initial mount (prevPaneId is null or identical)', () => {
-        expect(shouldReleaseControlOnPaneChange(null, 'w5N:pB', 'idle')).toBe(false)
-        expect(shouldReleaseControlOnPaneChange(null, 'w5N:pB', 'engaging')).toBe(false)
-        expect(shouldReleaseControlOnPaneChange(null, 'w5N:pB', 'active')).toBe(false)
+        expect(shouldReleaseControlOnPaneChange(null, 'w5N:pB', 'idle')).toBe(
+          false
+        )
+        expect(
+          shouldReleaseControlOnPaneChange(null, 'w5N:pB', 'engaging')
+        ).toBe(false)
+        expect(shouldReleaseControlOnPaneChange(null, 'w5N:pB', 'active')).toBe(
+          false
+        )
       })
 
       it('requests release on actual pane switch when ownership is engaging or active', () => {
-        expect(shouldReleaseControlOnPaneChange('w5N:pB', 'w5N:p1', 'active')).toBe(true)
-        expect(shouldReleaseControlOnPaneChange('w5N:pB', 'w5N:p1', 'engaging')).toBe(true)
+        expect(
+          shouldReleaseControlOnPaneChange('w5N:pB', 'w5N:p1', 'active')
+        ).toBe(true)
+        expect(
+          shouldReleaseControlOnPaneChange('w5N:pB', 'w5N:p1', 'engaging')
+        ).toBe(true)
       })
 
       it('does not request release on actual pane switch when ownership is idle or releasing', () => {
-        expect(shouldReleaseControlOnPaneChange('w5N:pB', 'w5N:p1', 'idle')).toBe(false)
-        expect(shouldReleaseControlOnPaneChange('w5N:pB', 'w5N:p1', 'releasing')).toBe(false)
+        expect(
+          shouldReleaseControlOnPaneChange('w5N:pB', 'w5N:p1', 'idle')
+        ).toBe(false)
+        expect(
+          shouldReleaseControlOnPaneChange('w5N:pB', 'w5N:p1', 'releasing')
+        ).toBe(false)
       })
     })
 
     describe('shouldReleaseControlOnViewChange', () => {
       it('does not request release when surface mode is unchanged across ownership progression', () => {
-        expect(shouldReleaseControlOnViewChange('stream', 'stream', 'idle')).toBe(false)
-        expect(shouldReleaseControlOnViewChange('stream', 'stream', 'engaging')).toBe(false)
-        expect(shouldReleaseControlOnViewChange('stream', 'stream', 'active')).toBe(false)
+        expect(
+          shouldReleaseControlOnViewChange('stream', 'stream', 'idle')
+        ).toBe(false)
+        expect(
+          shouldReleaseControlOnViewChange('stream', 'stream', 'engaging')
+        ).toBe(false)
+        expect(
+          shouldReleaseControlOnViewChange('stream', 'stream', 'active')
+        ).toBe(false)
       })
 
       it('requests release on actual transition away from stream when ownership is engaging or active', () => {
-        expect(shouldReleaseControlOnViewChange('stream', 'panel', 'active')).toBe(true)
-        expect(shouldReleaseControlOnViewChange('stream', 'panel', 'engaging')).toBe(true)
-        expect(shouldReleaseControlOnViewChange('stream', 'history', 'active')).toBe(true)
-        expect(shouldReleaseControlOnViewChange('stream', 'question', 'active')).toBe(true)
+        expect(
+          shouldReleaseControlOnViewChange('stream', 'panel', 'active')
+        ).toBe(true)
+        expect(
+          shouldReleaseControlOnViewChange('stream', 'panel', 'engaging')
+        ).toBe(true)
+        expect(
+          shouldReleaseControlOnViewChange('stream', 'chat', 'active')
+        ).toBe(true)
+        expect(
+          shouldReleaseControlOnViewChange('stream', 'question', 'active')
+        ).toBe(true)
       })
 
       it('does not request release on transition away from stream when ownership is idle or releasing', () => {
-        expect(shouldReleaseControlOnViewChange('stream', 'panel', 'idle')).toBe(false)
-        expect(shouldReleaseControlOnViewChange('stream', 'panel', 'releasing')).toBe(false)
+        expect(
+          shouldReleaseControlOnViewChange('stream', 'panel', 'idle')
+        ).toBe(false)
+        expect(
+          shouldReleaseControlOnViewChange('stream', 'panel', 'releasing')
+        ).toBe(false)
       })
 
       it('does not request release on transitions not leaving stream', () => {
-        expect(shouldReleaseControlOnViewChange('panel', 'history', 'active')).toBe(false)
-        expect(shouldReleaseControlOnViewChange('panel', 'stream', 'active')).toBe(false)
-        expect(shouldReleaseControlOnViewChange('question', 'panel', 'active')).toBe(false)
+        expect(
+          shouldReleaseControlOnViewChange('panel', 'chat', 'active')
+        ).toBe(false)
+        expect(
+          shouldReleaseControlOnViewChange('panel', 'stream', 'active')
+        ).toBe(false)
+        expect(
+          shouldReleaseControlOnViewChange('question', 'panel', 'active')
+        ).toBe(false)
       })
     })
 
@@ -254,9 +329,21 @@ describe('terminal-control-ownership pure state machine', () => {
           currentViewMode: 'stream'
         }
 
-        expect(shouldReleaseControlOnNavigation({ ...paramsBase, ownership: 'idle' })).toBe(false)
-        expect(shouldReleaseControlOnNavigation({ ...paramsBase, ownership: 'engaging' })).toBe(false)
-        expect(shouldReleaseControlOnNavigation({ ...paramsBase, ownership: 'active' })).toBe(false)
+        expect(
+          shouldReleaseControlOnNavigation({ ...paramsBase, ownership: 'idle' })
+        ).toBe(false)
+        expect(
+          shouldReleaseControlOnNavigation({
+            ...paramsBase,
+            ownership: 'engaging'
+          })
+        ).toBe(false)
+        expect(
+          shouldReleaseControlOnNavigation({
+            ...paramsBase,
+            ownership: 'active'
+          })
+        ).toBe(false)
       })
 
       it('proves actual pane switch while active requests release', () => {
@@ -330,7 +417,9 @@ describe('terminal-control-ownership pure state machine', () => {
         ownership = 'engaging'
         expect(evaluateEffects()).toBe(false)
         expect(ownership).toBe('engaging')
-        expect(getTerminalControlFooterNotice(ownership)).toBe('Connecting terminal control session...')
+        expect(getTerminalControlFooterNotice(ownership)).toBe(
+          'Connecting terminal control session...'
+        )
 
         // Server lease ready -> ownership becomes active
         ownership = 'active'
@@ -347,7 +436,9 @@ describe('terminal-control-ownership pure state machine', () => {
 
         // Handler sets releasing
         ownership = 'releasing'
-        expect(getTerminalControlFooterNotice(ownership)).toBe('Releasing terminal control session...')
+        expect(getTerminalControlFooterNotice(ownership)).toBe(
+          'Releasing terminal control session...'
+        )
 
         // Mode changes away to panel while releasing
         viewMode = 'panel'
@@ -496,14 +587,21 @@ describe('terminal-control-ownership pure state machine', () => {
       }).toThrow('must be a JSON object')
 
       expect(() => {
-        parseTerminalControlStatusResponse({ ok: false, error: 'fail' }, 'ws1:p1')
+        parseTerminalControlStatusResponse(
+          { ok: false, error: 'fail' },
+          'ws1:p1'
+        )
       }).toThrow('ok must be true')
     })
   })
 
   describe('resolveControlledPaneIdentity pure helper', () => {
     it('uses explicit override when provided', () => {
-      const resolved = resolveControlledPaneIdentity('captured-1', 'fallback-2', 'override-3')
+      const resolved = resolveControlledPaneIdentity(
+        'captured-1',
+        'fallback-2',
+        'override-3'
+      )
       expect(resolved).toBe('override-3')
     })
 
@@ -520,14 +618,24 @@ describe('terminal-control-ownership pure state machine', () => {
 
     it('returns undefined when neither captured nor fallback pane is available', () => {
       expect(resolveControlledPaneIdentity(null, null)).toBeUndefined()
-      expect(resolveControlledPaneIdentity(undefined, undefined)).toBeUndefined()
+      expect(
+        resolveControlledPaneIdentity(undefined, undefined)
+      ).toBeUndefined()
     })
 
     it('never opens Control on a newly selected pane during a prop transition', () => {
-      expect(resolveTerminalControlConnectionPane('control', false, 'w5N:pB')).toBe('w5N:pB')
-      expect(resolveTerminalControlConnectionPane('control', false, null)).toBeNull()
-      expect(resolveTerminalControlConnectionPane('observer', false, 'w5N:pB')).toBeNull()
-      expect(resolveTerminalControlConnectionPane('control', true, 'w5N:pB')).toBeNull()
+      expect(
+        resolveTerminalControlConnectionPane('control', false, 'w5N:pB')
+      ).toBe('w5N:pB')
+      expect(
+        resolveTerminalControlConnectionPane('control', false, null)
+      ).toBeNull()
+      expect(
+        resolveTerminalControlConnectionPane('observer', false, 'w5N:pB')
+      ).toBeNull()
+      expect(
+        resolveTerminalControlConnectionPane('control', true, 'w5N:pB')
+      ).toBeNull()
     })
   })
 
@@ -587,7 +695,7 @@ describe('terminal-control-ownership pure state machine', () => {
           nextOwnership: 'active',
           notifiedPaneId: 'ws1:p1',
           currentSelectedPaneId: 'ws1:p1',
-          currentViewMode: 'history'
+          currentViewMode: 'chat'
         })
       ).toBe(true)
 

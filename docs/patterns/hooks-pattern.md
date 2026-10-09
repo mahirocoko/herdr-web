@@ -4,7 +4,7 @@
 - `useLifecycleOperations` is instantiated once by the root and owns one frozen lifecycle ticket across Drawer dismissal and route changes. It accepts no new mutation while pending, unknown, or reconciliation-failed; exact request identity plus reconciliation attempt fence every settlement/retry.
 - Snapshot polling stops while the event WebSocket stream is healthy.
 - Fallback HTTP polling activates only when disconnected or reconnecting, using bounded backoff.
-- Reading hooks (`usePaneRead`) own their active HTTP polling interval for text content refresh on active surfaces (Panel: 1000ms, History: 2000ms, Question: 2000ms while blocked).
+- Reading hooks (`usePaneRead`) own their active HTTP polling interval for text content refresh on active surfaces (Panel: 1000ms, Question: 2000ms while blocked); `useConversation` owns active-pane polling and cursor pagination for Chat.
 - Stream hooks (`useTerminalStream`) own the observer WebSocket connection (`/api/terminal`).
 - Store callback functions in refs when long-lived sockets must call current logic without reconnecting for every render.
 - Cleanup intervals, retry timers, sockets, observers, and event subscriptions on every effect exit.

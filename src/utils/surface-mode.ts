@@ -1,4 +1,4 @@
-export type ISurfaceMode = 'question' | 'panel' | 'history' | 'stream'
+export type ISurfaceMode = 'question' | 'panel' | 'chat' | 'stream'
 
 export interface IResolveSurfaceModeParams {
   currentMode: ISurfaceMode
@@ -32,14 +32,19 @@ export const resolveSurfaceMode = ({
 
 /**
  * Returns the list of surface modes available for a pane.
- * Terminal and History are the primary reading surfaces.
- * Blocked panes additionally offer the explicit Question snapshot.
+ * Terminal is default for all panes. Agent panes additionally offer Chat.
+ * Blocked agent panes offer Question. Passing isAgent=false returns Terminal only;
+ * existing callers using the default may offer Chat's truthful shell fallback.
  * Panel remains an internal snapshot fallback, not a competing primary mode.
  */
 export const getAvailableSurfaceModes = (
-  isBlocked: boolean
+  isBlocked: boolean,
+  isAgent = true
 ): ISurfaceMode[] => {
-  return isBlocked ? ['stream', 'question', 'history'] : ['stream', 'history']
+  if (!isAgent) {
+    return ['stream']
+  }
+  return isBlocked ? ['stream', 'question', 'chat'] : ['stream', 'chat']
 }
 
 export interface IPaneReadConfig {
@@ -51,8 +56,8 @@ export interface IPaneReadConfig {
 /**
  * Pure helper providing the pane read parameters and polling intervals for each surface mode.
  * - Panel: source 'visible', no lines, 1000ms active polling
- * - History: source 'recent-unwrapped', 1000 lines, 2000ms active polling
  * - Question: source 'detection', 2000ms polling when blocked
+ * - Chat: null (Chat polls structured conversation endpoint, not text pane read)
  * - Stream: null (observer streams over WebSocket, not pane read)
  */
 export const getPaneReadConfigForMode = (
@@ -70,12 +75,7 @@ export const getPaneReadConfigForMode = (
         source: 'visible',
         pollIntervalMs: 1000
       }
-    case 'history':
-      return {
-        source: 'recent-unwrapped',
-        lines: 1000,
-        pollIntervalMs: 2000
-      }
+    case 'chat':
     case 'stream':
       return null
   }

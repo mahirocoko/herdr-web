@@ -248,6 +248,61 @@ export const executeTerminalInput = async (
   }
 }
 
+/**
+ * Internal interactive-answer primitive, not a browser action. Text only: unlike
+ * executeTerminalInput this NEVER appends Enter. The prompt owner must keep its
+ * coordinator claim and revalidate target/session/phase before invoking it.
+ * Native reads and send_input are not an atomic conditional write.
+ */
+export const executePromptTextOnly = async (
+  paneId: string,
+  text: string,
+  timeoutMs = 5000
+): Promise<{ ok: boolean; output: string }> => {
+  if (getTransportMode() !== 'socket') {
+    throw new Error('Interactive text-only answers require socket transport')
+  }
+  if (
+    !text ||
+    /[\x00-\x1f\x7f-\x9f]/.test(text) ||
+    Buffer.byteLength(text, 'utf8') > 4096
+  ) {
+    throw new Error('Invalid interactive answer text')
+  }
+  const exists = await validatePaneExists(paneId, 3000)
+  if (!exists) {
+    throw new HerdrSocketError(
+      'pane_not_found',
+      `Pane "${paneId}" does not exist in the active Herdr session`
+    )
+  }
+  const result = await sendRawSocketRequest<{ type?: string }>(
+    'pane.send_input',
+    { pane_id: paneId, text },
+    { timeoutMs }
+  )
+  if (result.type !== 'pane_input_sent') {
+    throw new Error('Interactive answer acknowledgement is unknown')
+  }
+  return { ok: true, output: '' }
+}
+
+/** Private source prompt suggestion nicety; no browser ANSI read endpoint is added. */
+export const readPromptAnsi = async (
+  paneId: string,
+  timeoutMs = 1500
+): Promise<string> => {
+  if (getTransportMode() !== 'socket') return ''
+  if (!(await validatePaneExists(paneId, timeoutMs))) return ''
+  const result = await sendRawSocketRequest<any>(
+    'pane.read',
+    { pane_id: paneId, source: 'visible', format: 'ansi', strip_ansi: false },
+    { timeoutMs }
+  )
+  const text = result?.read?.text ?? result?.text
+  return typeof text === 'string' ? text : ''
+}
+
 export const readPaneContent = async (
   paneId: string,
   options: IPaneReadOptions = {},

@@ -13,6 +13,7 @@ import Button from '@/components/ui/button.tsx'
 
 export interface ITerminalImagePreviewProps {
   imagePath: string | null
+  sourceBlob?: Blob | null
   paneId?: string | null
   open: boolean
   onClose: () => void
@@ -23,6 +24,7 @@ const DEFAULT_ZOOM_INDEX = 2 // 1.0 (Fit baseline)
 
 export const TerminalImagePreview: FC<ITerminalImagePreviewProps> = ({
   imagePath,
+  sourceBlob = null,
   paneId = null,
   open,
   onClose
@@ -82,7 +84,7 @@ export const TerminalImagePreview: FC<ITerminalImagePreviewProps> = ({
 
   // Fetch image bytes when open and imagePath changes
   useEffect(() => {
-    if (!open || !imagePath) {
+    if (!open || (!imagePath && !sourceBlob)) {
       cleanupUrl()
       setError(null)
       setLoading(false)
@@ -104,10 +106,21 @@ export const TerminalImagePreview: FC<ITerminalImagePreviewProps> = ({
     setZoomIndex(DEFAULT_ZOOM_INDEX) // Reset zoom to 1.0 (Fit baseline)
     setNaturalSize(null)
 
+    if (sourceBlob) {
+      const url = URL.createObjectURL(sourceBlob)
+      activeUrlRef.current = url
+      setObjectUrl(url)
+      setLoading(false)
+      return () => {
+        controller.abort()
+        cleanupUrl()
+      }
+    }
+
     const fetchImage = async () => {
       try {
         const bodyPayload: { path: string; paneId?: string } = {
-          path: imagePath
+          path: imagePath!
         }
         if (paneId) {
           bodyPayload.paneId = paneId
@@ -164,7 +177,7 @@ export const TerminalImagePreview: FC<ITerminalImagePreviewProps> = ({
       controller.abort()
       cleanupUrl()
     }
-  }, [open, imagePath, paneId, cleanupUrl])
+  }, [open, imagePath, sourceBlob, paneId, cleanupUrl])
 
   const handleZoomIn = () => {
     setZoomIndex((prev) => Math.min(prev + 1, ZOOM_STEPS.length - 1))

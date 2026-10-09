@@ -60,12 +60,12 @@ Open **`http://127.0.0.1:8787`**.
 
 Herdr Web organizes an active Herdr session into canonical tabs across four dedicated reading surfaces:
 
-| Surface      | Best For                       | Behavior & Source                                                                                                                                                                               |
-| :----------- | :----------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Panel**    | Internal source fallback       | Source snapshot preserving whitespace, wrapping, semantic highlighting, auto-follow, and scroll position (`/api/pane/read?source=visible`, 1000ms polling). Not a primary header mode.          |
-| **History**  | Plain-text scrollback          | Bounded scrollback up to 1000 unwrapped rows (`/api/pane/read?source=recent-unwrapped&lines=1000`, 2000ms polling), text selection, and jump control.                                           |
-| **Question** | Long agent questions & choices | Explicit detection snapshot for blocked panes (`/api/pane/read?source=detection`, 2000ms polling). Status changes do not replace the surface being read.                                        |
-| **Terminal** | Default live reading surface   | Real-time ANSI observer streaming from `herdr terminal session observe` into `@xterm/xterm` (internal mode `stream`). Defaults for every selected pane; older source output remains in History. |
+| Surface      | Best For                       | Behavior & Source                                                                                                                                                                                                                            |
+| :----------- | :----------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Panel**    | Internal source fallback       | Source snapshot preserving whitespace, wrapping, semantic highlighting, auto-follow, and scroll position (`/api/pane/read?source=visible`, 1000ms polling). Not a primary header mode.                                                       |
+| **Chat**     | Agent conversation transcript  | Native Letta, Agy, Codex, Claude, OMP, OmO, GJC and PI readers on the macOS host (`/api/conversation`, 2000ms polling), with work/tool details, recorded metadata, files/media/math, branch/task records and typed interactive prompt cards. |
+| **Question** | Long agent questions & choices | Explicit detection snapshot for blocked panes (`/api/pane/read?source=detection`, 2000ms polling). Status changes do not replace the surface being read.                                                                                     |
+| **Terminal** | Default live reading surface   | Real-time ANSI observer streaming from `herdr terminal session observe` into `@xterm/xterm` (internal mode `stream`). Defaults for every selected pane; agent conversation is viewed in Chat.                                                |
 
 For polling and bridge lifecycle internals, see [Transport Architecture](docs/transport-architecture.md).
 

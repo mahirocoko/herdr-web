@@ -135,6 +135,13 @@ export interface ITabCloseTargetIdentity {
 
 export type IStrictActionRequest =
   | {
+      type: 'prompt-answer'
+      operationId: string
+      target: IActionTargetIdentity
+      promptId: string
+      answer: import('./interactive-prompt.ts').PromptAnswerIntent
+    }
+  | {
       type: 'prompt'
       operationId: string
       target: IActionTargetIdentity
@@ -183,7 +190,8 @@ export type ILifecycleActionRequest = Extract<
 
 export type IActionRequest = IStrictActionRequest
 
-export type ICatalogSourceKind = 'repo-config' | 'native-agent' | 'server-preset'
+export type ICatalogSourceKind =
+  'repo-config' | 'native-agent' | 'server-preset'
 
 export interface ICatalogItem {
   id: string
@@ -224,7 +232,8 @@ export interface INativeChoiceResponse {
   revision: number
 }
 
-export type IActionOutcome = 'acknowledged' | 'observed' | 'rejected' | 'unknown'
+export type IActionOutcome =
+  'acknowledged' | 'observed' | 'rejected' | 'unknown'
 
 export interface IActionResult {
   workspaceId?: string
@@ -265,7 +274,8 @@ export interface ITerminalClosed {
   reason?: string
 }
 
-export type ISnapshotStatus = 'loading' | 'connected' | 'reconnecting' | 'error' | 'empty'
+export type ISnapshotStatus =
+  'loading' | 'connected' | 'reconnecting' | 'error' | 'empty'
 
 export type IManifestSourceKind = 'remote' | 'local' | 'builtin' | 'unknown'
 

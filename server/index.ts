@@ -27,7 +27,18 @@ import {
   readPaneContent
 } from './herdr-adapter.ts'
 import { HerdrSocketError } from './herdr-socket.ts'
+import {
+  InteractivePromptService,
+  type IPromptDeps
+} from './interactive-prompt.ts'
 import { getSharedSnapshotBridge, SnapshotBridge } from './snapshot-bridge.ts'
+import {
+  readPaneConversation,
+  ConversationError
+} from './conversation/conversation-reader.ts'
+import { handleConversationOutputRequest } from './conversation/output-route.ts'
+import { handleConversationImageRequest } from './conversation/image-route.ts'
+import { handleFileViewerRequest } from './file-viewer.ts'
 import { getSharedPushService } from './push/service.ts'
 import { loadPushConfig } from './push/config.ts'
 import {
@@ -115,6 +126,7 @@ export interface ICreateServerOptions {
   startPushBridge?: boolean
   deps?: {
     coordinator?: OperationCoordinator
+    promptDeps?: IPromptDeps
     leaseManager?: TerminalControlLeaseManager
     snapshotBridge?: SnapshotBridge
     fetchSnapshot?: (timeoutMs?: number) => Promise<ISnapshotResult>
@@ -247,6 +259,10 @@ export const createServer = (
 ) => {
   const coordinator =
     options.deps?.coordinator ?? getSharedOperationCoordinator()
+  const interactivePrompts = new InteractivePromptService({
+    fetchSnapshot: options.deps?.fetchSnapshot,
+    ...options.deps?.promptDeps
+  })
   const leaseManager =
     options.deps?.leaseManager ??
     (options.deps?.coordinator
@@ -336,6 +352,151 @@ export const createServer = (
         return (
           pushService.getConfig()?.ownerLogin ?? loadPushConfig()?.ownerLogin
         )
+      }
+
+      if (pathname === '/api/files/view') {
+        return handleFileViewerRequest(req, {
+          ownerLogin: getConfiguredOwnerLogin(),
+          snapshot: options.deps?.fetchSnapshot ?? getHerdrSnapshot
+        })
+      }
+
+      if (pathname === '/api/conversation/image') {
+        return handleConversationImageRequest(req, {
+          ownerLogin: getConfiguredOwnerLogin(),
+          deps: {
+            fetchSnapshot: options.deps?.fetchSnapshot ?? getHerdrSnapshot
+          }
+        })
+      }
+
+      // Owner-only, opaque native recorded-output read; never a caller path.
+      if (pathname === '/api/conversation/output') {
+        return handleConversationOutputRequest(req, {
+          ownerLogin: getConfiguredOwnerLogin(),
+          deps: {
+            fetchSnapshot: options.deps?.fetchSnapshot ?? getHerdrSnapshot
+          }
+        })
+      }
+
+      // GET /api/conversation
+      if (req.method === 'GET' && pathname === '/api/conversation') {
+        const auth = validateOwnerAuth(
+          req,
+          hostHeader,
+          originHeader,
+          getConfiguredOwnerLogin(),
+          { requireOrigin: false }
+        )
+        if (!auth.allowed) {
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              error: auth.error || 'Forbidden: unauthorized'
+            }),
+            {
+              status: auth.status,
+              headers: {
+                'content-type': 'application/json',
+                'cache-control': 'no-store'
+              }
+            }
+          )
+        }
+
+        const paneId = url.searchParams.get('pane_id')
+        if (!paneId || paneId.trim().length === 0) {
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              error: 'pane_id query parameter is required'
+            }),
+            {
+              status: 400,
+              headers: {
+                'content-type': 'application/json',
+                'cache-control': 'no-store'
+              }
+            }
+          )
+        }
+
+        const before = url.searchParams.get('before')
+
+        try {
+          const conversation = await readPaneConversation(paneId.trim(), {
+            before: before ? before.trim() : null,
+            deps: {
+              fetchSnapshot: options.deps?.fetchSnapshot ?? getHerdrSnapshot
+            }
+          })
+          return new Response(JSON.stringify(conversation), {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+              'cache-control': 'no-store'
+            }
+          })
+        } catch (err) {
+          if (err instanceof ConversationError) {
+            return new Response(
+              JSON.stringify({ ok: false, error: err.message, code: err.code }),
+              {
+                status: err.status,
+                headers: {
+                  'content-type': 'application/json',
+                  'cache-control': 'no-store'
+                }
+              }
+            )
+          }
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              error: err instanceof Error ? err.message : String(err)
+            }),
+            {
+              status: 500,
+              headers: {
+                'content-type': 'application/json',
+                'cache-control': 'no-store'
+              }
+            }
+          )
+        }
+      }
+
+      // Owner-authenticated prompt observation. Never offers a shell-looking screen as an agent.
+      if (req.method === 'GET' && pathname === '/api/pane/prompt') {
+        const auth = validateOwnerAuth(
+          req,
+          hostHeader,
+          originHeader,
+          getConfiguredOwnerLogin(),
+          { requireOrigin: false }
+        )
+        if (!auth.allowed)
+          return Response.json(
+            { error: auth.error || 'Forbidden' },
+            { status: auth.status }
+          )
+        const pane = url.searchParams.get('pane')
+        if (!pane || !PANE_ID_REGEX.test(pane))
+          return Response.json({ error: 'Invalid pane' }, { status: 400 })
+        try {
+          return Response.json(await interactivePrompts.read(pane), {
+            headers: { 'cache-control': 'no-store' }
+          })
+        } catch {
+          return Response.json(
+            {
+              error:
+                'Interactive prompt evidence unavailable; inspect the terminal.'
+            },
+            { status: 409, headers: { 'cache-control': 'no-store' } }
+          )
+        }
       }
 
       // POST /api/action
@@ -494,6 +655,7 @@ export const createServer = (
 
           if (
             action.type === 'prompt' ||
+            action.type === 'prompt-answer' ||
             action.type === 'terminal-input' ||
             action.type === 'keys' ||
             action.type === 'tab-create'
@@ -524,7 +686,16 @@ export const createServer = (
             let responseBody: any
             let responseStatus = 200
 
-            if (action.type === 'prompt') {
+            if (action.type === 'prompt-answer') {
+              // The admitted claim stays held across every write and permitted queue cleanup.
+              const result = await interactivePrompts.answer(
+                action.target,
+                action.promptId,
+                action.answer
+              )
+              responseBody = result
+              responseStatus = result.status
+            } else if (action.type === 'prompt') {
               const promptFn = options.deps?.executePrompt ?? executePrompt
               const res = await promptFn(action.target.paneId, action.text)
               responseBody = { ok: true, outcome: 'acknowledged', result: res }

@@ -5,9 +5,10 @@ import type {
   IPane,
   ISnapshotResult,
   ITabCreateTargetIdentity,
-  IWorkspaceCreateSource,
+  IWorkspaceCreateSource
 } from './types.ts'
 
+import { validatePromptAnswerIntent } from '../src/types/interactive-prompt.ts'
 import { CANONICAL_TERMINAL_KEYS } from '../src/utils/terminal-keys.ts'
 
 export const ALLOWED_KEYS = new Set<string>(CANONICAL_TERMINAL_KEYS)
@@ -18,7 +19,7 @@ export const ALLOWED_LOCAL_HOSTS = new Set([
   '127.0.0.1:5173',
   'localhost:5173',
   '127.0.0.1',
-  'localhost',
+  'localhost'
 ])
 
 export const PANE_ID_REGEX = /^[a-zA-Z0-9_-]+:[a-zA-Z0-9_-]+$/
@@ -45,13 +46,13 @@ export const APPROVED_DEV_APP_PORTS = new Set(['8787', '5173'])
 export const APPROVED_LOOPBACK_HOSTNAMES = new Set(['127.0.0.1', 'localhost'])
 
 export const parseHostAndPort = (
-  hostStr: string,
+  hostStr: string
 ): { hostname: string; port: string } => {
   const colonIndex = hostStr.lastIndexOf(':')
   if (colonIndex !== -1) {
     return {
       hostname: hostStr.slice(0, colonIndex),
-      port: hostStr.slice(colonIndex + 1),
+      port: hostStr.slice(colonIndex + 1)
     }
   }
   return { hostname: hostStr, port: '' }
@@ -59,7 +60,7 @@ export const parseHostAndPort = (
 
 export const isOriginAllowed = (
   originHeader?: string | null,
-  hostHeader?: string | null,
+  hostHeader?: string | null
 ): boolean => {
   if (!originHeader || !hostHeader) return false
   try {
@@ -105,7 +106,7 @@ export const isOriginAllowed = (
 
 export const isApprovedLoopback = (
   hostHeader?: string | null,
-  originHeader?: string | null,
+  originHeader?: string | null
 ): boolean => {
   if (!hostHeader || !originHeader) return false
   try {
@@ -115,7 +116,7 @@ export const isApprovedLoopback = (
 
     const isHostLoopback = APPROVED_LOOPBACK_HOSTNAMES.has(hostParsed.hostname)
     const isOriginLoopback = APPROVED_LOOPBACK_HOSTNAMES.has(
-      originParsed.hostname,
+      originParsed.hostname
     )
 
     if (!isHostLoopback || !isOriginLoopback) {
@@ -161,7 +162,7 @@ export const validateOwnerAuth = (
   hostHeader?: string | null,
   originHeader?: string | null,
   configuredOwnerLogin?: string,
-  options: IOwnerAuthOptions = {},
+  options: IOwnerAuthOptions = {}
 ): IOwnerAuthResult => {
   const requireOrigin = options.requireOrigin ?? true
 
@@ -171,14 +172,14 @@ export const validateOwnerAuth = (
       return {
         allowed: false,
         status: 403,
-        error: 'Forbidden: origin not authorized',
+        error: 'Forbidden: origin not authorized'
       }
     }
   } else if (requireOrigin) {
     return {
       allowed: false,
       status: 403,
-      error: 'Forbidden: origin not authorized',
+      error: 'Forbidden: origin not authorized'
     }
   }
 
@@ -186,7 +187,7 @@ export const validateOwnerAuth = (
     return {
       allowed: false,
       status: 403,
-      error: 'Forbidden: host not authorized',
+      error: 'Forbidden: host not authorized'
     }
   }
 
@@ -204,7 +205,7 @@ export const validateOwnerAuth = (
       return {
         allowed: false,
         status: 500,
-        error: 'Server misconfigured: owner login not set',
+        error: 'Server misconfigured: owner login not set'
       }
     }
 
@@ -213,7 +214,7 @@ export const validateOwnerAuth = (
       return {
         allowed: false,
         status: 403,
-        error: 'Forbidden: Tailnet user not authorized',
+        error: 'Forbidden: Tailnet user not authorized'
       }
     }
 
@@ -231,7 +232,7 @@ export const validateOwnerAuth = (
   return {
     allowed: false,
     status: 403,
-    error: 'Forbidden: unauthorized network context',
+    error: 'Forbidden: unauthorized network context'
   }
 }
 
@@ -244,18 +245,18 @@ export const MAX_CLOSE_MANIFEST_IDS = 64
 
 const validateCloseManifestIds = (
   value: unknown,
-  fieldName: string,
+  fieldName: string
 ): IValidationResult<string[]> => {
   if (!Array.isArray(value)) {
     return {
       valid: false,
-      error: `Missing or invalid expected "${fieldName}": must be an array`,
+      error: `Missing or invalid expected "${fieldName}": must be an array`
     }
   }
   if (value.length > MAX_CLOSE_MANIFEST_IDS) {
     return {
       valid: false,
-      error: `Expected "${fieldName}" exceeds maximum of ${MAX_CLOSE_MANIFEST_IDS} IDs`,
+      error: `Expected "${fieldName}" exceeds maximum of ${MAX_CLOSE_MANIFEST_IDS} IDs`
     }
   }
   const normalized: string[] = []
@@ -264,7 +265,7 @@ const validateCloseManifestIds = (
     if (typeof item !== 'string') {
       return {
         valid: false,
-        error: `Invalid expected "${fieldName}": every ID must be a string`,
+        error: `Invalid expected "${fieldName}": every ID must be a string`
       }
     }
     const id = item.trim()
@@ -275,13 +276,13 @@ const validateCloseManifestIds = (
     ) {
       return {
         valid: false,
-        error: `Invalid expected "${fieldName}" ID: must be a safe literal token`,
+        error: `Invalid expected "${fieldName}" ID: must be a safe literal token`
       }
     }
     if (seen.has(id)) {
       return {
         valid: false,
-        error: `Duplicate expected "${fieldName}" ID "${id}"`,
+        error: `Duplicate expected "${fieldName}" ID "${id}"`
       }
     }
     seen.add(id)
@@ -292,7 +293,7 @@ const validateCloseManifestIds = (
 }
 
 export const validateActionRequest = (
-  body: unknown,
+  body: unknown
 ): IValidationResult<IActionRequest> => {
   if (!body || typeof body !== 'object') {
     return { valid: false, error: 'Request body must be a JSON object' }
@@ -303,6 +304,7 @@ export const validateActionRequest = (
 
   if (
     type !== 'prompt' &&
+    type !== 'prompt-answer' &&
     type !== 'keys' &&
     type !== 'terminal-input' &&
     type !== 'tab-create' &&
@@ -313,7 +315,7 @@ export const validateActionRequest = (
     return {
       valid: false,
       error:
-        'Action type must be "prompt", "keys", "terminal-input", "tab-create", "workspace-create", "workspace-close", or "tab-close"',
+        'Action type must be "prompt", "keys", "terminal-input", "tab-create", "workspace-create", "workspace-close", or "tab-close"'
     }
   }
 
@@ -328,7 +330,7 @@ export const validateActionRequest = (
     return {
       valid: false,
       error:
-        'Invalid "operationId": must be a safe token (1-128 chars, alphanumeric, underscore, period, colon, hyphen)',
+        'Invalid "operationId": must be a safe token (1-128 chars, alphanumeric, underscore, period, colon, hyphen)'
     }
   }
 
@@ -338,7 +340,7 @@ export const validateActionRequest = (
       if (!allowedKeys.has(key)) {
         return {
           valid: false,
-          error: `Unsupported field "${key}" on workspace-create action`,
+          error: `Unsupported field "${key}" on workspace-create action`
         }
       }
     }
@@ -353,7 +355,7 @@ export const validateActionRequest = (
         return {
           valid: false,
           error:
-            'label exceeds maximum length of 100 characters or contains control characters',
+            'label exceeds maximum length of 100 characters or contains control characters'
         }
       }
       label = trimmedLabel
@@ -368,7 +370,7 @@ export const validateActionRequest = (
       ) {
         return {
           valid: false,
-          error: 'Invalid "source": must be a non-null object when supplied',
+          error: 'Invalid "source": must be a non-null object when supplied'
         }
       }
       const rawSource = raw.source as Record<string, unknown>
@@ -377,7 +379,7 @@ export const validateActionRequest = (
         if (!allowedSourceKeys.has(key)) {
           return {
             valid: false,
-            error: `Unsupported field "${key}" on workspace-create source`,
+            error: `Unsupported field "${key}" on workspace-create source`
           }
         }
       }
@@ -395,7 +397,7 @@ export const validateActionRequest = (
       ) {
         return {
           valid: false,
-          error: 'Invalid source "workspaceId": must be a safe token',
+          error: 'Invalid source "workspaceId": must be a safe token'
         }
       }
 
@@ -405,7 +407,7 @@ export const validateActionRequest = (
       ) {
         return {
           valid: false,
-          error: 'Invalid source paneId: must match format "ws:p1"',
+          error: 'Invalid source paneId: must match format "ws:p1"'
         }
       }
       const paneId = rawSource.paneId.trim()
@@ -423,7 +425,7 @@ export const validateActionRequest = (
       ) {
         return {
           valid: false,
-          error: 'Invalid source "terminalId": must be a safe token',
+          error: 'Invalid source "terminalId": must be a safe token'
         }
       }
 
@@ -436,8 +438,8 @@ export const validateActionRequest = (
         type: 'workspace-create',
         operationId,
         ...(label !== undefined ? { label } : {}),
-        ...(source !== undefined ? { source } : {}),
-      },
+        ...(source !== undefined ? { source } : {})
+      }
     }
   }
 
@@ -447,7 +449,7 @@ export const validateActionRequest = (
       if (!allowedKeys.has(key)) {
         return {
           valid: false,
-          error: `Unsupported field "${key}" on workspace-close action`,
+          error: `Unsupported field "${key}" on workspace-close action`
         }
       }
     }
@@ -465,7 +467,7 @@ export const validateActionRequest = (
       if (!allowedTargetKeys.has(key)) {
         return {
           valid: false,
-          error: `Unsupported field "${key}" on workspace-close target`,
+          error: `Unsupported field "${key}" on workspace-close target`
         }
       }
     }
@@ -477,7 +479,7 @@ export const validateActionRequest = (
     ) {
       return {
         valid: false,
-        error: 'Missing or invalid workspace-close target "expected" object',
+        error: 'Missing or invalid workspace-close target "expected" object'
       }
     }
     const rawExpected = rawTarget.expected as Record<string, unknown>
@@ -486,7 +488,7 @@ export const validateActionRequest = (
       if (!allowedExpectedKeys.has(key)) {
         return {
           valid: false,
-          error: `Unsupported field "${key}" on workspace-close expected manifest`,
+          error: `Unsupported field "${key}" on workspace-close expected manifest`
         }
       }
     }
@@ -495,7 +497,7 @@ export const validateActionRequest = (
       return { valid: false, error: tabIdsResult.error }
     const paneIdsResult = validateCloseManifestIds(
       rawExpected.paneIds,
-      'paneIds',
+      'paneIds'
     )
     if (!paneIdsResult.valid || !paneIdsResult.data)
       return { valid: false, error: paneIdsResult.error }
@@ -513,7 +515,7 @@ export const validateActionRequest = (
     ) {
       return {
         valid: false,
-        error: 'Invalid target "workspaceId": must be a safe token',
+        error: 'Invalid target "workspaceId": must be a safe token'
       }
     }
 
@@ -526,10 +528,10 @@ export const validateActionRequest = (
           workspaceId,
           expected: {
             tabIds: tabIdsResult.data,
-            paneIds: paneIdsResult.data,
-          },
-        },
-      },
+            paneIds: paneIdsResult.data
+          }
+        }
+      }
     }
   }
 
@@ -539,7 +541,7 @@ export const validateActionRequest = (
       if (!allowedKeys.has(key)) {
         return {
           valid: false,
-          error: `Unsupported field "${key}" on tab-close action`,
+          error: `Unsupported field "${key}" on tab-close action`
         }
       }
     }
@@ -557,7 +559,7 @@ export const validateActionRequest = (
       if (!allowedTargetKeys.has(key)) {
         return {
           valid: false,
-          error: `Unsupported field "${key}" on tab-close target`,
+          error: `Unsupported field "${key}" on tab-close target`
         }
       }
     }
@@ -569,7 +571,7 @@ export const validateActionRequest = (
     ) {
       return {
         valid: false,
-        error: 'Missing or invalid tab-close target "expected" object',
+        error: 'Missing or invalid tab-close target "expected" object'
       }
     }
     const rawExpected = rawTarget.expected as Record<string, unknown>
@@ -578,13 +580,13 @@ export const validateActionRequest = (
       if (!allowedExpectedKeys.has(key)) {
         return {
           valid: false,
-          error: `Unsupported field "${key}" on tab-close expected manifest`,
+          error: `Unsupported field "${key}" on tab-close expected manifest`
         }
       }
     }
     const paneIdsResult = validateCloseManifestIds(
       rawExpected.paneIds,
-      'paneIds',
+      'paneIds'
     )
     if (!paneIdsResult.valid || !paneIdsResult.data)
       return { valid: false, error: paneIdsResult.error }
@@ -602,7 +604,7 @@ export const validateActionRequest = (
     ) {
       return {
         valid: false,
-        error: 'Invalid target "workspaceId": must be a safe token',
+        error: 'Invalid target "workspaceId": must be a safe token'
       }
     }
 
@@ -616,7 +618,7 @@ export const validateActionRequest = (
     if (tabId.length > 128 || !CONSERVATIVE_TOKEN_REGEX.test(tabId)) {
       return {
         valid: false,
-        error: 'Invalid target "tabId": must be a safe token',
+        error: 'Invalid target "tabId": must be a safe token'
       }
     }
 
@@ -628,9 +630,9 @@ export const validateActionRequest = (
         target: {
           workspaceId,
           tabId,
-          expected: { paneIds: paneIdsResult.data },
-        },
-      },
+          expected: { paneIds: paneIdsResult.data }
+        }
+      }
     }
   }
 
@@ -640,13 +642,13 @@ export const validateActionRequest = (
       'operationId',
       'workspaceId',
       'target',
-      'label',
+      'label'
     ])
     for (const key of Object.keys(raw)) {
       if (!allowedKeys.has(key)) {
         return {
           valid: false,
-          error: `Unsupported field "${key}" on tab-create action`,
+          error: `Unsupported field "${key}" on tab-create action`
         }
       }
     }
@@ -667,7 +669,7 @@ export const validateActionRequest = (
       if (!allowedTargetKeys.has(key)) {
         return {
           valid: false,
-          error: `Unsupported field "${key}" on tab-create target`,
+          error: `Unsupported field "${key}" on tab-create target`
         }
       }
     }
@@ -679,7 +681,7 @@ export const validateActionRequest = (
   ) {
     return {
       valid: false,
-      error: 'Invalid target paneId: must match format "ws:p1"',
+      error: 'Invalid target paneId: must match format "ws:p1"'
     }
   }
   const paneId = rawTarget.paneId.trim()
@@ -695,7 +697,7 @@ export const validateActionRequest = (
     return {
       valid: false,
       error:
-        'Invalid target "terminalId": must be a safe token (1-128 chars, alphanumeric, underscore, period, colon, hyphen)',
+        'Invalid target "terminalId": must be a safe token (1-128 chars, alphanumeric, underscore, period, colon, hyphen)'
     }
   }
 
@@ -724,7 +726,7 @@ export const validateActionRequest = (
         return {
           valid: false,
           error:
-            'label exceeds maximum length of 100 characters or contains control characters',
+            'label exceeds maximum length of 100 characters or contains control characters'
         }
       }
       label = trimmedLabel
@@ -738,10 +740,10 @@ export const validateActionRequest = (
         workspaceId,
         target: {
           paneId,
-          terminalId,
+          terminalId
         },
-        ...(label !== undefined ? { label } : {}),
-      },
+        ...(label !== undefined ? { label } : {})
+      }
     }
   }
 
@@ -752,7 +754,7 @@ export const validateActionRequest = (
     return {
       valid: false,
       error:
-        'Invalid or missing target "expectedMode": must be "agent", "blocked-agent", or "shell"',
+        'Invalid or missing target "expectedMode": must be "agent", "blocked-agent", or "shell"'
     }
   }
   const expectedMode = rawTarget.expectedMode as IExpectedPaneMode
@@ -765,7 +767,7 @@ export const validateActionRequest = (
     if (typeof rawTarget.agentSessionId !== 'string') {
       return {
         valid: false,
-        error: 'Invalid target "agentSessionId": must be a string',
+        error: 'Invalid target "agentSessionId": must be a string'
       }
     }
     const trimmedSession = rawTarget.agentSessionId.trim()
@@ -777,7 +779,7 @@ export const validateActionRequest = (
       return {
         valid: false,
         error:
-          'Invalid target "agentSessionId": must be a safe token (1-256 chars, alphanumeric, underscore, period, colon, hyphen)',
+          'Invalid target "agentSessionId": must be a safe token (1-256 chars, alphanumeric, underscore, period, colon, hyphen)'
       }
     }
     agentSessionId = trimmedSession
@@ -787,14 +789,53 @@ export const validateActionRequest = (
     paneId,
     terminalId,
     expectedMode,
-    ...(agentSessionId !== undefined ? { agentSessionId } : {}),
+    ...(agentSessionId !== undefined ? { agentSessionId } : {})
+  }
+
+  if (type === 'prompt-answer') {
+    const allowed = new Set([
+      'type',
+      'operationId',
+      'target',
+      'promptId',
+      'answer'
+    ])
+    const targetKeys = new Set([
+      'paneId',
+      'terminalId',
+      'expectedMode',
+      'agentSessionId'
+    ])
+    if (
+      Object.keys(raw).some((key) => !allowed.has(key)) ||
+      Object.keys(rawTarget).some((key) => !targetKeys.has(key)) ||
+      expectedMode === 'shell'
+    )
+      return {
+        valid: false,
+        error: 'Invalid interactive answer target or fields'
+      }
+    const answer = validatePromptAnswerIntent(raw.answer)
+    if (
+      !answer ||
+      typeof raw.promptId !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(raw.promptId)
+    )
+      return {
+        valid: false,
+        error: 'Invalid interactive prompt occurrence or answer intent'
+      }
+    return {
+      valid: true,
+      data: { type, operationId, target, promptId: raw.promptId, answer }
+    }
   }
 
   if (type === 'prompt') {
     if (expectedMode !== 'agent') {
       return {
         valid: false,
-        error: `Action type "prompt" requires target expectedMode "agent", received "${expectedMode}"`,
+        error: `Action type "prompt" requires target expectedMode "agent", received "${expectedMode}"`
       }
     }
     if (typeof raw.text !== 'string' || raw.text.trim().length === 0) {
@@ -803,7 +844,7 @@ export const validateActionRequest = (
     if (raw.text.length > 4096) {
       return {
         valid: false,
-        error: 'Prompt text exceeds maximum length of 4096 characters',
+        error: 'Prompt text exceeds maximum length of 4096 characters'
       }
     }
     return {
@@ -812,8 +853,8 @@ export const validateActionRequest = (
         type: 'prompt',
         operationId,
         target,
-        text: raw.text,
-      },
+        text: raw.text
+      }
     }
   }
 
@@ -821,19 +862,19 @@ export const validateActionRequest = (
     if (expectedMode !== 'blocked-agent' && expectedMode !== 'shell') {
       return {
         valid: false,
-        error: `Action type "terminal-input" requires target expectedMode "blocked-agent" or "shell", received "${expectedMode}"`,
+        error: `Action type "terminal-input" requires target expectedMode "blocked-agent" or "shell", received "${expectedMode}"`
       }
     }
     if (typeof raw.text !== 'string' || raw.text.trim().length === 0) {
       return {
         valid: false,
-        error: 'Terminal input text must be a non-empty string',
+        error: 'Terminal input text must be a non-empty string'
       }
     }
     if (raw.text.length > 4096) {
       return {
         valid: false,
-        error: 'Terminal input text exceeds maximum length of 4096 characters',
+        error: 'Terminal input text exceeds maximum length of 4096 characters'
       }
     }
     return {
@@ -842,8 +883,8 @@ export const validateActionRequest = (
         type: 'terminal-input',
         operationId,
         target,
-        text: raw.text,
-      },
+        text: raw.text
+      }
     }
   }
 
@@ -851,13 +892,13 @@ export const validateActionRequest = (
     if (!Array.isArray(raw.keys) || raw.keys.length === 0) {
       return {
         valid: false,
-        error: 'Keys must be a non-empty array of strings',
+        error: 'Keys must be a non-empty array of strings'
       }
     }
     if (raw.keys.length > 16) {
       return {
         valid: false,
-        error: 'Keys array exceeds maximum size of 16 keys',
+        error: 'Keys array exceeds maximum size of 16 keys'
       }
     }
     const cleanKeys: string[] = []
@@ -869,7 +910,7 @@ export const validateActionRequest = (
       if (!ALLOWED_KEYS.has(lower)) {
         return {
           valid: false,
-          error: `Unauthorized key: "${k}". Allowed keys: ${Array.from(ALLOWED_KEYS).join(', ')}`,
+          error: `Unauthorized key: "${k}". Allowed keys: ${Array.from(ALLOWED_KEYS).join(', ')}`
         }
       }
       cleanKeys.push(lower)
@@ -880,8 +921,8 @@ export const validateActionRequest = (
         type: 'keys',
         operationId,
         target,
-        keys: cleanKeys,
-      },
+        keys: cleanKeys
+      }
     }
   }
 
@@ -895,7 +936,7 @@ export const validateActionRequest = (
  */
 export const isAgentPane = (
   pane?: Partial<IPane> | null,
-  snapshotAgents?: any[] | null,
+  snapshotAgents?: any[] | null
 ): boolean => {
   if (!pane) return false
 
@@ -929,7 +970,7 @@ export const isAgentPane = (
     snapshotAgents.length > 0
   ) {
     const hasMatchingAgent = snapshotAgents.some(
-      (a) => a && (a.target === pane.pane_id || a.pane_id === pane.pane_id),
+      (a) => a && (a.target === pane.pane_id || a.pane_id === pane.pane_id)
     )
     if (hasMatchingAgent) {
       return true
@@ -950,7 +991,7 @@ export interface ITargetPreflightResult {
 export const verifyTargetAgainstSnapshot = (
   snapshot: ISnapshotResult,
   target: IActionTargetIdentity | ITabCreateTargetIdentity,
-  options: { isTabCreate?: boolean; actionType?: string } = {},
+  options: { isTabCreate?: boolean; actionType?: string } = {}
 ): ITargetPreflightResult => {
   if (
     !Array.isArray(snapshot.workspaces) ||
@@ -961,25 +1002,25 @@ export const verifyTargetAgainstSnapshot = (
       ok: false,
       status: 502,
       error:
-        'Authoritative snapshot is malformed: workspaces, tabs, and panes must be arrays',
+        'Authoritative snapshot is malformed: workspaces, tabs, and panes must be arrays'
     }
   }
 
   const matchingPanes = snapshot.panes.filter(
-    (pane) => pane && pane.pane_id === target.paneId,
+    (pane) => pane && pane.pane_id === target.paneId
   )
   if (matchingPanes.length === 0) {
     return {
       ok: false,
       status: 404,
-      error: `Pane "${target.paneId}" not found in active session`,
+      error: `Pane "${target.paneId}" not found in active session`
     }
   }
   if (matchingPanes.length !== 1) {
     return {
       ok: false,
       status: 409,
-      error: `Ambiguous duplicate pane ID "${target.paneId}" in active session`,
+      error: `Ambiguous duplicate pane ID "${target.paneId}" in active session`
     }
   }
   const targetPane = matchingPanes[0]
@@ -988,7 +1029,7 @@ export const verifyTargetAgainstSnapshot = (
     return {
       ok: false,
       status: 409,
-      error: `Terminal replacement detected: pane "${target.paneId}" terminal is "${targetPane.terminal_id ?? ''}", expected "${target.terminalId}"`,
+      error: `Terminal replacement detected: pane "${target.paneId}" terminal is "${targetPane.terminal_id ?? ''}", expected "${target.terminalId}"`
     }
   }
 
@@ -1004,7 +1045,7 @@ export const verifyTargetAgainstSnapshot = (
       return {
         ok: false,
         status: 409,
-        error: `Source pane "${target.paneId}" has no usable current working directory`,
+        error: `Source pane "${target.paneId}" has no usable current working directory`
       }
     }
     return { ok: true, pane: targetPane, derivedCwd }
@@ -1015,8 +1056,7 @@ export const verifyTargetAgainstSnapshot = (
   const paneAgentSession = targetPane.agent_session
   const agents = snapshot.agents || []
   const owningAgent = agents.find(
-    (a: any) =>
-      a && (a.target === target.paneId || a.pane_id === target.paneId),
+    (a: any) => a && (a.target === target.paneId || a.pane_id === target.paneId)
   )
 
   // Canonical agent ownership evidence (identical to Terminal Control)
@@ -1034,7 +1074,7 @@ export const verifyTargetAgainstSnapshot = (
     return {
       ok: false,
       status: 409,
-      error: `Expected mode mismatch: expected "${actionTarget.expectedMode}", but pane is currently "${computedMode}"`,
+      error: `Expected mode mismatch: expected "${actionTarget.expectedMode}", but pane is currently "${computedMode}"`
     }
   }
 
@@ -1045,7 +1085,7 @@ export const verifyTargetAgainstSnapshot = (
     return {
       ok: false,
       status: 409,
-      error: `Action type "prompt" requires expectedMode "agent", received "${actionTarget.expectedMode}"`,
+      error: `Action type "prompt" requires expectedMode "agent", received "${actionTarget.expectedMode}"`
     }
   }
 
@@ -1057,7 +1097,7 @@ export const verifyTargetAgainstSnapshot = (
     return {
       ok: false,
       status: 409,
-      error: `Action type "terminal-input" requires expectedMode "blocked-agent" or "shell", received "${actionTarget.expectedMode}"`,
+      error: `Action type "terminal-input" requires expectedMode "blocked-agent" or "shell", received "${actionTarget.expectedMode}"`
     }
   }
 
@@ -1076,14 +1116,14 @@ export const verifyTargetAgainstSnapshot = (
         return {
           ok: false,
           status: 409,
-          error: `Missing required agentSessionId for pane "${actionTarget.paneId}": pane has active session "${authoritativeSessionId}"`,
+          error: `Missing required agentSessionId for pane "${actionTarget.paneId}": pane has active session "${authoritativeSessionId}"`
         }
       }
       if (actionTarget.agentSessionId !== authoritativeSessionId) {
         return {
           ok: false,
           status: 409,
-          error: `Agent session replacement detected: expected "${actionTarget.agentSessionId}", got "${authoritativeSessionId}"`,
+          error: `Agent session replacement detected: expected "${actionTarget.agentSessionId}", got "${authoritativeSessionId}"`
         }
       }
     } else {
@@ -1091,7 +1131,7 @@ export const verifyTargetAgainstSnapshot = (
         return {
           ok: false,
           status: 409,
-          error: `Agent session mismatch: caller specified "${actionTarget.agentSessionId}", but pane has no active session`,
+          error: `Agent session mismatch: caller specified "${actionTarget.agentSessionId}", but pane has no active session`
         }
       }
     }
@@ -1101,7 +1141,7 @@ export const verifyTargetAgainstSnapshot = (
       return {
         ok: false,
         status: 409,
-        error: `Agent session mismatch: caller specified agentSessionId for shell pane`,
+        error: `Agent session mismatch: caller specified agentSessionId for shell pane`
       }
     }
   }
@@ -1112,11 +1152,11 @@ export const verifyTargetAgainstSnapshot = (
 export const ALLOWED_PANE_READ_SOURCES = new Set([
   'detection',
   'visible',
-  'recent-unwrapped',
+  'recent-unwrapped'
 ])
 
 export const validatePaneReadParams = (
-  url: URL,
+  url: URL
 ): IValidationResult<{
   pane: string
   source: 'detection' | 'visible' | 'recent-unwrapped'
@@ -1132,7 +1172,7 @@ export const validatePaneReadParams = (
   if (!ALLOWED_PANE_READ_SOURCES.has(sourceClean)) {
     return {
       valid: false,
-      error: `Invalid source: "${rawSource}". Allowed sources: ${Array.from(ALLOWED_PANE_READ_SOURCES).join(', ')}`,
+      error: `Invalid source: "${rawSource}". Allowed sources: ${Array.from(ALLOWED_PANE_READ_SOURCES).join(', ')}`
     }
   }
 
@@ -1143,7 +1183,7 @@ export const validatePaneReadParams = (
     if (isNaN(parsed) || parsed < 1 || parsed > 1000) {
       return {
         valid: false,
-        error: 'lines must be an integer between 1 and 1000',
+        error: 'lines must be an integer between 1 and 1000'
       }
     }
     lines = parsed
@@ -1154,13 +1194,13 @@ export const validatePaneReadParams = (
     data: {
       pane: pane.trim(),
       source: sourceClean as 'detection' | 'visible' | 'recent-unwrapped',
-      lines,
-    },
+      lines
+    }
   }
 }
 
 export const validateTerminalParams = (
-  url: URL,
+  url: URL
 ): IValidationResult<{ pane: string; cols: number; rows: number }> => {
   const pane = url.searchParams.get('pane')
   if (!pane || !PANE_ID_REGEX.test(pane.trim())) {
@@ -1178,7 +1218,7 @@ export const validateTerminalParams = (
     if (isNaN(parsed) || parsed < 20 || parsed > 500) {
       return {
         valid: false,
-        error: 'cols must be an integer between 20 and 500',
+        error: 'cols must be an integer between 20 and 500'
       }
     }
     cols = parsed
@@ -1189,7 +1229,7 @@ export const validateTerminalParams = (
     if (isNaN(parsed) || parsed < 5 || parsed > 200) {
       return {
         valid: false,
-        error: 'rows must be an integer between 5 and 200',
+        error: 'rows must be an integer between 5 and 200'
       }
     }
     rows = parsed
@@ -1200,13 +1240,13 @@ export const validateTerminalParams = (
     data: {
       pane: pane.trim(),
       cols,
-      rows,
-    },
+      rows
+    }
   }
 }
 
 export const validateAgentExplainParams = (
-  url: URL,
+  url: URL
 ): IValidationResult<{ pane: string }> => {
   const keys = Array.from(url.searchParams.keys())
   if (!url.searchParams.has('pane')) {
@@ -1221,14 +1261,14 @@ export const validateAgentExplainParams = (
   if (!pane || !PANE_ID_REGEX.test(pane.trim())) {
     return {
       valid: false,
-      error: 'Invalid "pane" query param: must match format "ws:p1"',
+      error: 'Invalid "pane" query param: must match format "ws:p1"'
     }
   }
 
   return {
     valid: true,
     data: {
-      pane: pane.trim(),
-    },
+      pane: pane.trim()
+    }
   }
 }

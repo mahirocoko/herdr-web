@@ -2,17 +2,32 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FC } from 'react'
 import { useNavigate, useOutletContext } from 'react-router'
 import { usePaneRead } from '@/hooks/use-pane-read.ts'
+import { useInteractivePrompt } from '@/hooks/use-interactive-prompt.ts'
+import { PromptCard } from '@/components/prompt-card.tsx'
+import {
+  answerFromText,
+  answerHint,
+  answerRefusal,
+  needsConfirmation
+} from '@/utils/prompt-answer.ts'
+import type { PromptAnswerIntent } from '@/types/interactive-prompt.ts'
 import { sendAction } from '@/services/api-client.ts'
 import HorizonHeader from '@/components/horizon-header.tsx'
 import AttentionHorizon from '@/components/attention-horizon.tsx'
 import TerminalCanvas from '@/components/terminal-canvas.tsx'
 import QuestionView from '@/components/question-view.tsx'
 import PanelView from '@/components/panel-view.tsx'
-import HistoryView from '@/components/history-view.tsx'
+import ChatView from '@/components/chat-view.tsx'
+import ChatControls from '@/components/chat-controls.tsx'
 import PaneDrawer from '@/components/pane-drawer.tsx'
 import SpaceDrawer from '@/components/space-drawer.tsx'
 import SidebarRoster from '@/components/sidebar-roster.tsx'
-import { Sheet, SheetContent } from '@/components/ui/sheet.tsx'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle
+} from '@/components/ui/sheet.tsx'
 import ThumbDeck from '@/components/thumb-deck.tsx'
 import PromptComposer from '@/components/prompt-composer.tsx'
 import Button from '@/components/ui/button.tsx'
@@ -83,10 +98,12 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
     useState<string | null>(null)
 
   const [isBusy, setIsBusy] = useState(false)
+  const [isChatKeysOpen, setIsChatKeysOpen] = useState(false)
   const isBusyRef = useRef(isBusy)
   isBusyRef.current = isBusy
   const [actionError, setActionError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ISurfaceMode>('stream')
+  useEffect(() => setIsChatKeysOpen(false), [selectedPaneId, viewMode])
   const viewModeRef = useRef<ISurfaceMode>(viewMode)
   viewModeRef.current = viewMode
 
@@ -381,19 +398,6 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
     pollIntervalMs: viewMode === 'panel' ? 1000 : 0
   })
 
-  const {
-    content: historyContent,
-    isLoading: isHistoryLoading,
-    error: historyError,
-    refetch: refetchHistory
-  } = usePaneRead({
-    paneId: selectedPaneId,
-    source: 'recent-unwrapped',
-    lines: 1000,
-    isEnabled: viewMode === 'history',
-    pollIntervalMs: viewMode === 'history' ? 2000 : 0
-  })
-
   const isAgentPaneForControl = isAgentPane(selectedPane, snapshot?.agents)
 
   const refetchActiveSurface = async () => {
@@ -401,12 +405,53 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
       await refetchQuestion()
     } else if (viewMode === 'panel') {
       await refetchPanel()
-    } else if (viewMode === 'history') {
-      await refetchHistory()
     }
   }
 
   const targetResult = deriveActionTarget(selectedPane, snapshot?.agents)
+  const currentActionTargetRef = useRef(targetResult.target)
+  currentActionTargetRef.current = targetResult.target
+  const interactive = useInteractivePrompt(
+    targetResult.target ?? undefined,
+    viewMode === 'chat' && isAgentPaneForControl
+  )
+  const [composerDraft, setComposerDraft] = useState('')
+  const [chatSend, setChatSend] = useState<{
+    paneId: string
+    revision: number
+  } | null>(null)
+  const markChatSend = () => {
+    if (viewMode === 'chat' && selectedPaneId)
+      setChatSend((previous) => ({
+        paneId: selectedPaneId,
+        revision: (previous?.revision ?? 0) + 1
+      }))
+  }
+  const [typedPromptAnswer, setTypedPromptAnswer] = useState<{
+    id: string
+    answer: PromptAnswerIntent
+    draft: string
+  } | null>(null)
+  useEffect(() => {
+    setTypedPromptAnswer(null)
+  }, [selectedPaneId, interactive.prompt?.id])
+  const answerInteractivePrompt = async (answer: PromptAnswerIntent) => {
+    if (isBusyRef.current)
+      return {
+        ok: false,
+        outcome: 'rejected' as const,
+        error: 'Another input is in flight.'
+      }
+    isBusyRef.current = true
+    setIsBusy(true)
+    try {
+      markChatSend()
+      return await interactive.answer(answer)
+    } finally {
+      isBusyRef.current = false
+      setIsBusy(false)
+    }
+  }
   const canonicalExpectedMode: IExpectedPaneMode =
     targetResult.target?.expectedMode ??
     (isAgentPaneForControl
@@ -428,18 +473,60 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
       }
       return 'skipped_busy'
     }
+    if (
+      viewMode === 'chat' &&
+      canonicalHasAgent &&
+      (!interactive.ready || interactive.unknown)
+    ) {
+      setActionError(
+        interactive.unknown
+          ? 'Answer outcome is unknown. Inspect Terminal, then re-read the prompt before sending.'
+          : (interactive.error ??
+              'Wait for the current prompt read before sending.')
+      )
+      throw new Error(
+        interactive.unknown
+          ? 'Answer outcome unknown; inspect and re-read before sending.'
+          : 'Current prompt evidence is not ready.'
+      )
+    }
+    if (viewMode === 'chat' && interactive.error)
+      throw new Error(interactive.error)
+    if (viewMode === 'chat' && interactive.prompt) {
+      const answer = answerFromText(interactive.prompt, text)
+      if (!answer) {
+        const refusal = answerRefusal(interactive.prompt)
+        setActionError(refusal)
+        throw new Error(refusal)
+      }
+      if (needsConfirmation(interactive.prompt, answer)) {
+        setTypedPromptAnswer({ id: interactive.prompt.id, answer, draft: text })
+        return 'skipped_busy' // Inert until this occurrence's explicit Confirm.
+      }
+      const result = await answerInteractivePrompt(answer)
+      if (!result.ok) {
+        setActionError(
+          result.error ?? 'Answer outcome unknown; inspect the terminal.'
+        )
+        throw new Error(result.error ?? 'Interactive answer failed')
+      }
+      void interactive.refresh()
+      return 'acknowledged'
+    }
     const actionType =
       targetResult.target.expectedMode === 'agent' ? 'prompt' : 'terminal-input'
     const operationId = crypto.randomUUID()
 
     return executeGuardedAction({
-      action: () =>
-        sendAction({
+      action: () => {
+        markChatSend()
+        return sendAction({
           type: actionType,
           operationId,
           target: targetResult.target!,
           text
-        }),
+        })
+      },
       onSuccessRefresh: () => {
         void Promise.allSettled([refreshSnapshot(), refetchActiveSurface()])
       },
@@ -453,7 +540,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
     })
   }
 
-  const handleSendKeys = async (keys: string[]) => {
+  const handleSendKeys = async (keys: string[], reportFailure = false) => {
     if (!selectedPaneId || !targetResult.target) {
       if (targetResult.error) {
         setActionError(targetResult.error)
@@ -461,13 +548,14 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
       return
     }
     const operationId = crypto.randomUUID()
+    const actionTarget = targetResult.target
     try {
-      await executeGuardedAction({
+      return await executeGuardedAction({
         action: () =>
           sendAction({
             type: 'keys',
             operationId,
-            target: targetResult.target!,
+            target: actionTarget,
             keys
           }),
         onSuccessRefresh: () => {
@@ -478,11 +566,19 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
           isBusyRef.current = busy
           setIsBusy(busy)
         },
-        setError: (err) =>
-          setActionError(err ? formatActionErrorMessage(err) : null)
+        setError: (err) => {
+          const current = currentActionTargetRef.current
+          if (
+            current?.paneId === actionTarget.paneId &&
+            current?.terminalId === actionTarget.terminalId &&
+            current?.agentSessionId === actionTarget.agentSessionId
+          )
+            setActionError(err ? formatActionErrorMessage(err) : null)
+        }
       })
-    } catch {
+    } catch (error) {
       // Key failure recorded in setActionError by executeGuardedAction
+      if (reportFailure) throw error
     }
   }
 
@@ -498,18 +594,14 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
       ? isQuestionLoading
       : viewMode === 'panel'
         ? isPanelLoading
-        : viewMode === 'history'
-          ? isHistoryLoading
-          : false
+        : false
 
   const handleRefreshCurrentSurface =
     viewMode === 'question'
       ? refetchQuestion
       : viewMode === 'panel'
         ? refetchPanel
-        : viewMode === 'history'
-          ? refetchHistory
-          : undefined
+        : undefined
 
   // Resize open mobile -> desktop closes/reconciles modal without trapping desktop or resetting selectedpane
   useEffect(() => {
@@ -826,13 +918,20 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
                     />
                   )}
 
-                  {viewMode === 'history' && (
-                    <HistoryView
+                  {viewMode === 'chat' && (
+                    <ChatView
                       paneId={selectedPaneId}
-                      content={historyContent}
-                      isLoading={isHistoryLoading}
-                      error={historyError}
-                      onRefresh={refetchHistory}
+                      sendRevision={
+                        chatSend?.paneId === selectedPaneId
+                          ? chatSend.revision
+                          : 0
+                      }
+                      agentName={
+                        selectedPane?.agent || selectedPane?.display_agent
+                      }
+                      agentStatus={selectedPane?.agent_status}
+                      connected={status === 'connected'}
+                      isAgent={isAgentPane(selectedPane, snapshot?.agents)}
                       onSwitchToStream={() => setViewMode('stream')}
                     />
                   )}
@@ -874,7 +973,92 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
               </div>
             ) : (
               <>
+                {viewMode === 'chat' && interactive.error && (
+                  <p role="status">{interactive.error}</p>
+                )}
+                {viewMode === 'chat' && interactive.prompt && (
+                  <PromptCard
+                    paneId={selectedPaneId!}
+                    prompt={interactive.prompt}
+                    answerPrompt={answerInteractivePrompt}
+                    isUnknown={interactive.unknown}
+                    typedAnswer={
+                      typedPromptAnswer?.id === interactive.prompt.id
+                        ? typedPromptAnswer.answer
+                        : null
+                    }
+                    onTypedAnswerDone={() => setTypedPromptAnswer(null)}
+                    onPromptChanged={() => {
+                      void interactive.refresh()
+                    }}
+                    onAnswered={(focus) => {
+                      if (
+                        typedPromptAnswer &&
+                        composerDraft === typedPromptAnswer.draft
+                      )
+                        setComposerDraft('')
+                      setTypedPromptAnswer(null)
+                      void interactive.refresh()
+                      void refreshSnapshot()
+                      if (focus)
+                        document
+                          .querySelector<HTMLTextAreaElement>(
+                            '.prompt-composer textarea'
+                          )
+                          ?.focus()
+                    }}
+                  />
+                )}
+                {viewMode === 'chat' &&
+                  canonicalHasAgent &&
+                  !interactive.ready &&
+                  !interactive.prompt && (
+                    <div className="chat-inline-state" role="status">
+                      <span>
+                        {interactive.unknown
+                          ? 'Answer outcome unknown. Inspect Terminal before re-reading.'
+                          : (interactive.error ?? 'Reading current prompt…')}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        onClick={() => {
+                          void interactive.refresh()
+                        }}
+                      >
+                        Re-read prompt
+                      </Button>
+                    </div>
+                  )}
+                {viewMode === 'chat' && (
+                  <ChatControls
+                    key={`${selectedPaneId}:${selectedPane?.terminal_id}:${targetResult.target?.agentSessionId ?? ''}`}
+                    working={
+                      canonicalHasAgent &&
+                      selectedPane?.agent_status === 'working'
+                    }
+                    nativeStatus={selectedPane?.agent_status}
+                    observation={snapshot}
+                    disabled={
+                      isBusy ||
+                      !targetResult.target ||
+                      controlOwnership !== 'idle'
+                    }
+                    requestStop={() => handleSendKeys(['ctrl+c'], true)}
+                    onMore={() => {
+                      setIsChatKeysOpen(true)
+                    }}
+                  />
+                )}
                 <PromptComposer
+                  draftText={composerDraft}
+                  onDraftChange={setComposerDraft}
+                  promptPlaceholder={
+                    viewMode === 'chat'
+                      ? interactive.prompt
+                        ? answerHint(interactive.prompt)
+                        : (interactive.suggestion ?? undefined)
+                      : undefined
+                  }
                   paneId={selectedPaneId}
                   terminalId={selectedPane?.terminal_id}
                   workspaceId={workspaceId}
@@ -885,6 +1069,13 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
                   isBusy={isBusy}
                   isControlActive={controlOwnership !== 'idle'}
                   hasValidTarget={Boolean(targetResult.target)}
+                  isPromptEvidenceReady={
+                    !(
+                      viewMode === 'chat' &&
+                      canonicalHasAgent &&
+                      !interactive.ready
+                    )
+                  }
                   error={actionError || targetResult.error}
                   onSubmitText={handleSubmitText}
                   onSendKeys={handleSendKeys}
@@ -898,16 +1089,18 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
                   pickerInitialTab={pickerInitialTab}
                 />
 
-                <ThumbDeck
-                  paneId={selectedPaneId}
-                  isBusy={isBusy || !targetResult.target}
-                  workspaceId={workspaceId}
-                  onSendKeys={handleSendKeys}
-                  onOpenManage={() => {
-                    setPickerInitialTab('rail')
-                    setIsPickerOpen(true)
-                  }}
-                />
+                {viewMode !== 'chat' && (
+                  <ThumbDeck
+                    paneId={selectedPaneId}
+                    isBusy={isBusy || !targetResult.target}
+                    workspaceId={workspaceId}
+                    onSendKeys={handleSendKeys}
+                    onOpenManage={() => {
+                      setPickerInitialTab('rail')
+                      setIsPickerOpen(true)
+                    }}
+                  />
+                )}
               </>
             )}
           </footer>
@@ -915,6 +1108,28 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
       </div>
 
       {/* Mobile Navigation Drawer Sheet (Base UI Drawer Sheet) */}
+      <Sheet
+        side="bottom"
+        open={isChatKeysOpen}
+        onOpenChange={setIsChatKeysOpen}
+      >
+        <SheetContent side="bottom" aria-label="Chat keyboard controls">
+          <SheetHeader>
+            <SheetTitle>Keyboard controls</SheetTitle>
+          </SheetHeader>
+          <ThumbDeck
+            paneId={selectedPaneId}
+            isBusy={isBusy || !targetResult.target}
+            workspaceId={workspaceId}
+            onSendKeys={handleSendKeys}
+            onOpenManage={() => {
+              setIsChatKeysOpen(false)
+              setPickerInitialTab('rail')
+              setIsPickerOpen(true)
+            }}
+          />
+        </SheetContent>
+      </Sheet>
       <Sheet
         side="left"
         open={isSpaceDrawerOpen}

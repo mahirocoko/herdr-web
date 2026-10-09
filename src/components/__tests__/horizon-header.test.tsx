@@ -52,7 +52,7 @@ describe('HorizonHeader context ownership and responsive markup', () => {
     expect(html).toContain('surface-tab-stream')
     expect(html).toContain('>Terminal</span>')
     expect(html).not.toContain('surface-tab-panel')
-    expect(html).toContain('surface-tab-history')
+    expect(html).toContain('surface-tab-chat')
     expect(html).toContain('context-sub header-desktop-only')
     expect(html).toContain('Project')
     expect(html).toContain('Open Tabs and Panes')
