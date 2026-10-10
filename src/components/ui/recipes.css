@@ -1,7 +1,7 @@
 /* ==========================================================================
-   Herdr Web - Canonical UI Recipe Stylesheet (Base UI + devswha/herdr-web-ui Visual Language)
-   Warm graphite dark-only terminal workspace with restrained modern primitives
-   Visual styling adapted from devswha/herdr-web-ui (MIT License Copyright 2026 devswha)
+   Herdr Web - Canonical UI Recipe Stylesheet
+   BoardUI dark material/state study adapted to project-owned Base UI controls.
+   Earlier devswha/herdr-web-ui (MIT 2026) anatomy remains; no source assets copied.
    Headless behaviors and ARIA owned by Base UI 1.8.0 primitives
    ========================================================================== */
 
@@ -33,6 +33,7 @@
     color 150ms ease,
     opacity 150ms ease;
   border: 1px solid transparent;
+  box-shadow: none;
   outline: none;
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
@@ -40,44 +41,49 @@
 }
 
 .ui-button:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
 
 .ui-button:disabled,
 .ui-button[data-disabled] {
-  opacity: 0.5;
+  opacity: 0.45;
+  box-shadow: none;
   cursor: not-allowed;
   pointer-events: none;
 }
 
 /* Button Variants */
 .ui-button--default {
-  background-color: var(--color-accent);
+  background-color: var(--color-action-primary);
+  background-image: var(--color-action-primary-gradient);
   color: var(--color-accent-text, #1b1407);
-  border-color: var(--color-accent);
+  border-color: var(--color-action-primary);
+  box-shadow: var(--shadow-control);
 }
 
 .ui-button--default:hover:not(:disabled) {
-  background-color: var(--color-accent-hover);
+  background-color: var(--color-action-primary);
+  background-image: var(--color-action-primary-hover-gradient);
   border-color: var(--color-accent-hover);
 }
 
 .ui-button--secondary {
   background-color: var(--color-bg-elevated);
   color: var(--color-text-strong);
-  border-color: var(--color-border-subtle);
+  border-color: var(--color-control-border);
+  box-shadow: var(--shadow-control);
 }
 
 .ui-button--secondary:hover:not(:disabled) {
   background-color: var(--color-bg-hover);
-  border-color: var(--color-border-strong);
+  border-color: var(--color-control-border-hover);
 }
 
 .ui-button--outline {
   background-color: transparent;
   color: var(--color-text-primary);
-  border-color: var(--color-border-subtle);
+  border-color: var(--color-control-border);
 }
 
 .ui-button--outline:hover:not(:disabled) {
@@ -103,25 +109,43 @@
 }
 
 .ui-button--danger:hover:not(:disabled) {
-  background-color: rgba(255, 123, 112, 0.2);
+  background-color: var(--color-danger-hover-tint);
   border-color: var(--color-status-blocked);
 }
 
 .ui-button--warning {
-  background-color: var(--color-accent);
-  color: var(--color-accent-text, #1b1407);
-  border-color: var(--color-accent);
+  background-color: var(--color-warning);
+  color: var(--color-warning-text);
+  border-color: var(--color-warning);
   font-weight: 600;
 }
 
 .ui-button--warning:hover:not(:disabled) {
-  background-color: var(--color-accent-hover);
-  border-color: var(--color-accent-hover);
+  background-color: var(--color-warning);
+  border-color: var(--color-text-strong);
 }
 
 .ui-button--warning:active:not(:disabled) {
-  background-color: #d48c1f;
-  border-color: #d48c1f;
+  background-color: var(--color-warning);
+  border-color: var(--color-border-strong);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+/* Pressed is a separate paint state, not a hover alias or layout shift. */
+.ui-button--default:active:not(:disabled):not([data-disabled]) {
+  background-color: var(--color-accent-pressed);
+  background-image: var(--color-action-primary-pressed-gradient);
+  border-color: var(--color-accent-pressed);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.ui-button--secondary:active:not(:disabled):not([data-disabled]),
+.ui-button--outline:active:not(:disabled):not([data-disabled]),
+.ui-button--ghost:active:not(:disabled):not([data-disabled]) {
+  background-color: var(--color-bg-elevated);
+  color: var(--color-text-strong);
+  border-color: var(--color-border-strong);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .ui-button--link {
@@ -139,7 +163,7 @@
   color: var(--color-accent-hover);
 }
 
-/* Button Sizes: matching source --control-h: 34px, with safe hit area */
+/* Button sizes: canonical --control-h, with unchanged mobile safe hit area. */
 .ui-button--default-size {
   height: var(--control-h, 34px);
   min-height: var(--control-h, 34px);
@@ -209,7 +233,7 @@
   width: 100%;
   height: var(--control-h, 34px);
   border-radius: var(--radius-md, 8px);
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid var(--color-control-border);
   background-color: var(--color-bg-input);
   padding: 0 var(--space-3, 12px);
   font-family: var(--font-sans);
@@ -233,8 +257,8 @@
 }
 
 .ui-input:focus-visible {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 1px var(--color-accent);
+  border-color: var(--color-focus);
+  box-shadow: 0 0 0 2px var(--color-accent-tint);
 }
 
 .ui-input:disabled,
@@ -268,7 +292,7 @@
   width: 100%;
   min-height: 80px;
   border-radius: var(--radius-md, 8px);
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid var(--color-control-border);
   background-color: var(--color-bg-input);
   padding: 0.625rem 0.75rem;
   font-family: var(--font-sans);
@@ -294,8 +318,8 @@
 }
 
 .ui-textarea:focus-visible {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 1px var(--color-accent);
+  border-color: var(--color-focus);
+  box-shadow: 0 0 0 2px var(--color-accent-tint);
 }
 
 .ui-textarea:disabled,
@@ -370,7 +394,7 @@
 /* --------------------------------------------------------------------------
    5. Switch Recipes (.ui-switch)
    Note on provenance: Base UI behavior and owner-local visual adaptation of
-   source actual control language (warm graphite palette, amber accent,
+   source control anatomy (current project semantic paint,
    and standard 40x22 pill geometry with 16px thumb and 18px translation).
    Upstream herdr-web-ui defines .view-switch (a segmented control), having no
    direct .switch class; this recipe provides the semantic toggle counterpart
@@ -892,8 +916,8 @@
 .ui-toggle--default[data-pressed] {
   background-color: var(--color-bg-hover);
   color: var(--color-text-strong);
-  border-color: var(--color-accent);
-  font-weight: 600;
+  border-color: var(--color-border-strong);
+  font-weight: 500;
 }
 
 .ui-toggle--outline {
@@ -910,8 +934,8 @@
 .ui-toggle--outline[data-pressed] {
   background-color: var(--color-bg-hover);
   color: var(--color-text-strong);
-  border-color: var(--color-accent);
-  font-weight: 600;
+  border-color: var(--color-border-strong);
+  font-weight: 500;
 }
 
 .ui-toggle--tab {
@@ -1020,7 +1044,7 @@
 .badge-working {
   background: var(--color-status-working-tint);
   color: var(--color-status-working);
-  border: 1px solid rgba(108, 184, 214, 0.35);
+  border: 1px solid var(--color-status-working-border);
 }
 
 .badge-working::before {
@@ -1034,13 +1058,13 @@
 .badge-blocked {
   background: var(--color-status-blocked-tint);
   color: var(--color-status-blocked);
-  border: 1px solid rgba(255, 123, 112, 0.35);
+  border: 1px solid var(--color-status-blocked-border);
 }
 
 .badge-done {
   background: var(--color-status-done-tint);
   color: var(--color-status-done);
-  border: 1px solid rgba(147, 195, 107, 0.35);
+  border: 1px solid var(--color-status-done-border);
 }
 
 .badge-unknown {
@@ -1074,19 +1098,19 @@
 .status-badge--working {
   background: var(--color-status-working-tint);
   color: var(--color-status-working);
-  border: 1px solid rgba(108, 184, 214, 0.35);
+  border: 1px solid var(--color-status-working-border);
 }
 
 .status-badge--blocked {
   background: var(--color-status-blocked-tint);
   color: var(--color-status-blocked);
-  border: 1px solid rgba(255, 123, 112, 0.35);
+  border: 1px solid var(--color-status-blocked-border);
 }
 
 .status-badge--done {
   background: var(--color-status-done-tint);
   color: var(--color-status-done);
-  border: 1px solid rgba(147, 195, 107, 0.35);
+  border: 1px solid var(--color-status-done-border);
 }
 
 .status-badge--unknown {

@@ -1,5 +1,5 @@
 /*
- * The chat lens, in the Codex / gajae-code-app register: the transcript is a quiet
+ * BoardUI AI Chat material study over the existing native transcript: a quiet
  * document. The user's words are the only raised block, right-aligned; the agent
  * answers as plain prose with no avatar or name, and everything it did in between
  * folds under one "Worked for 7s · 1 edit" line whose rows stay one line each until
@@ -15,9 +15,9 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: var(--space-4) var(--space-4) var(--space-5);
-  background: var(--color-bg-base);
+  background: var(--color-bg-surface);
 
-  --bg: var(--color-bg-base);
+  --bg: var(--color-bg-surface);
   --bg-surface: var(--color-bg-surface);
   --bg-panel: var(--color-bg-panel);
   --bg-elevated: var(--color-bg-elevated);
@@ -31,10 +31,6 @@
   --status-working: var(--color-status-working);
   --status-blocked: var(--color-status-blocked);
   --status-done: var(--color-status-done);
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 10px;
-  --radius-pill: 9999px;
   --chat-w: 720px;
   --lh-prose: 1.5;
   --lh-tight: 1.25;
@@ -374,7 +370,7 @@
 
 .chat-bubble .markdown pre,
 .chat-bubble .markdown-code {
-  background: var(--bg-panel);
+  background: var(--color-bg-base);
 }
 
 .markdown hr {
@@ -389,7 +385,7 @@
   overflow: hidden;
   border: var(--hairline) solid var(--border);
   border-radius: var(--radius-lg);
-  background: var(--bg-panel);
+  background: var(--color-bg-base);
   color: var(--text);
 }
 
@@ -1053,6 +1049,13 @@
   font-size: var(--fs-xs);
   max-width: 100%;
   overflow-wrap: anywhere;
+}
+.chat-skill > summary,
+.work-row[data-tool-name='Skill']:not(.is-error) .work-row-name {
+  color: var(--color-activity-skill);
+}
+.chat-skill[data-status='failed'] > summary {
+  color: var(--color-status-error);
 }
 .chat-preferences {
   color: var(--text-dim);

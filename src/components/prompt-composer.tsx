@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import type { FC, FormEvent, KeyboardEvent } from 'react'
+import type { FC, FormEvent, KeyboardEvent, ReactNode } from 'react'
 import { Loader2, SendHorizontal, SquareTerminal } from 'lucide-react'
 import {
   COMPOSER_MAX_HEIGHT,
@@ -38,6 +38,7 @@ export interface IPromptComposerProps {
   isPickerOpen?: boolean
   onPickerOpenChange?: (open: boolean) => void
   pickerInitialTab?: IPickerSheetTab
+  contextControls?: ReactNode
 }
 
 const PromptComposer: FC<IPromptComposerProps> = ({
@@ -60,7 +61,8 @@ const PromptComposer: FC<IPromptComposerProps> = ({
   onDraftChange,
   isPickerOpen,
   onPickerOpenChange,
-  pickerInitialTab
+  pickerInitialTab,
+  contextControls
 }) => {
   const effectiveMode: IExpectedPaneMode =
     expectedMode ?? (isBlocked ? 'blocked-agent' : hasAgent ? 'agent' : 'shell')
@@ -267,6 +269,11 @@ const PromptComposer: FC<IPromptComposerProps> = ({
       )}
 
       <form className="prompt-composer__form" onSubmit={handleSubmit}>
+        {contextControls && (
+          <div className="prompt-composer__context-controls">
+            {contextControls}
+          </div>
+        )}
         <div className="prompt-composer__input-wrapper">
           <Textarea
             ref={textareaRef}

@@ -120,7 +120,10 @@ const ToolRow: FC<{ part: ToolPart }> = ({ part }) => {
   const hasDetails = Boolean(part.input || part.output || part.images?.length)
 
   return (
-    <div className={`work-row${part.error ? ' is-error' : ''}`}>
+    <div
+      className={`work-row${part.error ? ' is-error' : ''}`}
+      data-tool-name={part.name}
+    >
       <button
         type="button"
         className="work-row-head"
@@ -417,7 +420,7 @@ const SkillActivity = ({ parts }: { parts: ConversationPart[] }) => {
   return (
     <div className="chat-skills" aria-label="Recorded skill activity">
       {[...recorded.entries()].map(([key, skill]) => (
-        <details key={key} className="chat-skill">
+        <details key={key} className="chat-skill" data-status={skill.status}>
           <summary>
             {skill.name} ·{' '}
             {skill.status === 'loaded'

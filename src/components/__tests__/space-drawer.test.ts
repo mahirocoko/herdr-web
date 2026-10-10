@@ -6,15 +6,15 @@ import { getWorkspaceStatusDotClass } from '../space-drawer.tsx'
 describe('space-drawer: pure helpers and state contracts', () => {
   it('maps upstream Space attention values to distinct truthful dots', () => {
     expect(getWorkspaceStatusDotClass('blocked')).toBe(
-      'space-status-dot--blocked',
+      'space-status-dot--blocked'
     )
     expect(getWorkspaceStatusDotClass('working')).toBe(
-      'space-status-dot--working',
+      'space-status-dot--working'
     )
     expect(getWorkspaceStatusDotClass('done')).toBe('space-status-dot--done')
     expect(getWorkspaceStatusDotClass('idle')).toBe('space-status-dot--idle')
     expect(getWorkspaceStatusDotClass('unknown')).toBe(
-      'space-status-dot--unknown',
+      'space-status-dot--unknown'
     )
   })
 })
@@ -26,7 +26,7 @@ describe('source-led Space and Tab sheet contracts', () => {
   const paneDrawerContent = fs.readFileSync(paneDrawerPath, 'utf8')
   const horizonHeaderPath = path.resolve(
     import.meta.dir,
-    '../horizon-header.tsx',
+    '../horizon-header.tsx'
   )
   const horizonHeaderContent = fs.readFileSync(horizonHeaderPath, 'utf8')
   const cssPath = path.resolve(import.meta.dir, '../../app.css')
@@ -34,10 +34,10 @@ describe('source-led Space and Tab sheet contracts', () => {
 
   it('guards opening intent before snapshot polling can refreeze a close confirmation', () => {
     const guard = spaceDrawerContent.indexOf(
-      'if (initializedIntentRef.current === intentKey) return',
+      'if (initializedIntentRef.current === intentKey) return'
     )
     const freeze = spaceDrawerContent.indexOf(
-      'freezeWorkspaceCloseConfirmation(target, tabs, panes)',
+      'freezeWorkspaceCloseConfirmation(target, tabs, panes)'
     )
     expect(guard).toBeGreaterThan(-1)
     expect(freeze).toBeGreaterThan(guard)
@@ -85,10 +85,10 @@ describe('source-led Space and Tab sheet contracts', () => {
 
   it('handles initialView close-space with frozen workspace confirmation', () => {
     expect(spaceDrawerContent).toContain(
-      "initialView?: 'list' | 'new-space' | 'close-space'",
+      "initialView?: 'list' | 'new-space' | 'close-space'"
     )
     expect(spaceDrawerContent).toContain(
-      'initialTargetWorkspaceId?: string | null',
+      'initialTargetWorkspaceId?: string | null'
     )
     expect(spaceDrawerContent).toContain("initialView === 'close-space'")
     expect(spaceDrawerContent).toContain('freezeWorkspaceCloseConfirmation(')
@@ -99,36 +99,37 @@ describe('source-led Space and Tab sheet contracts', () => {
     expect(horizonHeaderContent).not.toContain('title="Toggle sidebar (⌘⇧B)"')
     expect(horizonHeaderContent).toContain('title="Search navigation"')
     expect(horizonHeaderContent).not.toContain(
-      'title="Search navigation (⌘⇧K)"',
+      'title="Search navigation (⌘⇧K)"'
     )
   })
 
   it('provides source-led hierarchy and touch-safe controls', () => {
     expect(cssContent).toContain('.space-drawer-item')
     expect(cssContent).toContain(
-      'grid-template-columns: 10px minmax(0, 1fr) 24px',
+      'grid-template-columns: 10px minmax(0, 1fr) 24px'
     )
     expect(cssContent).toContain('.space-drawer-item--selected')
     expect(cssContent).toContain('.horizon-header__tab-trigger')
     expect(cssContent).toContain('min-height: 44px')
   })
 
-  it('proves SidebarRoster tab status indicator uses canonical activity dot instead of legacy raw status badges', () => {
+  it('keeps canonical Space activity in the roster without restoring nested Tab/pane rows', () => {
     const sidebarRosterPath = path.resolve(
       import.meta.dir,
-      '../sidebar-roster.tsx',
+      '../sidebar-roster.tsx'
     )
     const sidebarRosterContent = fs.readFileSync(sidebarRosterPath, 'utf8')
     const recipesPath = path.resolve(import.meta.dir, '../ui/recipes.css')
     const recipesContent = fs.readFileSync(recipesPath, 'utf8')
 
     expect(sidebarRosterContent).toContain(
-      'space-status-dot ${getActivityStatusDotClass(tabActivity)}',
+      'space-status-dot ${getActivityStatusDotClass(spaceActivity)}'
     )
     expect(sidebarRosterContent).not.toContain(
-      "badge badge-${tab.agent_status || 'unknown'}",
+      "badge badge-${tab.agent_status || 'unknown'}"
     )
-    expect(sidebarRosterContent).toContain('pane-status-indicator')
+    expect(sidebarRosterContent).not.toContain('pane-status-indicator')
+    expect(sidebarRosterContent).not.toContain('sidebar-workspace-tabs')
     expect(sidebarRosterContent).not.toContain('status-badge--')
     expect(recipesContent).toContain('.badge')
     expect(recipesContent).toContain('.badge-idle')
@@ -147,7 +148,7 @@ describe('source-led Space and Tab sheet contracts', () => {
     expect(appContent).toContain('className="sidebar mobile-sidebar-sheet"')
     expect(appContent).toContain('sidebar desktop-sidebar')
     expect(cssContent).not.toMatch(
-      /\.sidebar\s*\{[^}]*transform:\s*translateX\(-100%\)/,
+      /\.sidebar\s*\{[^}]*transform:\s*translateX\(-100%\)/
     )
     expect(cssContent).toContain('.desktop-sidebar')
   })

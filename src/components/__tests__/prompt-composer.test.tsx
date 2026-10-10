@@ -3,6 +3,21 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import PromptComposer from '../prompt-composer.tsx'
 
 describe('PromptComposer: static rendering and controls', () => {
+  it('keeps contextual controls inside the form without a second form or submit trigger', () => {
+    const html = renderToStaticMarkup(
+      <PromptComposer
+        paneId="ws1:p1"
+        terminalId="term-1"
+        isBusy={false}
+        onSubmitText={async () => {}}
+        contextControls={<button type="button">More controls</button>}
+      />
+    )
+    expect(html.indexOf('More controls')).toBeGreaterThan(html.indexOf('<form'))
+    expect(html.indexOf('More controls')).toBeLessThan(html.indexOf('</form>'))
+    expect(html.match(/<form/g)).toHaveLength(1)
+    expect(html).toContain('type="button">More controls')
+  })
   it('blocks unread prompt input without falsely claiming terminal identity is missing', () => {
     const html = renderToStaticMarkup(
       <PromptComposer
