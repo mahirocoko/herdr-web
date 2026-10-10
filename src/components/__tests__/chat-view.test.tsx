@@ -4,6 +4,24 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import ChatView, { Turn, ToolRow } from '../chat-view.tsx'
 
 describe('ChatView component', () => {
+  it('exposes real Skill tool identity without claiming workflow completion', () => {
+    const html = renderToStaticMarkup(
+      createElement(ToolRow, {
+        part: {
+          kind: 'tool',
+          id: 'skill',
+          name: 'Skill',
+          summary: 'better-colors',
+          input: '{"skill":"better-colors"}',
+          output: '',
+          pending: false
+        }
+      })
+    )
+    expect(html).toContain('data-tool-name="Skill"')
+    expect(html).toContain('work-row-name">Skill')
+    expect(html).not.toContain('workflow completed')
+  })
   it('renders user text together with every attachment notice', () => {
     const html = renderToStaticMarkup(
       createElement(Turn, {

@@ -10,7 +10,10 @@ import {
   useNavigate
 } from 'react-router'
 import { useSnapshot } from '@/hooks/use-snapshot.ts'
-import { useLifecycleOperations, type ILifecycleOperations } from '@/hooks/use-lifecycle-operations.ts'
+import {
+  useLifecycleOperations,
+  type ILifecycleOperations
+} from '@/hooks/use-lifecycle-operations.ts'
 import { usePushSubscription } from '@/hooks/use-push-subscription.ts'
 import { useVisualViewport } from '@/hooks/use-visual-viewport.ts'
 import type { IPane, ISnapshotResult, ISnapshotStatus } from '@/types/herdr.ts'
@@ -36,7 +39,7 @@ export const recordPushClickDiagnostic = (
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'accept': 'application/json'
+      accept: 'application/json'
     },
     body: JSON.stringify({ stage })
   }).catch(() => undefined)
@@ -65,6 +68,7 @@ export const Layout = ({ children }: { children: ReactNode }) => {
     <html lang="en">
       <head>
         <meta charSet="UTF-8" />
+        <meta name="color-scheme" content="dark" />
         <meta
           name="viewport"
           content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-visual"
@@ -74,7 +78,10 @@ export const Layout = ({ children }: { children: ReactNode }) => {
         <link rel="manifest" href="/manifest.webmanifest" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta
+          name="apple-mobile-web-app-status-bar-style"
+          content="black-translucent"
+        />
         <meta name="theme-color" content="#101010" />
         <Meta />
         <Links />
@@ -117,7 +124,8 @@ const Root = () => {
   } | null>(null)
 
   useEffect(() => {
-    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator))
+      return
 
     const handleServiceWorkerMessage = (event: MessageEvent) => {
       const workspaceId = parsePushWorkspaceMessage(event.data)
@@ -132,8 +140,15 @@ const Root = () => {
       }
     }
 
-    navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage)
-    return () => navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage)
+    navigator.serviceWorker.addEventListener(
+      'message',
+      handleServiceWorkerMessage
+    )
+    return () =>
+      navigator.serviceWorker.removeEventListener(
+        'message',
+        handleServiceWorkerMessage
+      )
   }, [navigate])
 
   useEffect(() => {
@@ -175,7 +190,13 @@ const Root = () => {
       }
       setPendingWorkspaceAck(null)
     }
-  }, [pendingWorkspaceAck, location.pathname, snapshot, status, setSelectedWorkspaceId])
+  }, [
+    pendingWorkspaceAck,
+    location.pathname,
+    snapshot,
+    status,
+    setSelectedWorkspaceId
+  ])
 
   useEffect(() => {
     if ((status !== 'connected' && status !== 'empty') || !snapshot) return
@@ -185,19 +206,38 @@ const Root = () => {
       return
     }
     if (!routeWorkspaceId) return
-    if (snapshot.workspaces.some((workspace) => workspace.workspace_id === routeWorkspaceId)) return
+    if (
+      snapshot.workspaces.some(
+        (workspace) => workspace.workspace_id === routeWorkspaceId
+      )
+    )
+      return
 
-    const fallbackId = selectedWorkspaceId && snapshot.workspaces.some((workspace) => workspace.workspace_id === selectedWorkspaceId)
-      ? selectedWorkspaceId
-      : snapshot.focused_workspace_id && snapshot.workspaces.some((workspace) => workspace.workspace_id === snapshot.focused_workspace_id)
-        ? snapshot.focused_workspace_id
-        : snapshot.active_workspace_id && snapshot.workspaces.some((workspace) => workspace.workspace_id === snapshot.active_workspace_id)
-          ? snapshot.active_workspace_id
-          : snapshot.workspaces[0].workspace_id
+    const fallbackId =
+      selectedWorkspaceId &&
+      snapshot.workspaces.some(
+        (workspace) => workspace.workspace_id === selectedWorkspaceId
+      )
+        ? selectedWorkspaceId
+        : snapshot.focused_workspace_id &&
+            snapshot.workspaces.some(
+              (workspace) =>
+                workspace.workspace_id === snapshot.focused_workspace_id
+            )
+          ? snapshot.focused_workspace_id
+          : snapshot.active_workspace_id &&
+              snapshot.workspaces.some(
+                (workspace) =>
+                  workspace.workspace_id === snapshot.active_workspace_id
+              )
+            ? snapshot.active_workspace_id
+            : snapshot.workspaces[0].workspace_id
     navigate(deriveSpacePath(fallbackId), { replace: true })
   }, [location.pathname, navigate, selectedWorkspaceId, snapshot, status])
 
-  const lifecycleOriginRef = useRef<Map<string, ILifecycleNavigationOrigin>>(new Map())
+  const lifecycleOriginRef = useRef<Map<string, ILifecycleNavigationOrigin>>(
+    new Map()
+  )
   const currentPathnameRef = useRef(location.pathname)
   const currentWorkspaceIdRef = useRef(selectedWorkspaceId)
   const currentPaneIdRef = useRef(selectedPaneId)
@@ -209,7 +249,12 @@ const Root = () => {
 
   useEffect(() => {
     const ticket = lifecycle.ticket
-    if (!ticket || ticket.phase !== 'pending' || lifecycleOriginRef.current.has(ticket.requestIdentity)) return
+    if (
+      !ticket ||
+      ticket.phase !== 'pending' ||
+      lifecycleOriginRef.current.has(ticket.requestIdentity)
+    )
+      return
     lifecycleOriginRef.current.set(ticket.requestIdentity, {
       requestIdentity: ticket.requestIdentity,
       pathname: currentPathnameRef.current,
@@ -233,7 +278,8 @@ const Root = () => {
         currentTicket?.requestIdentity !== ticket.requestIdentity ||
         currentTicket.reconciliationAttempt !== ticket.reconciliationAttempt ||
         currentTicket.phase !== 'observed'
-      ) return
+      )
+        return
 
       const authoritative = getSnapshot()
       if (!refreshed || !authoritative) {
@@ -246,7 +292,12 @@ const Root = () => {
       }
 
       if (ticket.type === 'workspace-create') {
-        if (!snapshotConfirmsCreatedTarget(authoritative, ticket.result || undefined)) {
+        if (
+          !snapshotConfirmsCreatedTarget(
+            authoritative,
+            ticket.result || undefined
+          )
+        ) {
           lifecycle.reportReconciliationFailure(
             ticket.requestIdentity,
             ticket.reconciliationAttempt,
@@ -254,16 +305,22 @@ const Root = () => {
           )
           return
         }
-        const result = ticket.result as { workspaceId: string; tabId: string; paneId: string }
-        if (shouldApplyCreateResultNavigation({
-          origin: lifecycleOriginRef.current.get(ticket.requestIdentity),
-          requestIdentity: ticket.requestIdentity,
-          attempt: ticket.reconciliationAttempt,
-          currentTicket: currentLifecycleTicketRef.current,
-          currentPathname: currentPathnameRef.current,
-          currentWorkspaceId: currentWorkspaceIdRef.current,
-          currentPaneId: currentPaneIdRef.current
-        })) {
+        const result = ticket.result as {
+          workspaceId: string
+          tabId: string
+          paneId: string
+        }
+        if (
+          shouldApplyCreateResultNavigation({
+            origin: lifecycleOriginRef.current.get(ticket.requestIdentity),
+            requestIdentity: ticket.requestIdentity,
+            attempt: ticket.reconciliationAttempt,
+            currentTicket: currentLifecycleTicketRef.current,
+            currentPathname: currentPathnameRef.current,
+            currentWorkspaceId: currentWorkspaceIdRef.current,
+            currentPaneId: currentPaneIdRef.current
+          })
+        ) {
           setSelectedPaneId(result.paneId, result.workspaceId)
           navigate(deriveSpacePath(result.workspaceId), { replace: true })
         }

@@ -90,6 +90,7 @@ const ChatControls = ({
     <div className="chat-controls">
       {working && (
         <Button
+          type="button"
           variant="outline"
           size="sm"
           disabled={disabled || Boolean(request && request.phase !== 'unknown')}
@@ -107,7 +108,7 @@ const ChatControls = ({
       <span role="status" aria-live="polite">
         {notice}
       </span>
-      <Button variant="ghost" size="sm" onClick={onMore}>
+      <Button type="button" variant="ghost" size="sm" onClick={onMore}>
         More controls
       </Button>
     </div>

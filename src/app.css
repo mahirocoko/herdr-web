@@ -1,28 +1,30 @@
 /* ==========================================================================
    Herdr Web - Mobile Command Center (Slice 1)
-   Authored CSS - Warm Graphite High-Contrast Semantic Design
-   Visual ownership adapted from devswha/herdr-web-ui (MIT License 2026)
+   Authored CSS - Dark compact workspace
+   BoardUI Dashboard / AI Chat material study; project-owned recipes and assets.
+   Earlier devswha/herdr-web-ui adaptation retained in behavioral anatomy.
    ========================================================================== */
 
 @import './fonts/fonts.css';
 @import './components/ui/recipes.css';
 
 :root {
-  /* Surfaces: Warm graphite tonal steps from devswha/herdr-web-ui */
-  --color-bg-base: #12100e;
-  --color-bg-surface: #181613;
-  --color-bg-panel: #181613;
-  --color-bg-elevated: #211e1a;
-  --color-bg-hover: #2a2621;
-  --color-bg-input: #1c1916;
-  --color-bg-overlay: rgba(8, 6, 4, 0.55);
+  /* Neutral nesting studied from BoardUI's native dark semantic ladder. */
+  color-scheme: dark;
+  --color-bg-base: #121212;
+  --color-bg-surface: #171717;
+  --color-bg-panel: #171717;
+  --color-bg-elevated: #262626;
+  --color-bg-hover: #303030;
+  --color-bg-input: #262626;
+  --color-bg-overlay: rgba(0, 0, 0, 0.6);
 
   /* Source Scale & Rhythm Metrics */
-  --control-h: 34px;
+  --control-h: 36px;
   --touch-target: 40px;
   --header-h: 52px;
   --header-h-wide: 46px;
-  --sidebar-w: 320px;
+  --sidebar-w: 280px;
   --keybar-h: 48px;
   --row-h: 56px;
   --chip-h: 20px;
@@ -54,40 +56,65 @@
   --space-8: 32px;
 
   /* Borders */
-  --color-border-subtle: #2d2924;
-  --color-border-strong: #3e3830;
-  --color-border-active: #f0a830;
+  --color-border-subtle: #2a292d;
+  --color-border-strong: #525252;
+  --color-border-active: #404040;
+  --color-control-border: #404040;
+  --color-control-border-hover: #737373;
 
   /* Text */
-  --color-text-primary: #d8d0c3;
-  --color-text-secondary: #9b9183;
-  --color-text-tertiary: #786f63;
-  --color-text-strong: #f2ebdf;
+  --color-text-primary: #e5e5e5;
+  --color-text-secondary: #a3a3a3;
+  --color-text-tertiary: #929292;
+  --color-text-strong: #fafafa;
 
-  /* Saturated chrome: ONE amber signature (actions, focus, selection) */
-  --color-accent: #f0a830;
-  --color-accent-hover: #f6bb55;
-  --color-accent-glow: rgba(240, 168, 48, 0.16);
-  --color-accent-tint: rgba(240, 168, 48, 0.13);
-  --color-accent-text: #1b1407;
+  /* BoardUI blue500/600/700 declarations; text-bearing fills use darker stops. */
+  --color-accent: #3080ff;
+  --color-accent-hover: #3392ff;
+  --color-accent-pressed: #1447e6;
+  --color-action-primary: #155dfc;
+  --color-action-primary-gradient: linear-gradient(180deg, #155dfc, #1447e6);
+  --color-action-primary-hover-gradient: linear-gradient(
+    180deg,
+    #155dfc,
+    #155dfc
+  );
+  --color-action-primary-pressed-gradient: linear-gradient(
+    180deg,
+    #1447e6,
+    #1447e6
+  );
+  --color-accent-glow: rgba(48, 128, 255, 0.18);
+  --color-accent-tint: rgba(48, 128, 255, 0.14);
+  --color-accent-text: #ffffff;
+  --color-focus: #3080ff;
 
-  /* Agent States: meaning colors distinct from chrome amber */
-  --color-status-idle: #9b9183;
-  --color-status-working: #6cb8d6;
-  --color-status-blocked: #ff7b70;
-  --color-status-done: #93c36b;
-  --color-status-error: #ff7b70;
-  --color-status-working-tint: rgba(108, 184, 214, 0.14);
-  --color-status-blocked-tint: rgba(255, 123, 112, 0.14);
-  --color-status-done-tint: rgba(147, 195, 107, 0.14);
-  --color-danger-tint: rgba(255, 123, 112, 0.12);
+  /* Native status meanings remain distinct from action chrome. */
+  --color-status-idle: #929292;
+  --color-status-working: #00d2ef;
+  --color-status-blocked: #ff6568;
+  --color-status-done: #05df72;
+  --color-status-error: #ff6568;
+  --color-activity-skill: #c07eff;
+  --color-warning: #ffb83c;
+  --color-warning-text: #121212;
+  --color-status-working-tint: rgba(0, 210, 239, 0.14);
+  --color-status-blocked-tint: rgba(255, 101, 104, 0.14);
+  --color-status-done-tint: rgba(5, 223, 114, 0.14);
+  --color-status-working-border: rgba(0, 210, 239, 0.35);
+  --color-status-blocked-border: rgba(255, 101, 104, 0.35);
+  --color-status-done-border: rgba(5, 223, 114, 0.35);
+  --color-danger-tint: rgba(255, 101, 104, 0.12);
+  --color-danger-hover-tint: rgba(255, 101, 104, 0.2);
   --color-danger-text: #ffd9d4;
 
   /* Overlays & Shadows */
   --shadow-drawer: 0 0 40px rgba(0, 0, 0, 0.6);
   --shadow-pop:
     0 16px 48px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--color-border-subtle);
-  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-control:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 1px 2px rgba(0, 0, 0, 0.2);
 
   /* Typography */
   --font-sans:
@@ -100,9 +127,9 @@
 
   /* Radii */
   --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
   --radius-pill: 9999px;
 
   --safe-top: env(safe-area-inset-top, 0px);
@@ -110,8 +137,8 @@
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
 
-  /* Terminal Semantic Tokens: mirrored from source terminal theme */
-  --term-bg: #181613;
+  /* Terminal content colors stay source-owned; only canvas chrome is shared. */
+  --term-bg: var(--color-bg-base);
   --term-fg: #d8d0c3;
   --term-cursor: #f0a830;
   --term-selection: #4a3d26;
@@ -207,7 +234,8 @@ body {
   flex: 0 0 var(--sidebar-w, 320px);
   min-height: 0;
   background: var(--color-bg-surface);
-  border-right: 1px solid var(--color-border-subtle);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-xl);
   padding-left: env(safe-area-inset-left, 0px);
   overflow-y: auto;
   z-index: 30;
@@ -229,6 +257,21 @@ body {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  background: var(--color-bg-surface);
+  border-radius: var(--radius-xl);
+}
+
+@media (min-width: 769px) and (min-height: 501px) {
+  .app-body {
+    gap: var(--space-3);
+    padding: var(--space-3);
+  }
+}
+
+@media (max-width: 768px), (max-height: 500px) {
+  .pane-column {
+    border-radius: 0;
+  }
 }
 
 .terminal-host {
@@ -731,9 +774,9 @@ body {
 
 .sidebar-section__title {
   font-size: var(--fs-xs, 12px);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
   color: var(--color-text-secondary);
 }
 
@@ -748,22 +791,6 @@ body {
 .sidebar-workspace-item {
   margin-bottom: 4px;
   position: relative;
-}
-
-.sidebar-workspace-item.is-selected {
-  position: relative;
-}
-
-.sidebar-workspace-item.is-selected::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: var(--rail-w, 3px);
-  background: var(--color-accent);
-  z-index: 2;
-  border-radius: 0 2px 2px 0;
 }
 
 .sidebar-workspace-row {
@@ -785,119 +812,6 @@ body {
   color: var(--color-status-error);
 }
 
-.sidebar-workspace-tabs {
-  margin-top: 4px;
-  margin-left: 12px;
-  padding-left: 10px;
-  /* Preserve the inset while the selected Space owns the only vertical rail. */
-  border-left: 1px solid transparent;
-}
-
-.sidebar-workspace-tabs__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 6px;
-  font-size: var(--fs-2xs, 11px);
-  color: var(--color-text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.sidebar-tabs-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.sidebar-tab-item {
-  border-radius: var(--radius-sm);
-  padding: 4px 6px;
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.sidebar-tab-item.is-active-tab {
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.sidebar-tab-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 4px;
-  font-size: var(--fs-xs, 12px);
-  font-weight: 500;
-  color: var(--color-text-primary);
-}
-
-.sidebar-panes-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.sidebar-pane-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 6px 8px;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--color-text-secondary);
-  font-size: var(--fs-xs, 12px);
-  cursor: pointer;
-  text-align: left;
-}
-
-.sidebar-pane-item:hover {
-  background: var(--color-bg-hover);
-  color: var(--color-text-primary);
-}
-
-.sidebar-pane-item.is-selected {
-  background: var(--color-bg-elevated);
-  border-color: var(--color-border-active);
-  color: var(--color-text-strong);
-}
-
-.sidebar-pane-icon {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  color: var(--color-text-secondary);
-}
-
-.sidebar-pane-item.is-selected .sidebar-pane-icon {
-  color: var(--color-accent);
-}
-
-.sidebar-pane-content {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.sidebar-pane-title {
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sidebar-pane-cwd {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--color-text-tertiary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .sidebar-roster-footer {
   flex-shrink: 0;
   border-top: 1px solid var(--color-border-subtle);
@@ -906,17 +820,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-
-.horizon-header__workspace-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex-shrink: 1;
-  min-width: 0;
-  color: var(--color-text-primary);
-  font-size: 13px;
-  font-weight: 500;
 }
 
 .horizon-header__tab-trigger {
@@ -1250,7 +1153,7 @@ body {
 .herdr-footer {
   flex-shrink: 0;
   background-color: var(--color-bg-surface);
-  border-top: 1px solid var(--color-border-subtle);
+  border-top: 1px solid transparent;
   padding-top: 6px;
   padding-bottom: max(6px, var(--footer-safe-bottom));
   padding-left: max(8px, var(--safe-left));
@@ -1281,22 +1184,22 @@ body {
   display: flex;
   flex-direction: column;
   width: 100%;
-  background-color: var(--color-bg-elevated);
-  border: 1px solid var(--color-border-subtle);
+  background-color: var(--color-bg-input);
+  border: 1px solid var(--color-control-border);
   border-radius: var(--radius-xl);
-  box-shadow: none;
+  box-shadow: var(--shadow-control);
   transition:
     border-color 0.15s ease-out,
     box-shadow 0.15s ease-out;
 }
 
 .prompt-composer__form:focus-within {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 1px var(--color-accent-tint);
+  border-color: var(--color-focus);
+  box-shadow: 0 0 0 2px var(--color-accent-tint);
 }
 
-.prompt-composer__input,
-.prompt-composer__textarea {
+/* Composer geometry must survive a later route import of the shared recipe. */
+.ui-textarea.prompt-composer__textarea {
   width: 100%;
   min-width: 0;
   min-height: 40px;
@@ -1362,6 +1265,12 @@ body {
   .prompt-composer__form .prompt-composer__input-wrapper {
     grid-column: 2;
     grid-row: 1;
+  }
+
+  .prompt-composer__context-controls {
+    grid-row: 2;
+    border-bottom: 0;
+    border-top: var(--hairline) solid var(--color-border-subtle);
   }
 
   .prompt-composer__form .ui-textarea {
@@ -1647,7 +1556,7 @@ body {
 }
 
 .sidebar-workspace-row .space-drawer-item--selected::before {
-  /* SidebarRoster already paints the rail on the full Space + children owner. */
+  /* SidebarRoster owns tonal selection; standalone drawer keeps its rail. */
   content: none;
 }
 
@@ -2042,9 +1951,11 @@ body {
   flex-shrink: 0;
 }
 
-.pane-card__explain-trigger {
+/* Keep both label and chevron inside the card after shared recipe reimports. */
+.ui-button.pane-card__explain-trigger {
   min-width: 44px;
   min-height: 44px;
+  height: 44px;
   width: 48px;
   display: flex;
   flex-direction: column;
@@ -3199,7 +3110,11 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 0 var(--space-2) var(--space-2);
+  padding: var(--space-1) var(--space-2);
+}
+.prompt-composer__context-controls {
+  grid-column: 1 / -1;
+  border-bottom: var(--hairline) solid var(--color-border-subtle);
 }
 .chat-controls > [role='status'] {
   flex: 1;
@@ -4212,6 +4127,16 @@ body {
   flex-direction: column;
 }
 
+@media (min-width: 769px) and (min-height: 501px) {
+  .ui-sheet--bottom.navigation-search-sheet {
+    width: min(640px, calc(100vw - 48px));
+    max-height: min(560px, calc(100dvh - 96px));
+    margin: 72px auto auto;
+    border: var(--hairline) solid var(--color-border-subtle);
+    border-radius: var(--radius-xl);
+  }
+}
+
 .navigation-search-bar {
   display: flex;
   align-items: center;
@@ -4310,7 +4235,7 @@ body {
 }
 
 .navigation-search-item.is-current {
-  border-color: rgba(229, 169, 59, 0.3) !important;
+  border-color: var(--color-border-active) !important;
 }
 
 .navigation-search-item__icon {
@@ -4366,9 +4291,9 @@ body {
 }
 
 .navigation-search-item__badge--current {
-  background-color: rgba(229, 169, 59, 0.12);
-  border-color: rgba(229, 169, 59, 0.35);
-  color: var(--color-accent);
+  background-color: var(--color-bg-elevated);
+  border-color: var(--color-control-border);
+  color: var(--color-text-secondary);
 }
 
 .navigation-search-item__chevron {

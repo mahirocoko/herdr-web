@@ -84,16 +84,15 @@ describe('forwarded mobile header, key rail and Working spinner scope', () => {
     expect(css).toContain('@media (prefers-reduced-motion: no-preference)')
   })
 
-  it('gives the selected sidebar Space one rail without changing nested geometry', () => {
-    const nested = css.match(/\.sidebar-workspace-tabs\s*\{([^}]+)\}/)?.[1]
-    expect(nested).toContain('border-left: 1px solid transparent')
-    expect(nested).toContain('margin-left: 12px')
-    expect(nested).toContain('padding-left: 10px')
+  it('keeps Space selection without restoring removed nested tabs/panes styles', () => {
+    expect(css).not.toContain('.sidebar-workspace-tabs')
+    expect(css).not.toContain('.sidebar-pane-item')
     const rowRail = css.match(
       /\.sidebar-workspace-row \.space-drawer-item--selected::before\s*\{([^}]+)\}/
     )?.[1]
     expect(rowRail).toContain('content: none')
-    expect(css).toContain('.sidebar-workspace-item.is-selected::before')
+    expect(css).not.toContain('.sidebar-workspace-item.is-selected::before')
+    expect(css).not.toContain('.horizon-header__workspace-label')
   })
 
   it('starts the mobile composer as one row without changing desktop markup or IME handlers', () => {
@@ -412,12 +411,14 @@ describe('style-guards: zero duplicate control-paint on feature classes across p
 
   it('rejects duplicate paint, focus, and state overrides on prompt composer controls', () => {
     const composerInputs = extractBlock(
-      '.prompt-composer__input,\n.prompt-composer__textarea'
+      '.ui-textarea.prompt-composer__textarea'
     )
     expect(composerInputs).not.toContain('background:')
     expect(composerInputs).not.toContain('border:')
     expect(composerInputs).not.toContain('border-radius:')
     expect(composerInputs).not.toContain('color:')
+    expect(composerInputs).toContain('resize: none;')
+    expect(composerInputs).toContain('min-height: 40px;')
     expect(cssContent).not.toContain('.prompt-composer__textarea:focus-visible')
     expect(cssContent).not.toContain('.prompt-composer__input:focus-visible')
     expect(cssContent).not.toContain('.prompt-composer__textarea:disabled')
@@ -446,7 +447,10 @@ describe('style-guards: zero duplicate control-paint on feature classes across p
     const formBlock = extractBlock('.prompt-composer__form')
     expect(formBlock).not.toContain('var(--color-border)')
     expect(formBlock).not.toContain('var(--shadow-sm)')
-    expect(formBlock).toContain('var(--color-border-subtle)')
+    expect(formBlock).toContain('var(--color-control-border)')
+    expect(formBlock).toContain('var(--shadow-control)')
+    expect(cssContent).toMatch(/--color-control-border:\s*#[0-9a-f]{6};/)
+    expect(cssContent).toMatch(/--shadow-control:\s*inset/)
   })
 
   it('rejects duplicate paint on drawer controls, selects, and lifecycle actions', () => {

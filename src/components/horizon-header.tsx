@@ -101,6 +101,10 @@ const HorizonHeader: FC<IHorizonHeaderProps> = ({
   lifecycleTicket
 }) => {
   const availableModes = getAvailableSurfaceModes(isBlocked)
+  const workspaceTitle =
+    activeWorkspace?.label ||
+    (activeWorkspace ? `Space ${activeWorkspace.number}` : 'Select Workspace')
+  const folderLabel = cwdBasename(selectedPane?.cwd)
 
   return (
     <header className="app-header horizon-header is-zoned">
@@ -174,18 +178,10 @@ const HorizonHeader: FC<IHorizonHeaderProps> = ({
               <Terminal size={18} />
             )}
           </span>
-          <span className="context-title-text">
-            {activeWorkspace?.label ||
-              (activeWorkspace
-                ? `Space ${activeWorkspace.number}`
-                : 'Select Workspace')}
-          </span>
+          <span className="context-title-text">{workspaceTitle}</span>
         </div>
 
         <div className="context-sub header-desktop-only">
-          <span className="horizon-header__workspace-label">
-            {activeWorkspace ? activeWorkspace.label : 'Select Workspace'}
-          </span>
           <span className="context-sep" aria-hidden="true">
             ›
           </span>
@@ -208,13 +204,16 @@ const HorizonHeader: FC<IHorizonHeaderProps> = ({
               aria-hidden="true"
             />
           </Button>
-          {selectedPane?.cwd && (
+          {folderLabel && folderLabel !== workspaceTitle && (
             <>
               <span className="context-sep" aria-hidden="true">
                 ›
               </span>
-              <span className="context-folder" title={selectedPane.cwd}>
-                {cwdBasename(selectedPane.cwd)}
+              <span
+                className="context-folder"
+                title={selectedPane?.cwd ?? undefined}
+              >
+                {folderLabel}
               </span>
             </>
           )}

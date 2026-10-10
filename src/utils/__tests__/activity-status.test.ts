@@ -7,13 +7,13 @@ import {
   deriveTabActivity,
   getActivityStatusDotClass,
   rollupActivities,
-  sanitizeActivity,
+  sanitizeActivity
 } from '../activity-status.ts'
 
 const CURRENT_TABS = [
   { tab_id: 'tab-1', workspace_id: 'ws-1' },
   { tab_id: 'tab-A', workspace_id: 'ws-A' },
-  { tab_id: 'tab-B', workspace_id: 'ws-B' },
+  { tab_id: 'tab-B', workspace_id: 'ws-B' }
 ] as ITab[]
 
 const deriveSpaceActivity = (panes: IPane[], workspaceId: string) =>
@@ -26,32 +26,32 @@ describe('activity-status: pure helper and UI activity rollup contracts', () => 
         pane_id: 'p1',
         tab_id: 'tab-1',
         workspace_id: 'ws-1',
-        agent_status: 'working',
+        agent_status: 'working'
       },
       {
         pane_id: 'orphan',
         tab_id: 'missing',
         workspace_id: 'ws-1',
-        agent_status: 'blocked',
-      },
+        agent_status: 'blocked'
+      }
     ] as IPane[]
     expect(deriveSpaceActivityFromSnapshot(panes, 'ws-1', CURRENT_TABS)).toBe(
-      'working',
+      'working'
     )
     expect(deriveSpaceActivityFromSnapshot(panes, 'ws-1', [])).toBe('unknown')
     const movedTabs = [{ tab_id: 'tab-1', workspace_id: 'ws-B' }] as ITab[]
     expect(deriveSpaceActivityFromSnapshot(panes, 'ws-1', movedTabs)).toBe(
-      'unknown',
+      'unknown'
     )
     expect(deriveSpaceActivityFromSnapshot(panes, 'ws-B', movedTabs)).toBe(
-      'unknown',
+      'unknown'
     )
     expect(
       deriveSpaceActivityFromSnapshot(
         [{ ...panes[0], workspace_id: 'ws-B' }],
         'ws-B',
-        movedTabs,
-      ),
+        movedTabs
+      )
     ).toBe('working')
   })
 
@@ -76,18 +76,18 @@ describe('activity-status: pure helper and UI activity rollup contracts', () => 
 
     // CSS class generator safety
     expect(getActivityStatusDotClass('blocked')).toBe(
-      'space-status-dot--blocked',
+      'space-status-dot--blocked'
     )
     expect(getActivityStatusDotClass('working')).toBe(
-      'space-status-dot--working',
+      'space-status-dot--working'
     )
     expect(getActivityStatusDotClass('done')).toBe('space-status-dot--done')
     expect(getActivityStatusDotClass('idle')).toBe('space-status-dot--idle')
     expect(getActivityStatusDotClass('unknown')).toBe(
-      'space-status-dot--unknown',
+      'space-status-dot--unknown'
     )
     expect(getActivityStatusDotClass('evil" class="hacked')).toBe(
-      'space-status-dot--unknown',
+      'space-status-dot--unknown'
     )
 
     // Direct contract for rollupActivities
@@ -105,8 +105,8 @@ describe('activity-status: pure helper and UI activity rollup contracts', () => 
         pane_id: 'p1',
         tab_id: 'tab-1',
         workspace_id: 'ws-1',
-        agent_status: 'working',
-      } as IPane,
+        agent_status: 'working'
+      } as IPane
     ]
 
     const tabActivity = deriveTabActivity(testPanes, 'ws-1', 'tab-1')
@@ -124,20 +124,20 @@ describe('activity-status: pure helper and UI activity rollup contracts', () => 
         pane_id: 'p1',
         tab_id: 'tab-1',
         workspace_id: 'ws-1',
-        agent_status: 'working',
+        agent_status: 'working'
       } as IPane,
       {
         pane_id: 'p2',
         tab_id: 'tab-1',
         workspace_id: 'ws-1',
-        agent_status: 'blocked',
+        agent_status: 'blocked'
       } as IPane,
       {
         pane_id: 'p3',
         tab_id: 'tab-1',
         workspace_id: 'ws-1',
-        agent_status: 'done',
-      } as IPane,
+        agent_status: 'done'
+      } as IPane
     ]
 
     expect(deriveTabActivity(testPanes, 'ws-1', 'tab-1')).toBe('blocked')
@@ -151,14 +151,14 @@ describe('activity-status: pure helper and UI activity rollup contracts', () => 
         pane_id: 'p1',
         tab_id: 'tab-1',
         workspace_id: 'ws-1',
-        agent_status: 'working',
+        agent_status: 'working'
       } as IPane,
       {
         pane_id: 'p2',
         tab_id: 'tab-1',
         workspace_id: 'ws-1',
-        agent_status: 'done',
-      } as IPane,
+        agent_status: 'done'
+      } as IPane
     ]
     expect(deriveTabActivity(workingPanes, 'ws-1', 'tab-1')).toBe('working')
 
@@ -168,18 +168,18 @@ describe('activity-status: pure helper and UI activity rollup contracts', () => 
         pane_id: 'p1',
         tab_id: 'tab-1',
         workspace_id: 'ws-1',
-        agent_status: 'done',
+        agent_status: 'done'
       } as IPane,
       {
         pane_id: 'p2',
         tab_id: 'tab-1',
         workspace_id: 'ws-1',
-        agent_status: 'done',
-      } as IPane,
+        agent_status: 'done'
+      } as IPane
     ]
     expect(deriveTabActivity(donePanes, 'ws-1', 'tab-1')).toBe('done')
     expect(ACTIVITY_LABEL[deriveTabActivity(donePanes, 'ws-1', 'tab-1')]).toBe(
-      'Done',
+      'Done'
     )
 
     // 3. Panes transition to idle/ready -> Tab/Space become idle
@@ -188,12 +188,12 @@ describe('activity-status: pure helper and UI activity rollup contracts', () => 
         pane_id: 'p1',
         tab_id: 'tab-1',
         workspace_id: 'ws-1',
-        agent_status: 'idle',
-      } as IPane,
+        agent_status: 'idle'
+      } as IPane
     ]
     expect(deriveTabActivity(idlePanes, 'ws-1', 'tab-1')).toBe('idle')
     expect(ACTIVITY_LABEL[deriveTabActivity(idlePanes, 'ws-1', 'tab-1')]).toBe(
-      'Ready',
+      'Ready'
     )
   })
 
@@ -207,13 +207,13 @@ describe('activity-status: pure helper and UI activity rollup contracts', () => 
       pane_id: 'p-shell',
       tab_id: 'tab-1',
       workspace_id: 'ws-1',
-      agent_status: undefined,
+      agent_status: undefined
     } as unknown as IPane
 
     expect(derivePaneActivity(shellPane)).toBe('unknown')
     expect(deriveTabActivity([shellPane], 'ws-1', 'tab-1')).toBe('unknown')
     expect(
-      ACTIVITY_LABEL[deriveTabActivity([shellPane], 'ws-1', 'tab-1')],
+      ACTIVITY_LABEL[deriveTabActivity([shellPane], 'ws-1', 'tab-1')]
     ).toBe('—')
   })
 
@@ -224,8 +224,8 @@ describe('activity-status: pure helper and UI activity rollup contracts', () => 
         pane_id: 'p1',
         tab_id: 'tab-A',
         workspace_id: 'ws-A',
-        agent_status: 'working',
-      } as IPane,
+        agent_status: 'working'
+      } as IPane
     ]
 
     expect(deriveSpaceActivity(initialPanes, 'ws-A')).toBe('working')
@@ -237,8 +237,8 @@ describe('activity-status: pure helper and UI activity rollup contracts', () => 
         pane_id: 'p1',
         tab_id: 'tab-B',
         workspace_id: 'ws-B',
-        agent_status: 'working',
-      } as IPane,
+        agent_status: 'working'
+      } as IPane
     ]
 
     // ws-A now has 0 panes -> reverts to unknown
@@ -259,37 +259,38 @@ describe('activity-status: pure helper and UI activity rollup contracts', () => 
     // 1. sidebar-roster.tsx
     const sidebarRoster = fs.readFileSync(
       path.join(baseDir, 'sidebar-roster.tsx'),
-      'utf8',
+      'utf8'
     )
     expect(sidebarRoster).toContain('deriveSpaceActivity')
-    expect(sidebarRoster).toContain('deriveTabActivity')
-    expect(sidebarRoster).toContain('derivePaneActivity')
+    expect(sidebarRoster).not.toContain('deriveTabActivity')
+    expect(sidebarRoster).not.toContain('derivePaneActivity')
+    expect(sidebarRoster).not.toContain('sidebar-workspace-tabs')
     expect(sidebarRoster).toContain('getActivityStatusDotClass')
     expect(sidebarRoster).not.toContain(
-      'getWorkspaceStatusDotClass(workspace.agent_status)',
+      'getWorkspaceStatusDotClass(workspace.agent_status)'
     )
     expect(sidebarRoster).not.toContain(
-      "badge badge-${tab.agent_status || 'unknown'}",
+      "badge badge-${tab.agent_status || 'unknown'}"
     )
     expect(sidebarRoster).not.toContain(
-      "badge badge-${pane.agent_status || 'idle'}",
+      "badge badge-${pane.agent_status || 'idle'}"
     )
 
     // 2. space-drawer.tsx
     const spaceDrawer = fs.readFileSync(
       path.join(baseDir, 'space-drawer.tsx'),
-      'utf8',
+      'utf8'
     )
     expect(spaceDrawer).toContain('deriveSpaceActivity')
     expect(spaceDrawer).toContain('getActivityStatusDotClass')
     expect(spaceDrawer).not.toContain(
-      'getWorkspaceStatusDotClass(workspace.agent_status)',
+      'getWorkspaceStatusDotClass(workspace.agent_status)'
     )
 
     // 3. pane-drawer.tsx
     const paneDrawer = fs.readFileSync(
       path.join(baseDir, 'pane-drawer.tsx'),
-      'utf8',
+      'utf8'
     )
     expect(paneDrawer).toContain('deriveTabActivity')
     expect(paneDrawer).toContain('derivePaneActivity')
@@ -302,13 +303,13 @@ describe('activity-status: pure helper and UI activity rollup contracts', () => 
     expect(tabRail).toContain('deriveTabActivity')
     expect(tabRail).toContain('getActivityStatusDotClass')
     expect(tabRail).not.toContain(
-      'getWorkspaceStatusDotClass(tab.agent_status)',
+      'getWorkspaceStatusDotClass(tab.agent_status)'
     )
 
     // 5. navigation-search-sheet.tsx
     const navSearch = fs.readFileSync(
       path.join(baseDir, 'navigation-search-sheet.tsx'),
-      'utf8',
+      'utf8'
     )
     expect(navSearch).toContain('deriveSpaceActivity')
     expect(navSearch).toContain('deriveTabActivity')
@@ -316,10 +317,10 @@ describe('activity-status: pure helper and UI activity rollup contracts', () => 
     expect(navSearch).toContain('getActivityStatusDotClass')
     expect(navSearch).toContain('${displaySubtitle}, ${statusSummary}')
     expect(navSearch).toContain(
-      "item.type === 'pane' ? 'effective state' : 'attention'",
+      "item.type === 'pane' ? 'effective state' : 'attention'"
     )
     expect(navSearch).not.toContain(
-      'getWorkspaceStatusDotClass(item.agentStatus)',
+      'getWorkspaceStatusDotClass(item.agentStatus)'
     )
   })
 })

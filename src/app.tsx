@@ -729,7 +729,6 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
       tabs={tabs}
       panes={panes}
       selectedWorkspaceId={workspaceId}
-      selectedPaneId={selectedPaneId}
       onSelectWorkspace={(wsId) => {
         if (wsId !== workspaceId) {
           navigate('/spaces/' + encodeURIComponent(wsId))
@@ -739,18 +738,8 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
           setIsSpaceDrawerOpen(false)
         }
       }}
-      onSelectPane={(pId, wsId) => {
-        if (wsId && wsId !== workspaceId) {
-          navigate('/spaces/' + encodeURIComponent(wsId))
-        }
-        setSelectedPaneId(pId, wsId)
-        if (isMobile) {
-          setIsSpaceDrawerOpen(false)
-        }
-      }}
       onOpenNewSpace={handleOpenNewSpace}
       onOpenCloseSpace={handleOpenCloseSpace}
-      onOpenNewTab={handleOpenNewTab}
       pushState={push.state}
       onOpenSettings={() => {
         if (isMobile) setIsSpaceDrawerOpen(false)
@@ -974,7 +963,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
             )}
           </main>
 
-          {/* Footer Controls: Prompt Composer first, then Thumb Deck */}
+          {/* Composer, contextual Chat controls and Terminal key rail */}
           <footer className="herdr-footer">
             {controlOwnership !== 'idle' ? (
               <div
@@ -1044,27 +1033,29 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
                       </Button>
                     </div>
                   )}
-                {viewMode === 'chat' && (
-                  <ChatControls
-                    key={`${selectedPaneId}:${selectedPane?.terminal_id}:${targetResult.target?.agentSessionId ?? ''}`}
-                    working={
-                      canonicalHasAgent &&
-                      selectedPane?.agent_status === 'working'
-                    }
-                    nativeStatus={selectedPane?.agent_status}
-                    observation={snapshot}
-                    disabled={
-                      isBusy ||
-                      !targetResult.target ||
-                      controlOwnership !== 'idle'
-                    }
-                    requestStop={() => handleSendKeys(['ctrl+c'], true)}
-                    onMore={() => {
-                      setIsChatKeysOpen(true)
-                    }}
-                  />
-                )}
                 <PromptComposer
+                  contextControls={
+                    viewMode === 'chat' ? (
+                      <ChatControls
+                        key={`${selectedPaneId}:${selectedPane?.terminal_id}:${targetResult.target?.agentSessionId ?? ''}`}
+                        working={
+                          canonicalHasAgent &&
+                          selectedPane?.agent_status === 'working'
+                        }
+                        nativeStatus={selectedPane?.agent_status}
+                        observation={snapshot}
+                        disabled={
+                          isBusy ||
+                          !targetResult.target ||
+                          controlOwnership !== 'idle'
+                        }
+                        requestStop={() => handleSendKeys(['ctrl+c'], true)}
+                        onMore={() => {
+                          setIsChatKeysOpen(true)
+                        }}
+                      />
+                    ) : undefined
+                  }
                   draftText={composerDraft}
                   onDraftChange={setComposerDraft}
                   promptPlaceholder={

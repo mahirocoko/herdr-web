@@ -1,32 +1,20 @@
 import { useRef, useEffect } from 'react'
 import type { FC } from 'react'
-import {
-  AlertTriangle,
-  Check,
-  ChevronRight,
-  Layers,
-  Plus,
-  Terminal,
-  Trash2,
-} from 'lucide-react'
+import { AlertTriangle, Check, ChevronRight, Plus, Trash2 } from 'lucide-react'
 import Button from '@/components/ui/button.tsx'
 import type { IPane, ISnapshotStatus, ITab, IWorkspace } from '@/types/herdr.ts'
 import {
-  formatTabLabel,
   formatWorkspaceAriaLabel,
-  formatWorkspaceSourceLine,
-  isAgentPane,
+  formatWorkspaceSourceLine
 } from '@/utils/workspace-helpers.ts'
 import {
   getConnectionStatusLabel,
-  getStatusDotClass,
+  getStatusDotClass
 } from '@/utils/connection-status.ts'
 import {
   ACTIVITY_LABEL,
-  derivePaneActivity,
   deriveSpaceActivity,
-  deriveTabActivity,
-  getActivityStatusDotClass,
+  getActivityStatusDotClass
 } from '@/utils/activity-status.ts'
 import './ui/recipes.css'
 
@@ -35,12 +23,9 @@ export interface ISidebarRosterProps {
   tabs: ITab[]
   panes: IPane[]
   selectedWorkspaceId: string | null
-  selectedPaneId: string | null
   onSelectWorkspace: (workspaceId: string) => void
-  onSelectPane: (paneId: string, workspaceId?: string) => void
   onOpenNewSpace: () => void
   onOpenCloseSpace?: (workspace: IWorkspace) => void
-  onOpenNewTab?: () => void
   pushState?: string
   onOpenSettings: () => void
   status: ISnapshotStatus
@@ -66,18 +51,15 @@ export const SidebarRoster: FC<ISidebarRosterProps> = ({
   tabs,
   panes,
   selectedWorkspaceId,
-  selectedPaneId,
   onSelectWorkspace,
-  onSelectPane,
   onOpenNewSpace,
   onOpenCloseSpace,
-  onOpenNewTab,
   pushState,
   onOpenSettings,
   status,
   blockedPanes,
   onJumpToPane,
-  hasLifecycleGate = false,
+  hasLifecycleGate = false
 }) => {
   const activeWorkspaceRef = useRef<HTMLButtonElement | null>(null)
 
@@ -89,15 +71,11 @@ export const SidebarRoster: FC<ISidebarRosterProps> = ({
     return () => cancelAnimationFrame(frame)
   }, [selectedWorkspaceId])
 
-  const activeTabs = tabs
-    .filter((t) => t.workspace_id === selectedWorkspaceId)
-    .sort((a, b) => a.number - b.number)
-
   return (
     <div
       className="sidebar-roster"
       role="navigation"
-      aria-label="Spaces and Panes Navigation"
+      aria-label="Spaces Navigation"
     >
       {/* Needs Attention / Blocked Panes Strip */}
       {blockedPanes.length > 0 && (
@@ -169,13 +147,13 @@ export const SidebarRoster: FC<ISidebarRosterProps> = ({
             const spaceActivity = deriveSpaceActivity(
               panes,
               workspace.workspace_id,
-              tabs,
+              tabs
             )
             const ariaLabel = formatWorkspaceAriaLabel(
               workspace,
               label,
               metadata,
-              spaceActivity,
+              spaceActivity
             )
 
             return (
@@ -233,134 +211,6 @@ export const SidebarRoster: FC<ISidebarRosterProps> = ({
                     </Button>
                   )}
                 </div>
-
-                {/* Nested Active Space Tabs & Panes */}
-                {isSelected && (
-                  <div
-                    className="sidebar-workspace-tabs"
-                    role="group"
-                    aria-label={`Tabs in ${label}`}
-                  >
-                    <div className="sidebar-workspace-tabs__header">
-                      <span className="sidebar-workspace-tabs__title">
-                        Tabs & Panes
-                      </span>
-                      {onOpenNewTab && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="sidebar-workspace-tabs__new-btn"
-                          onClick={onOpenNewTab}
-                          disabled={hasLifecycleGate}
-                          title="New Shell Tab"
-                          aria-label="New Shell Tab"
-                        >
-                          <Plus size={14} aria-hidden="true" />
-                          <span>Tab</span>
-                        </Button>
-                      )}
-                    </div>
-
-                    <ul className="sidebar-tabs-list">
-                      {activeTabs.map((tab) => {
-                        const tabPanes = panes.filter(
-                          (p) => p.tab_id === tab.tab_id,
-                        )
-                        const hasSelectedPane = tabPanes.some(
-                          (p) => p.pane_id === selectedPaneId,
-                        )
-
-                        const tabActivity = deriveTabActivity(
-                          panes,
-                          workspace.workspace_id,
-                          tab.tab_id,
-                        )
-
-                        return (
-                          <li
-                            key={tab.tab_id}
-                            className={`sidebar-tab-item${hasSelectedPane ? ' is-active-tab' : ''}`}
-                          >
-                            <div className="sidebar-tab-header">
-                              <span className="sidebar-tab-title">
-                                {formatTabLabel(tab)}
-                              </span>
-                              <span
-                                className={`space-status-dot ${getActivityStatusDotClass(tabActivity)}`}
-                                aria-label={`Tab activity: ${ACTIVITY_LABEL[tabActivity]} (Native attention: ${tab.agent_status || 'unknown'})`}
-                                title={`Activity: ${ACTIVITY_LABEL[tabActivity]} (Native attention: ${tab.agent_status || 'unknown'})`}
-                              />
-                            </div>
-
-                            <ul className="sidebar-panes-list">
-                              {tabPanes.map((pane) => {
-                                const isPaneSelected =
-                                  pane.pane_id === selectedPaneId
-                                const hasAgent = isAgentPane(pane)
-                                const paneActivity = derivePaneActivity(pane)
-
-                                return (
-                                  <li key={pane.pane_id}>
-                                    <button
-                                      type="button"
-                                      className={`sidebar-pane-item${isPaneSelected ? ' is-selected' : ''}`}
-                                      onClick={() =>
-                                        onSelectPane(
-                                          pane.pane_id,
-                                          workspace.workspace_id,
-                                        )
-                                      }
-                                      aria-current={
-                                        isPaneSelected ? 'true' : undefined
-                                      }
-                                      title={`${pane.pane_id} — ${displayPaneTitle(pane)}`}
-                                    >
-                                      <span
-                                        className="sidebar-pane-icon"
-                                        aria-hidden="true"
-                                      >
-                                        {hasAgent ? (
-                                          <Layers size={14} />
-                                        ) : (
-                                          <Terminal size={14} />
-                                        )}
-                                      </span>
-                                      <span className="sidebar-pane-content">
-                                        <span className="sidebar-pane-title">
-                                          {displayPaneTitle(pane)}
-                                        </span>
-                                        {pane.cwd && (
-                                          <span className="sidebar-pane-cwd">
-                                            {pane.cwd}
-                                          </span>
-                                        )}
-                                      </span>
-                                      <span
-                                        className="pane-status-indicator"
-                                        title={`Activity: ${ACTIVITY_LABEL[paneActivity]} (Native effective: ${pane.agent_status || 'unknown'})`}
-                                      >
-                                        <span
-                                          className={`space-status-dot ${getActivityStatusDotClass(paneActivity)}`}
-                                          aria-hidden="true"
-                                        />
-                                        <span
-                                          className={`pane-status-word pane-status-word--${paneActivity}`}
-                                        >
-                                          {ACTIVITY_LABEL[paneActivity]}
-                                        </span>
-                                      </span>
-                                    </button>
-                                  </li>
-                                )
-                              })}
-                            </ul>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  </div>
-                )}
               </li>
             )
           })}

@@ -90,7 +90,7 @@ describe('drift-guards: retired absolute claims verification', () => {
       'changed membership returns a definitive 409 rejection and zero RPC'
     )
     expect(agentsMd).toContain('attention aggregates')
-    expect(readme).toContain('upstream attention aggregates')
+    expect(readme).toContain('native attention information')
     expect(archMd).toContain(
       'a Space can truthfully aggregate to `done` while another Tab is `working`'
     )
@@ -109,7 +109,8 @@ describe('drift-guards: retired absolute claims verification', () => {
     )
 
     expect(agentsMd).toContain('Herdr-style Spaces side sheet')
-    expect(readme).toContain('active-Space Tabs & Panes sheet')
+    expect(readme).toContain('**Tabs & Panes drawer**')
+    expect(readme).toContain('no longer contain a nested Tabs & Panes list')
     expect(spaceDrawer).toContain('aria-label="Herdr Spaces"')
     expect(spaceDrawer).not.toContain('New Shell Tab')
     expect(paneDrawer).toContain('Tabs & Panes')

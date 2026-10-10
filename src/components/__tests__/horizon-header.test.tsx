@@ -11,6 +11,35 @@ describe('HorizonHeader context ownership and responsive markup', () => {
     onOpenTabs: () => {}
   }
 
+  it('does not repeat a Space title as an identical workspace or folder breadcrumb', () => {
+    const html = renderToStaticMarkup(
+      <HorizonHeader
+        {...common}
+        activeWorkspace={{
+          workspace_id: 'w1',
+          number: 1,
+          label: 'Project',
+          agent_status: 'done',
+          tab_count: 1,
+          pane_count: 1,
+          focused: true
+        }}
+        selectedPane={{
+          pane_id: 'p1',
+          workspace_id: 'w1',
+          tab_id: 't1',
+          agent_status: 'done',
+          focused: true,
+          cwd: '/projects/Project'
+        }}
+      />
+    )
+    expect(html.match(/>Project<\/span>/g)).toHaveLength(1)
+    expect(html).not.toContain('horizon-header__workspace-label')
+    expect(html).not.toContain('context-folder')
+    expect(html).toContain('Open Tabs and Panes')
+  })
+
   it('shows the current Space title and retains desktop Tab and folder context', () => {
     const html = renderToStaticMarkup(
       <HorizonHeader
