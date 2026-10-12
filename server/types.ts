@@ -153,7 +153,18 @@ export interface ITabCloseTargetIdentity {
   expected: ITabCloseExpectedMembership
 }
 
+export type IHeldActionRequest =
+  | {
+      type: 'held-enqueue'
+      operationId: string
+      target: IActionTargetIdentity
+      text: string
+    }
+  | { type: 'held-send'; operationId: string; heldId: string }
+  | { type: 'held-discard'; operationId: string; heldId: string }
+
 export type IActionRequest =
+  | IHeldActionRequest
   | {
       type: 'prompt-answer'
       operationId: string

@@ -1,6 +1,13 @@
 // MIT License - Copyright (c) 2026 devswha
 // Content jobs from pinned5979118 FileViewer; existing local Dialog/lightbox recipe.
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode
+} from 'react'
 import { Dialog } from '@base-ui/react/dialog'
 import { X, Download, Folder, ArrowUp } from 'lucide-react'
 import { OpenChatToolFileContext } from './chat-tool-content.tsx'
@@ -12,7 +19,160 @@ import {
 import type { FileViewResult } from '@/types/file-viewer.ts'
 import Button from './ui/button.tsx'
 import TerminalImagePreview from './terminal-image-preview.tsx'
+import { Markdown } from './markdown.tsx'
+import ToggleGroup from './ui/toggle-group.tsx'
+import Toggle from './ui/toggle.tsx'
+import Textarea from './ui/textarea.tsx'
+import {
+  canReadMarkdownPreview,
+  resolveViewedFileLink,
+  sourcePreviewPage
+} from '@/utils/file-viewer-text.ts'
 import './chat-file-viewer.css'
+
+interface IFileTextPreviewProps {
+  path: string
+  size: number
+  text: string
+  onOpen: (path: string) => void
+}
+export const FileTextPreview = ({
+  path,
+  size,
+  text,
+  onOpen
+}: IFileTextPreviewProps) => {
+  const markdown = /\.(md|markdown)$/i.test(path)
+  const readable = useMemo(() => canReadMarkdownPreview(text), [text])
+  const [mode, setMode] = useState<'reader' | 'source'>(
+    markdown && readable ? 'reader' : 'source'
+  )
+  const [page, setPage] = useState(0)
+  const [copyState, setCopyState] = useState<
+    'idle' | 'pending' | 'copied' | 'manual'
+  >('idle')
+  const source = useMemo(() => sourcePreviewPage(text, page), [text, page])
+  const truncated = size > 64 * 1024
+  const copy = async () => {
+    setCopyState('pending')
+    try {
+      if (!navigator.clipboard?.writeText)
+        throw new Error('Clipboard unavailable')
+      await navigator.clipboard.writeText(text)
+      setCopyState('copied')
+    } catch {
+      setCopyState('manual')
+    }
+  }
+  return (
+    <>
+      <div className="file-text-controls">
+        {markdown && (
+          <ToggleGroup
+            aria-label="File view"
+            value={[mode]}
+            onValueChange={(values) => {
+              if (values[0] === 'reader' || values[0] === 'source')
+                setMode(values[0])
+            }}
+          >
+            <Toggle value="reader" variant="tab" disabled={!readable}>
+              Markdown
+            </Toggle>
+            <Toggle value="source" variant="tab">
+              Source
+            </Toggle>
+          </ToggleGroup>
+        )}
+        <Button
+          variant="secondary"
+          disabled={copyState === 'pending'}
+          onClick={() => void copy()}
+        >
+          {truncated ? 'Copy preview' : 'Copy file'}
+        </Button>
+        {copyState === 'copied' && (
+          <span role="status">
+            {truncated ? 'Preview copied' : 'File copied'}
+          </span>
+        )}
+      </div>
+      {truncated && (
+        <p className="file-text-notice" role="status">
+          Showing the first 64 KiB. Copy includes only this preview; download
+          for the complete file.
+        </p>
+      )}
+      {markdown && !readable && (
+        <p className="file-text-notice">
+          This document is too complex for Markdown preview. Read the paged
+          source or download the complete file.
+        </p>
+      )}
+      {copyState === 'manual' && (
+        <div className="file-copy-fallback">
+          <p role="status">
+            Clipboard unavailable. Select the text below and copy manually.
+          </p>
+          <Textarea
+            aria-label={truncated ? 'Preview to copy' : 'File to copy'}
+            readOnly
+            value={text}
+            onFocus={(event) => event.currentTarget.select()}
+          />
+        </div>
+      )}
+      {text === '' ? (
+        <p>Empty file</p>
+      ) : mode === 'reader' && readable ? (
+        <OpenChatToolFileContext.Provider
+          value={(target) => {
+            const resolved = resolveViewedFileLink(path, target)
+            if (resolved) onOpen(resolved)
+          }}
+        >
+          <Markdown className="file-markdown">{text}</Markdown>
+        </OpenChatToolFileContext.Provider>
+      ) : (
+        <>
+          <div className="file-source-navigation">
+            <Button
+              variant="ghost"
+              disabled={source.current === 0}
+              onClick={() => setPage(source.current - 1)}
+            >
+              Previous lines
+            </Button>
+            <span role="status">
+              Lines {source.start + 1}–{source.start + source.lines.length} of{' '}
+              {source.total}
+            </span>
+            <Button
+              variant="ghost"
+              disabled={source.current + 1 === source.pages}
+              onClick={() => setPage(source.current + 1)}
+            >
+              Next lines
+            </Button>
+          </div>
+          <pre
+            className="file-text"
+            aria-label="File source"
+            style={{ '--file-line-start': source.start } as CSSProperties}
+          >
+            <code>
+              {source.lines.map((line, index) => (
+                <span className="file-source-line" key={source.start + index}>
+                  {line}
+                </span>
+              ))}
+            </code>
+          </pre>
+        </>
+      )}
+    </>
+  )
+}
 
 interface IChatFilesProps {
   paneId: string
@@ -54,7 +214,11 @@ const ChatFiles = ({ paneId, children }: IChatFilesProps) => {
         setInfo(next)
         if ('candidates' in next) return
         if (next.kind === 'text' && next.ref) {
-          const preview = await fileTextPreview(next.ref, controller.signal)
+          const preview = await fileTextPreview(
+            next.ref,
+            controller.signal,
+            next.size > 64 * 1024
+          )
           if (valid()) setText(preview)
         } else if (
           next.kind === 'image' &&
@@ -89,7 +253,20 @@ const ChatFiles = ({ paneId, children }: IChatFilesProps) => {
   }, [target, paneId])
   const open = (path: string, offset = 0) => setTarget({ path, offset })
   const content = () => {
-    if (error) return <p role="alert">{error}</p>
+    if (error)
+      return (
+        <>
+          <p role="alert">{error}</p>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              if (target) open(target.path, target.offset)
+            }}
+          >
+            Reopen file
+          </Button>
+        </>
+      )
     if (!info) return <p role="status">Opening file…</p>
     if ('candidates' in info)
       return (
@@ -136,17 +313,16 @@ const ChatFiles = ({ paneId, children }: IChatFilesProps) => {
         </>
       )
     if (info.kind === 'text')
-      return (
-        <>
-          {text === null ? (
-            <p role="status">Loading text…</p>
-          ) : (
-            <pre className="file-text">{text}</pre>
-          )}
-          {info.size > 64 * 1024 && (
-            <p>Showing the first 64 KiB. Download for the complete file.</p>
-          )}
-        </>
+      return text === null ? (
+        <p role="status">Loading text…</p>
+      ) : (
+        <FileTextPreview
+          key={info.ref}
+          path={info.path}
+          size={info.size}
+          text={text}
+          onOpen={open}
+        />
       )
     if (info.kind === 'image')
       return image ? (

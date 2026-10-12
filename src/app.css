@@ -1254,9 +1254,8 @@ body {
   (max-width: 1023px) and (max-height: 500px) and (orientation: landscape) {
   .prompt-composer__form {
     display: grid;
-    grid-template-columns: var(--touch-target) minmax(0, 1fr) var(
-        --touch-target
-      );
+    /* Queue and Send share the trailing owner; its width follows both controls. */
+    grid-template-columns: var(--touch-target) minmax(0, 1fr) auto;
     align-items: end;
     gap: var(--space-1);
     padding: var(--space-1);

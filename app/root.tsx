@@ -10,6 +10,8 @@ import {
   useNavigate
 } from 'react-router'
 import { useSnapshot } from '@/hooks/use-snapshot.ts'
+import { useChatSubmissions } from '@/hooks/use-chat-submissions.ts'
+import { useHeldMessages } from '@/hooks/use-held-messages.ts'
 import {
   useLifecycleOperations,
   type ILifecycleOperations
@@ -56,6 +58,8 @@ export interface IAppOutletContext {
   setSelectedPaneId: (paneId: string, workspaceId?: string) => void
   refreshSnapshot: () => Promise<boolean>
   lifecycle: ILifecycleOperations
+  submissions: ReturnType<typeof useChatSubmissions>
+  held: ReturnType<typeof useHeldMessages>
   push: ReturnType<typeof usePushSubscription>
   viewportGeometry: IVisualViewportGeometry | null
   drawerTriggerRef: React.RefObject<HTMLButtonElement | null>
@@ -109,6 +113,8 @@ const Root = () => {
     getSnapshot
   } = useSnapshot(2000)
 
+  const submissions = useChatSubmissions()
+  const held = useHeldMessages()
   const lifecycle = useLifecycleOperations()
   const push = usePushSubscription()
   const viewportGeometry = useVisualViewport()
@@ -342,6 +348,8 @@ const Root = () => {
     setSelectedPaneId,
     refreshSnapshot,
     lifecycle,
+    submissions,
+    held,
     push,
     viewportGeometry,
     drawerTriggerRef,

@@ -1,5 +1,8 @@
 // Extracted from devswha/herdr-web-ui@59791189f76add8ddfba8d038264bb1a549d47da server/prompt.ts.
 // MIT License, Copyright (c) 2026 devswha. Pure parser/answer graph preserved.
+// Selective 7f12ec6 delta: Claude approval tails, question cursor/draft graph,
+// and wrapped session-model hint recognition; local per-write authority retained.
+// Local hardening: complete footer tails and no stale-native fallback authority.
 import { createHash } from 'node:crypto'
 import type { IInteractivePrompt as InteractivePrompt } from '../src/types/interactive-prompt.ts'
 import type { IQueuedQuestion as QueuedQuestion } from './codex-questions.ts'
@@ -41,8 +44,16 @@ const CLAUDE_CONFIRM_HINT_RE =
   /enter to confirm.*esc to (?:cancel|exit|go back)/i
 // Claude Code's `/model` list, by the two keys it takes a pick with: Enter saves it as the default
 // for new sessions, `s` keeps it to this session
-const CLAUDE_MODEL_HINT_RE =
-  /enter to set as default.*\bs to use this session only.*esc to cancel/i
+// Spaces are optional between hint characters: narrow panes wrap inside words.
+const CLAUDE_MODEL_GUARD_RE = new RegExp(
+  '^' +
+    ['Enter to set as default', 's to use this session only', 'Esc to cancel']
+      .map((part) => [...part.replace(/\s+/g, '')].join('\\s*'))
+      .join('\\s*·\\s*') +
+    '$',
+  'i'
+)
+const CLAUDE_HINT_LINES = 16
 // Codex's `/model` lists, by the footer of the row under the cursor (its keymap's own words): a
 // row that only opens the next list takes Enter, a row that picks takes `s` for this session and
 // Enter to save the pick as the default (`enter apply` on Ultra)
@@ -268,8 +279,8 @@ function parseNumberedRows(
       .match(NUMBERED_OPTION_RE)
     if (!match) continue
     let label = match[3]!.trim()
-    const checked = /^\[[xX✓]\]/.test(label)
-    label = label.replace(/^\[[ xX✓]\]\s*/, '').trim()
+    const checked = /^\[[xX✓✔]\]/.test(label)
+    label = label.replace(/^\[[ xX✓✔]\]\s*/, '').trim()
     rows.push({
       number: Number.parseInt(match[2]!, 10),
       label,
@@ -779,12 +790,36 @@ function parseClaudeQuestion(screen: string): ParsedPrompt | null {
     ? findLastIndex(lines.slice(0, hintIndex), (line) => isDivider(line))
     : hintIndex
   const rows = menuRows(lines, Math.max(0, hintIndex - 64), end)
-  if (!sequentialRows(rows) || rows.filter((row) => row.selected).length !== 1)
+  // Submit is unnumbered but occupies a cursor position before Chat about this.
+  const submitLine =
+    rows.length < 2
+      ? undefined
+      : lines
+          .slice(rows.at(-2)!.lineIndex + 1, rows.at(-1)!.lineIndex)
+          .map(cleanLine)
+          .find((line) => /^(?:[›>❯]\s*)?Submit$/.test(line))
+  const onSubmit = submitLine !== undefined && SELECTED_RE.test(submitLine)
+  if (
+    !sequentialRows(rows) ||
+    rows.filter((row) => row.selected).length !== (onSubmit ? 0 : 1)
+  )
     return null
   const chatIndex = rows.findIndex((row) => row.label === 'Chat about this')
-  const customIndex = rows.findIndex((row) =>
+  let customIndex = rows.findIndex((row) =>
     /^Type something\.?$/i.test(row.label)
   )
+  // A native chip/tabs and separating rule identify the custom row after its
+  // label has become a draft. Never infer that from arbitrary numbered output.
+  const drafted =
+    customIndex < 0 &&
+    !preview &&
+    chatIndex > 1 &&
+    lines
+      .slice(rows[chatIndex - 1]!.lineIndex + 1, rows[chatIndex]!.lineIndex)
+      .some(isDivider) &&
+    (claudeTabs(lines, rows[0]!.lineIndex) !== null ||
+      claudeChip(lines, rows[0]!.lineIndex) !== null)
+  if (drafted) customIndex = chatIndex - 1
   if (preview) {
     // its notes are no answer of their own: no typed-answer row, the options are the menu
     if (customIndex >= 0 || chatIndex >= 0) return null
@@ -802,8 +837,16 @@ function parseClaudeQuestion(screen: string): ParsedPrompt | null {
   if (!question) return null
   const optionRows = preview ? rows : rows.slice(0, customIndex)
   const multiSelect = optionRows.some((row) =>
-    /^\s*(?:[›>❯]\s*)?\d+\.\s+\[[ xX✓]\]/.test(lines[row.lineIndex]!)
+    /^\s*(?:[›>❯]\s*)?\d+\.\s+\[[ xX✓✔]\]/.test(lines[row.lineIndex]!)
   )
+  if (onSubmit && !multiSelect) return null
+  const submit = multiSelect && submitLine !== undefined
+  const rowAt = rows.findIndex((row) => row.selected)
+  const selectedIndex = onSubmit
+    ? rows.length - 1
+    : submit && rowAt === rows.length - 1
+      ? rowAt + 1
+      : rowAt
   const current = tabs?.tabs.findIndex((tab) => !tab.answered) ?? -1
   // a bar cut off by a narrow pane does not show how many questions there are
   const title =
@@ -826,13 +869,32 @@ function parseClaudeQuestion(screen: string): ParsedPrompt | null {
     },
     {
       responder: 'claude-question',
-      menuLabels: rows.map((row) => row.label),
-      selectedIndex: rows.findIndex((row) => row.selected),
+      menuLabels: submit
+        ? [
+            ...rows.slice(0, -1).map((row) => row.label),
+            'Submit',
+            rows.at(-1)!.label
+          ]
+        : rows.map((row) => row.label),
+      selectedIndex,
       checkedOptionIndices: optionRows.flatMap((row, index) =>
         row.checked ? [index] : []
       ),
       customMenuIndex: preview ? null : customIndex,
-      rejectWithEscapeIndex: null
+      rejectWithEscapeIndex: null,
+      ...(drafted
+        ? {
+            customSteps: (text: string) => [
+              ...keySteps([
+                ...navigationKeys(customIndex - selectedIndex),
+                'ctrl+k',
+                'ctrl+u'
+              ]),
+              { text },
+              ...keySteps([KEY.enter])
+            ]
+          }
+        : {})
     }
   )
 }
@@ -1892,6 +1954,26 @@ function parseOmpApproval(screen: string): ParsedPrompt | null {
   )
 }
 
+const CLAUDE_APPROVAL_FOOTER_RE =
+  /^esc to cancel(?:\s*·\s*tab to amend)?(?:\s*·\s*ctrl\+e to explain)?$|^esc to cancel\s*·\s*ctrl\+x ctrl\+k twice to stop background agents$/i
+
+// Bind rows to their first footer, not a later input's cancel hint. Consume
+// complete contiguous lines so a wrapped continuation is part of that footer.
+function claudeApprovalFooter(lines: string[], after: number) {
+  const start = lines.findIndex(
+    (line, index) => index > after && /^esc to\b/i.test(cleanLine(line))
+  )
+  if (start < 0) return null
+  let complete: { start: number; end: number } | null = null
+  for (let end = start + 1; end <= Math.min(start + 3, lines.length); end++) {
+    const span = lines.slice(start, end).map(cleanLine)
+    if (span.some((line) => !line || isDivider(line))) break
+    if (CLAUDE_APPROVAL_FOOTER_RE.test(span.join(' ')))
+      complete = { start, end }
+  }
+  return complete
+}
+
 function parseClaudeApproval(screen: string): ParsedPrompt | null {
   const lines = screen.replace(ANSI_RE, '').split(/\r?\n/)
   const planIndex = findLastIndex(lines, (_, index) =>
@@ -1956,9 +2038,9 @@ function parseClaudeApproval(screen: string): ParsedPrompt | null {
   )
   if (questionIndex < 0) return null
   // options end at the key hint: a line under the last one is then only its wrapped label
-  const hintIndex = findLastIndex(lines, (_, index) =>
-    /esc to cancel/i.test(wrapped(lines, index))
-  )
+  const footer = claudeApprovalFooter(lines, questionIndex)
+  if (!footer) return null
+  const hintIndex = footer.start
   const rows = parseNumberedRows(
     lines,
     questionIndex + 1,
@@ -2558,6 +2640,42 @@ function parseCodexModel(screen: string): ParsedPrompt | null {
  * Whether a model list of Claude Code's or Codex's holds the end of the screen, read or not. Enter
  * there saves a default, so nothing that ends in Enter is typed while one is open.
  */
+// A known native prompt rejected by its exact tail must not regain Enter/s
+// authority through the generic blocked-pane fallback card.
+export function sourcePromptBlocksFallback(
+  agent: string,
+  screen: string
+): boolean {
+  if (agent !== 'claude') return false
+  // Recognition is deliberately weaker than actionable parsing: malformed or
+  // stale native panels must not recover generic Enter authority after rejection.
+  const evidenceLines = screen.replace(ANSI_RE, '').split(/\r?\n/)
+  const question = findLastIndex(evidenceLines, (line) =>
+    /^Do you want to .+\?$/i.test(cleanLine(line))
+  )
+  if (
+    question >= 0 &&
+    parseNumberedRows(evidenceLines, question + 1, evidenceLines.length)
+      .length >= 2 &&
+    evidenceLines
+      .slice(question + 1)
+      .some((_, index, tail) => /esc to\s+cancel/i.test(wrapped(tail, index)))
+  )
+    return true
+  const hintPrefix = new RegExp(
+    CLAUDE_MODEL_GUARD_RE.source.replace(/\$$/, ''),
+    'i'
+  )
+  const lines = screen.replace(ANSI_RE, '').split(/\r?\n/).map(cleanLine)
+  return (
+    lines.some((_, index) =>
+      hintPrefix.test(
+        compactLines(lines.slice(index, index + CLAUDE_HINT_LINES))
+      )
+    ) && !claudeModelListWaits(screen)
+  )
+}
+
 export function modelListWaits(agent: string, screen: string): boolean {
   return (
     claudeModelListWaits(screen) ||
@@ -2571,24 +2689,50 @@ export function modelListWaits(agent: string, screen: string): boolean {
  * while herdr happens to report the pane blocked: that card offers Enter, and Enter on this list
  * saves the row under the cursor as the default for every new session.
  */
+const compactLines = (lines: string[]): string =>
+  lines
+    .map(cleanLine)
+    .filter((line) => !isDivider(line))
+    .join('')
+    .replace(/\s+/g, '')
+
+const claudeModelHintAt = (
+  lines: string[],
+  index: number,
+  end = index + CLAUDE_HINT_LINES
+): boolean => {
+  if (!cleanLine(lines[index] ?? '') || isDivider(cleanLine(lines[index]!)))
+    return false
+  // Parser discovery may have a native task footer after the hint. Each
+  // candidate hint must consume its own complete lines, never a prefix thereof.
+  for (let tail = index + 1; tail <= Math.min(end, lines.length); tail++)
+    if (CLAUDE_MODEL_GUARD_RE.test(compactLines(lines.slice(index, tail))))
+      return true
+  return false
+}
+
 function claudeModelListWaits(screen: string): boolean {
   const visible = screen
     .replace(ANSI_RE, '')
     .split(/\r?\n/)
     .map(cleanLine)
     .filter((line) => line && !isDivider(line))
-  // wider than the reader's own window: a hint wrapped further than it reads is still this list's.
-  // The match runs into the line it ends at, as in promptTailIsActive: a hint that ended above
-  // later output is an answered list's, and holds nothing
-  const ends = (lines: string[], end: number): boolean =>
-    [1, 2, 3, 4, 5, 6].some((span) => {
-      const from = Math.max(0, end - span)
-      return (
-        CLAUDE_MODEL_HINT_RE.test(lines.slice(from, end).join(' ')) &&
-        (span === 1 ||
-          !CLAUDE_MODEL_HINT_RE.test(lines.slice(from, end - 1).join(' ')))
-      )
-    })
+  // The shortest matching run must start with the hint and end at its final
+  // line. Quoted hints and answered lists above later output are not active.
+  const ends = (lines: string[], end: number): boolean => {
+    for (
+      let from = end - 1;
+      from >= Math.max(0, end - CLAUDE_HINT_LINES);
+      from--
+    ) {
+      if (CLAUDE_MODEL_GUARD_RE.test(compactLines(lines.slice(from, end))))
+        return (
+          claudeModelHintAt(lines, from, end) &&
+          !CLAUDE_MODEL_GUARD_RE.test(compactLines(lines.slice(from, end - 1)))
+        )
+    }
+    return false
+  }
   // Claude's own footer under the open list (the session's rule, its task list) is no later
   // output, and it sits under a wrapped hint as under a whole one
   const shown = withoutClaudeTasks(visible, ends)
@@ -2601,7 +2745,7 @@ function parseClaudeModel(screen: string): ParsedPrompt | null {
     .split(/\r?\n/)
     .map((line) => line.trimEnd())
   const hintIndex = findLastIndex(lines, (_, index) =>
-    CLAUDE_MODEL_HINT_RE.test(wrapped(lines, index))
+    claudeModelHintAt(lines, index)
   )
   if (hintIndex < 0) return null
   const { rows, below, last, unread } = listRows(
@@ -2752,10 +2896,25 @@ function promptTailIsActive(prompt: ParsedPrompt, screen: string): boolean {
     )
   if (prompt.responder === 'omp-approval')
     return ends(/^(?:[›>❯•]\s*)?(?:Approve|Deny)$|esc.*cancel/i)
-  if (prompt.responder === 'claude-approval')
-    return ends(/esc to cancel.*(?:tab|ctrl\+e)|ctrl\+e to explain/i)
+  // Newer Claude approvals end in the bare cancel hint or the exact stop-agents
+  // chord. Arbitrary trailing output must not keep an answered approval active.
+  if (prompt.responder === 'claude-approval') {
+    const question = findLastIndex(cleanLines, (line) =>
+      /^Do you want to .+\?$/i.test(line)
+    )
+    const footer = claudeApprovalFooter(cleanLines, question)
+    if (!footer) return false
+    const footerLines = cleanLines.slice(footer.start, footer.end)
+    const tail = cleanLines
+      .slice(footer.start)
+      .filter((line) => line && !isDivider(line))
+    const active = withoutClaudeTasks(tail, (lines, end) =>
+      CLAUDE_APPROVAL_FOOTER_RE.test(lines.slice(0, end).join(' '))
+    )
+    return active.length === footerLines.length
+  }
   if (prompt.responder === 'claude-confirm') return ends(CLAUDE_CONFIRM_HINT_RE)
-  if (prompt.responder === 'claude-model') return ends(CLAUDE_MODEL_HINT_RE)
+  if (prompt.responder === 'claude-model') return claudeModelListWaits(screen)
   if (prompt.responder === 'codex-model')
     return ends(
       /(?:^|\s)enter select\s*·\s*esc back$|(?:^|\s)enter (?:default|apply)\s*·\s*s session\s*·\s*esc back$/i

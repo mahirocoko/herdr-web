@@ -49,10 +49,22 @@ import { useChatPreferences } from '@/hooks/use-chat-preferences.ts'
 import { ChatPreferences, chatPreferenceStyle } from './chat-preferences.tsx'
 import { ChatRenderBoundary } from './chat-render-boundary.tsx'
 import { dismissKeyboardOn } from '@/utils/chat-keyboard.ts'
+import type { IActionTargetIdentity } from '@/types/herdr.ts'
+import type { useChatSubmissions } from '@/hooks/use-chat-submissions.ts'
+import type { useHeldMessages } from '@/hooks/use-held-messages.ts'
+import {
+  corroboratedSubmission,
+  sameSubmissionTarget,
+  submissionBaseline,
+  submissionLabel
+} from '@/utils/chat-submissions.ts'
 
 export interface IChatViewProps {
   paneId: string | null
   sendRevision?: number
+  actionTarget?: IActionTargetIdentity | null
+  submissions?: ReturnType<typeof useChatSubmissions>
+  held?: ReturnType<typeof useHeldMessages>
   agentName?: string | null
   agentStatus?: string
   connected?: boolean
@@ -445,6 +457,9 @@ const SkillActivity = ({ parts }: { parts: ConversationPart[] }) => {
 const ChatView: FC<IChatViewProps> = ({
   paneId,
   sendRevision = 0,
+  actionTarget = null,
+  submissions,
+  held,
   agentStatus,
   connected = true,
   isAgent = true,
@@ -469,6 +484,7 @@ const ChatView: FC<IChatViewProps> = ({
 
   const {
     turns,
+    contributions,
     sessionKey,
     metadata,
     abandoned,
@@ -484,6 +500,40 @@ const ChatView: FC<IChatViewProps> = ({
     isEnabled: isAgent && Boolean(paneId),
     pollIntervalMs: 2000
   })
+
+  const observeSubmissionBaseline = submissions?.observe
+  useEffect(() => {
+    if (actionTarget && actionTarget.paneId === paneId)
+      observeSubmissionBaseline?.(
+        actionTarget,
+        error ? null : submissionBaseline(sessionKey, contributions)
+      )
+  }, [
+    actionTarget?.paneId,
+    actionTarget?.terminalId,
+    actionTarget?.agentSessionId,
+    actionTarget?.expectedMode,
+    paneId,
+    sessionKey,
+    contributions,
+    error,
+    observeSubmissionBaseline
+  ])
+  const paneSubmissions =
+    submissions?.records.filter((record) => record.target.paneId === paneId) ??
+    []
+  const corroborations = new Map(
+    paneSubmissions.map((record) => [
+      record.operationId,
+      corroboratedSubmission(
+        record,
+        paneSubmissions,
+        actionTarget,
+        sessionKey,
+        contributions
+      )
+    ])
+  )
 
   // Maintain scroll stickiness
   if (sendRevision && sentOver.current?.revision !== sendRevision)
@@ -559,7 +609,7 @@ const ChatView: FC<IChatViewProps> = ({
       prependRef.current = null
     } else if (stickToBottomRef.current) node.scrollTop = node.scrollHeight
     if (!isLoadingOlder) prependRef.current = null
-  }, [turns, isLoadingOlder])
+  }, [turns, isLoadingOlder, submissions?.records])
 
   useLayoutEffect(() => {
     const node = scrollerRef.current
@@ -715,6 +765,154 @@ const ChatView: FC<IChatViewProps> = ({
               )
             })}
 
+            {paneSubmissions.map((record) => {
+              const nativeId = corroborations.get(record.operationId)
+              const currentSession =
+                sameSubmissionTarget(record.target, actionTarget) &&
+                (!record.baseline || record.baseline.sessionKey === sessionKey)
+              return (
+                <article
+                  key={record.operationId}
+                  className="chat-turn chat-turn-user"
+                >
+                  <div className="chat-user-row">
+                    {!nativeId && (
+                      <div className="chat-bubble">
+                        <Markdown>{record.text}</Markdown>
+                      </div>
+                    )}
+                    <p className="chat-inline-state" role="status">
+                      {nativeId
+                        ? 'Corroborated in native transcript — execution not confirmed.'
+                        : submissionLabel(record)}
+                      {!currentSession &&
+                        ' Captured target/history differs or is unavailable; this evidence does not authorize input.'}
+                    </p>
+                    <details className="chat-compact">
+                      <summary>Submission evidence</summary>
+                      <div className="chat-compact-text">
+                        <p>Operation: {record.operationId}</p>
+                        <p>
+                          Target: {record.target.paneId} /{' '}
+                          {record.target.terminalId} /{' '}
+                          {record.target.agentSessionId ??
+                            'session unavailable'}
+                        </p>
+                        <p>Browser generation: {record.generation}</p>
+                        <time dateTime={record.submittedAt}>
+                          {record.submittedAt}
+                        </time>
+                      </div>
+                    </details>
+                  </div>
+                </article>
+              )
+            })}
+            {held?.records
+              .filter((record) => record.target.paneId === paneId)
+              .map((record) => (
+                <article className="chat-turn" key={record.operationId}>
+                  <div className="chat-compact-text">
+                    <p>{record.text}</p>
+                  </div>
+                  <p className="chat-inline-state" role="status">
+                    {record.state === 'held'
+                      ? 'Held in Web — send manually'
+                      : record.state === 'consumed'
+                        ? 'Submitted — native execution not confirmed'
+                        : record.state === 'discarded'
+                          ? 'Discarded unsent Web-held text — no native cancellation'
+                          : record.state === 'uncertain'
+                            ? 'Outcome uncertain — inspect Terminal; no retry'
+                            : record.state === 'enqueue-unknown'
+                              ? 'Enqueue outcome unknown — refresh held evidence; do not enqueue again.'
+                              : record.state === 'rejected'
+                                ? 'Enqueue rejected — no retained Web intent.'
+                                : record.state}
+                    {record.restored &&
+                      ' Restored informational copy — no delivery or discard authority.'}
+                  </p>
+                  {!sameSubmissionTarget(record.target, actionTarget) && (
+                    <p className="chat-inline-state">
+                      Captured target/session differs or is unavailable. Send
+                      controls are unavailable.
+                    </p>
+                  )}
+                  {record.error && <p role="alert">{record.error}</p>}
+                  {record.state === 'held' &&
+                    !record.restored &&
+                    sameSubmissionTarget(record.target, actionTarget) && (
+                      <>
+                        <Button
+                          variant="secondary"
+                          onClick={() => void held.send(record)}
+                        >
+                          Send now
+                        </Button>
+                        <p className="chat-inline-state">
+                          Submit now; does not guarantee native interruption.
+                        </p>
+                      </>
+                    )}
+                  {record.state === 'held' && !record.restored && (
+                    <Button
+                      variant="ghost"
+                      onClick={() => void held.discard(record)}
+                    >
+                      Discard unsent Web-held text
+                    </Button>
+                  )}
+                  {!record.restored && (
+                    <Button
+                      variant="ghost"
+                      onClick={() => void held.refresh(record)}
+                    >
+                      Refresh held evidence (read only)
+                    </Button>
+                  )}
+                  {(record.restored ||
+                    [
+                      'rejected',
+                      'consumed',
+                      'discarded',
+                      'invalidated',
+                      'uncertain'
+                    ].includes(record.state)) && (
+                    <Button
+                      variant="ghost"
+                      onClick={() => held.dismiss(record)}
+                    >
+                      Dismiss saved copy
+                    </Button>
+                  )}
+                  <p className="chat-inline-state">
+                    Enqueue operation: {record.operationId}
+                  </p>
+                  <Button variant="ghost" onClick={onSwitchToStream}>
+                    Inspect Terminal
+                  </Button>
+                </article>
+              ))}
+            {paneSubmissions.length > 0 && (
+              <div>
+                <Button variant="ghost" onClick={() => submissions?.clear()}>
+                  Clear saved receipts (all panes)
+                </Button>
+                <p className="chat-inline-state">
+                  Removes Web evidence only; does not cancel native input.
+                </p>
+              </div>
+            )}
+            {held?.storageError && (
+              <p className="chat-inline-state" role="status">
+                {held.storageError}
+              </p>
+            )}
+            {submissions?.storageError && (
+              <p className="chat-inline-state" role="status">
+                {submissions.storageError}
+              </p>
+            )}
             {!connected && <p className="chat-inline-state">reconnecting…</p>}
 
             {error !== null && (
@@ -739,11 +937,14 @@ const ChatView: FC<IChatViewProps> = ({
               </p>
             )}
 
-            {!isLoading && turns.length === 0 && error === null && (
-              <div className="chat-empty">
-                <p>No conversation yet — say something below</p>
-              </div>
-            )}
+            {!isLoading &&
+              turns.length === 0 &&
+              paneSubmissions.length === 0 &&
+              error === null && (
+                <div className="chat-empty">
+                  <p>No conversation yet — say something below</p>
+                </div>
+              )}
           </div>
 
           {away && (

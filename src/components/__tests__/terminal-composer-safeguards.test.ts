@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import { evaluateComposerKey } from '@/utils/prompt-composer.ts'
 import {
   calculateVisibleViewportGeometry,
   resolveLayoutViewportHeight
 } from '@/utils/visual-viewport.ts'
+
+it('lets the mobile trailing slot own both Queue and Send widths', () => {
+  const css = readFileSync(new URL('../../app.css', import.meta.url), 'utf8')
+  const columns = css.match(
+    /\.prompt-composer__form\s*\{\s*display:\s*grid;[\s\S]*?grid-template-columns:\s*([^;]+);/
+  )?.[1]
+  expect(columns).toBe('var(--touch-target) minmax(0, 1fr) auto')
+})
 
 describe('terminal-composer-safeguards: Thai IME and Enter submission', () => {
   it('blocks Enter submission during active IME composition (isComposing = true)', () => {
