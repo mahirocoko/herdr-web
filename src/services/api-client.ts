@@ -14,12 +14,19 @@ import { parseTerminalControlStatusResponse } from '@/utils/terminal-control-own
 export class ActionError extends Error {
   status: number
   outcome?: IActionOutcome
+  result?: IActionResponse['result']
 
-  constructor(message: string, status: number, outcome?: IActionOutcome) {
+  constructor(
+    message: string,
+    status: number,
+    outcome?: IActionOutcome,
+    result?: IActionResponse['result']
+  ) {
     super(message)
     this.name = 'ActionError'
     this.status = status
     this.outcome = outcome
+    this.result = result
   }
 }
 
@@ -128,14 +135,16 @@ const hasValidObservedResult = (
 }
 
 export const sendAction = async (
-  action: IActionRequest
+  action: IActionRequest,
+  heldCapability?: string
 ): Promise<IActionResponse> => {
   let res: Response
   try {
     res = await fetch('/api/action', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        ...(heldCapability ? { 'X-Herdr-Held-Capability': heldCapability } : {})
       },
       body: JSON.stringify(action)
     })
@@ -171,7 +180,8 @@ export const sendAction = async (
     throw new ActionError(
       parsed.error || `Action failed with status ${res.status}`,
       res.status,
-      outcome
+      outcome,
+      parsed.result
     )
   }
 
@@ -184,6 +194,34 @@ export const sendAction = async (
   }
 
   return parsed
+}
+
+export const readHeldMessages = async (
+  operationIds: string[],
+  capability: string
+): Promise<unknown[]> => {
+  const response = await fetch('/api/held/read', {
+    method: 'POST',
+    cache: 'no-store',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Herdr-Held-Capability': capability
+    },
+    body: JSON.stringify({ operationIds: operationIds.slice(0, 32) })
+  })
+  const data: unknown = await response.json()
+  if (
+    !response.ok ||
+    !data ||
+    typeof data !== 'object' ||
+    !('records' in data) ||
+    !Array.isArray(data.records) ||
+    data.records.length > 32
+  )
+    throw new Error(
+      'Held evidence refresh unavailable; no delivery was attempted'
+    )
+  return data.records
 }
 
 export const fetchInteractivePrompt = async (

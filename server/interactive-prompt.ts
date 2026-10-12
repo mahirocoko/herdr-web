@@ -18,6 +18,7 @@ import {
   codexQuestionsCollapsed,
   codexQueuedPrompt,
   modelListWaits,
+  sourcePromptBlocksFallback,
   omoAskFromCall,
   parseFallbackPrompt,
   parseClaudeSuggestion,
@@ -163,6 +164,7 @@ export class InteractivePromptService {
       pane.agent_status === 'blocked' &&
       agent &&
       !modelListWaits(agent, screen) &&
+      !sourcePromptBlocksFallback(agent, screen) &&
       !(agent === 'codex' && codexQuestionsCollapsed(screen))
     )
       prompt = parseFallbackPrompt(agent, screen)
@@ -202,6 +204,21 @@ export class InteractivePromptService {
           )
         : null
     return { prompt: id ? read.prompt : null, target: read.target, suggestion }
+  }
+
+  /** Zero-write readiness for an explicit held send; no native interruption is implied. */
+  async heldReadiness(target: IActionTargetIdentity) {
+    const read = await this.observe(target.paneId, target)
+    return (
+      !read.prompt &&
+      read.screen.trim().length > 0 &&
+      ['idle', 'done', 'working'].includes(read.status) &&
+      ['letta', 'agy', 'codex', 'claude', 'omp', 'omo', 'gjc', 'pi'].includes(
+        read.agent
+      ) &&
+      !modelListWaits(read.agent, read.screen) &&
+      !sourcePromptBlocksFallback(read.agent, read.screen)
+    )
   }
 
   /** Called only inside the index action's one shared-topology/pane coordinator claim. */
@@ -321,7 +338,9 @@ export class InteractivePromptService {
               read.agent === 'omo' || read.agent === 'pi',
               read.asks
             ) ??
-            (initial.prompt?.fallback
+            (initial.prompt?.fallback &&
+            !modelListWaits(read.agent, read.screen) &&
+            !sourcePromptBlocksFallback(read.agent, read.screen)
               ? parseFallbackPrompt(read.agent, read.screen)
               : null)
           shown = raw ? promptMetadata(raw) : undefined
@@ -339,6 +358,11 @@ export class InteractivePromptService {
             (shown.id === expected.id ||
               ((typing || typed || expected.multi_select) && structural)) &&
             shown.selectedIndex === expected.selectedIndex &&
+            // The multi-select cursor graph includes the unnumbered Submit row.
+            // A vanished/inserted row must not masquerade as the expected cursor.
+            (!expected.multi_select ||
+              JSON.stringify(shown.menuLabels) ===
+                JSON.stringify(expected.menuLabels)) &&
             JSON.stringify(shown.checkedOptionIndices) ===
               JSON.stringify(expected.checkedOptionIndices)
           const model =
@@ -381,6 +405,16 @@ export class InteractivePromptService {
               ...expected,
               selectedIndex: expected.selectedIndex + 1
             }
+          // Clearing an existing Claude custom draft changes its row label/id.
+          // Permit only the existing structural + exact cursor/checks guard for
+          // the subsequent reads, never an unvalidated continuation or new form.
+          else if (
+            (key === 'ctrl+k' || key === 'ctrl+u') &&
+            expected.responder === 'claude-question' &&
+            answer.custom_text !== undefined &&
+            expected.selectedIndex === expected.customMenuIndex
+          )
+            typing = true
           else if (key === 'backspace' && expected.responder === 'omo-question')
             expected = { ...expected, checkedOptionIndices: [] }
           else if (

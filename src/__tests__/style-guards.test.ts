@@ -97,7 +97,7 @@ describe('forwarded mobile header, key rail and Working spinner scope', () => {
 
   it('starts the mobile composer as one row without changing desktop markup or IME handlers', () => {
     expect(css.replace(/\s/g, '')).toContain(
-      'grid-template-columns:var(--touch-target)minmax(0,1fr)var(--touch-target)'
+      'grid-template-columns:var(--touch-target)minmax(0,1fr)auto'
     )
     expect(css).toContain(
       'min-height: calc(var(--touch-target) + var(--space-1))'

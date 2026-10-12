@@ -57,7 +57,11 @@ export const openContextFile = async (
     throw new Error('Invalid directory metadata')
   return data
 }
-export const fileTextPreview = async (ref: string, signal: AbortSignal) => {
+export const fileTextPreview = async (
+  ref: string,
+  signal: AbortSignal,
+  truncated = false
+) => {
   const response = await fetch(fileContentUrl(ref, 'preview'), {
     signal,
     cache: 'no-store'
@@ -66,5 +70,5 @@ export const fileTextPreview = async (ref: string, signal: AbortSignal) => {
   const bytes = new Uint8Array(await response.arrayBuffer())
   if (bytes.length > 64 * 1024) throw new Error('Invalid text preview envelope')
   // A byte prefix may end inside a Thai/emoji code point; omit only that fragment.
-  return new TextDecoder('utf-8').decode(bytes, { stream: true })
+  return new TextDecoder('utf-8').decode(bytes, { stream: truncated })
 }

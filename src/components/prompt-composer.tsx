@@ -32,6 +32,7 @@ export interface IPromptComposerProps {
   isPromptEvidenceReady?: boolean
   error?: string | null
   onSubmitText: (text: string) => Promise<ActionResultStatus | void>
+  onQueueText?: (text: string) => Promise<ActionResultStatus | void>
   onSendKeys?: (keys: string[]) => void
   draftText?: string
   onDraftChange?: (text: string) => void
@@ -56,6 +57,7 @@ const PromptComposer: FC<IPromptComposerProps> = ({
   isPromptEvidenceReady = true,
   error,
   onSubmitText,
+  onQueueText,
   onSendKeys,
   draftText,
   onDraftChange,
@@ -148,7 +150,8 @@ const PromptComposer: FC<IPromptComposerProps> = ({
     })
   }
 
-  const submitDraft = async () => {
+  const submittingRef = useRef(false)
+  const submitDraft = async (queue = false) => {
     // Strictly prevent submission while IME composition is active
     if (isComposingRef.current) return
 
@@ -158,7 +161,8 @@ const PromptComposer: FC<IPromptComposerProps> = ({
       !trimmed ||
       !paneId ||
       !hasValidTarget ||
-      !isPromptEvidenceReady ||
+      (!queue && !isPromptEvidenceReady) ||
+      submittingRef.current ||
       isBusy ||
       isControlActive
     )
@@ -167,8 +171,10 @@ const PromptComposer: FC<IPromptComposerProps> = ({
     const submittedPaneId = paneId
     const submittedGeneration = paneGenerationRef.current
     const submittedDraft = text
+    if (queue && !onQueueText) return
+    submittingRef.current = true
     try {
-      const status = await onSubmitText(trimmed)
+      const status = await (queue ? onQueueText! : onSubmitText)(trimmed)
       // Clear only when status is acknowledged and exact draft/pane/generation remain unchanged
       if (status === 'acknowledged') {
         const currentPaneId = prevPaneIdRef.current
@@ -187,6 +193,8 @@ const PromptComposer: FC<IPromptComposerProps> = ({
       }
     } catch {
       // Retain draft on failure
+    } finally {
+      submittingRef.current = false
     }
   }
 
@@ -315,6 +323,23 @@ const PromptComposer: FC<IPromptComposerProps> = ({
           </div>
 
           <div className="prompt-composer__controls-right">
+            {onQueueText && (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={
+                  !text.trim() ||
+                  !paneId ||
+                  !hasValidTarget ||
+                  isBusy ||
+                  isControlActive
+                }
+                onClick={() => void submitDraft(true)}
+                title="Held in Web — send manually"
+              >
+                Queue
+              </Button>
+            )}
             <Button
               type="submit"
               variant="default"

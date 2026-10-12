@@ -324,7 +324,8 @@ function startsBlock(lines: string[], index: number): boolean {
 
 function parseList(
   lines: string[],
-  start: number
+  start: number,
+  depth = 0
 ): { block: IListBlock; next: number } {
   const first = listLine.exec(lineAt(lines, start))
   if (first === null)
@@ -405,7 +406,15 @@ function parseList(
     if ((match[1] ?? '').length >= baseIndent + 2) {
       const parent = block.items.at(-1)
       if (parent === undefined) break
-      const nested = parseList(lines, index)
+      if (depth >= 32) {
+        ;(parent.blocks ??= []).push({
+          type: 'paragraph',
+          lines: [parseInline(lineAt(lines, index).trim())]
+        })
+        index += 1
+        continue
+      }
+      const nested = parseList(lines, index, depth + 1)
       ;(parent.blocks ??= []).push(nested.block)
       index = nested.next
       continue

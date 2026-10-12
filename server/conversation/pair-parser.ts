@@ -2,6 +2,9 @@
 // Adapted from devswha/herdr-web-ui 5979118: codex.ts, conversation.ts,
 // codex-images.ts, transcript-records.ts and skill-activity.ts. Source-native
 // semantics only; filesystem/process authority stays in the fenced reader.
+// Selective 7f12ec6 delta: complete Codex instruction envelopes and Claude
+// local-command stream sequences; no additional file/session authority.
+// Local hardening beyond upstream: first-close parsing preserves ambiguous prose.
 import { createHash } from 'node:crypto'
 import { withoutMemoryCitations } from './codex-memory-citations.ts'
 import { basename, dirname } from 'node:path'
@@ -20,20 +23,40 @@ const string = (value: unknown): string =>
   typeof value === 'string' ? value : ''
 const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 const LIMIT = 16000
-const nativeId = (value: unknown): string | undefined => typeof value === 'string' && /^[A-Za-z0-9_:.-]{1,128}$/.test(value) ? value : undefined
+const nativeId = (value: unknown): string | undefined =>
+  typeof value === 'string' && /^[A-Za-z0-9_:.-]{1,128}$/.test(value)
+    ? value
+    : undefined
 const clip = (text: string) => ({
   text: text.slice(0, LIMIT),
   truncated: text.length > LIMIT
 })
+// Stop at the first closing tag; a regex that backtracks to a later tag can
+// silently consume appended human prose. Ambiguous envelopes stay visible.
+const elementEnd = (value: string, tag: string): number => {
+  const opening = `<${tag}>`
+  if (!value.startsWith(opening)) return -1
+  const closing = `</${tag}>`
+  const end = value.indexOf(closing, opening.length)
+  return end < 0 ? -1 : end + closing.length
+}
 const contextOnly = (text: string) => {
   const value = text.trim()
-  return (
-    (value.startsWith('# AGENTS.md instructions for ') &&
-      value.includes('</INSTRUCTIONS>')) ||
-    /^<(environment_context|permissions instructions|turn_aborted|subagent_notification)>[\s\S]*<\/\1>$/.test(
-      value
-    )
+  const header = /^# AGENTS\.md instructions(?: for [^\r\n]+)?\r?\n\s*/.exec(
+    value
   )
+  if (header) {
+    const body = value.slice(header[0].length)
+    const end = elementEnd(body, 'INSTRUCTIONS')
+    if (end < 0) return false
+    const tail = body.slice(end).trim()
+    return !tail || elementEnd(tail, 'environment_context') === tail.length
+  }
+  const tag =
+    /^<(environment_context|permissions instructions|turn_aborted|subagent_notification)>/.exec(
+      value
+    )?.[1]
+  return Boolean(tag && elementEnd(value, tag) === value.length)
 }
 export const pairText = (
   value: unknown,
@@ -90,6 +113,48 @@ const unwrapPastes = (text: string): string => {
     }
   )
   return changed ? visible.replace(/^\n+|\n+$/g, '') : visible
+}
+// One native local-command entry may carry stdout and stderr wrappers. Match
+// the complete sequence, not a tag quoted inside unrelated user text.
+const localCommandOutput = (content: string): string | null => {
+  const streams: string[] = []
+  let at = 0
+  for (;;) {
+    while (at < content.length && /\s/.test(content[at]!)) at++
+    if (at === content.length) break
+    const stream = content.startsWith('<local-command-stdout>', at)
+      ? 'stdout'
+      : content.startsWith('<local-command-stderr>', at)
+        ? 'stderr'
+        : null
+    if (stream === null) return null
+    const start = at + `<local-command-${stream}>`.length
+    const close = `</local-command-${stream}>`
+    let end = content.indexOf(close, start)
+    let next = 0
+    while (end !== -1) {
+      next = end + close.length
+      while (next < content.length && /\s/.test(content[next]!)) next++
+      if (
+        next === content.length ||
+        content.startsWith('<local-command-stdout>', next) ||
+        content.startsWith('<local-command-stderr>', next)
+      )
+        break
+      end = content.indexOf(close, end + close.length)
+    }
+    if (end === -1) return null
+    const text = content
+      .slice(start, end)
+      .replace(/\u001b\][\s\S]*?(?:\u0007|\u001b\\)/g, '')
+      .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, '')
+      .replace(/\u001b./g, '')
+      .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '')
+      .trim()
+    if (text) streams.push(text)
+    at = next
+  }
+  return streams.join('\n')
 }
 const selectedSkill = (text: string) => {
   const match =
@@ -408,18 +473,15 @@ export const pairContributions = (
       row.subtype === 'local_command' &&
       typeof row.content === 'string'
     ) {
-      const match =
-        /^\s*<local-command-(stdout|stderr)>([\s\S]*)<\/local-command-\1>\s*$/.exec(
-          row.content
-        )
-      if (match) {
-        const text = match[2]
-          .replace(/\u001b\][\s\S]*?(?:\u0007|\u001b\\)/g, '')
-          .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, '')
-          .replace(/\u001b./g, '')
-          .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '')
-          .trim()
-        if (text.length) { role = 'user'; parts.push({ kind: 'notice', source: 'local-command', text: text.length > 4000 ? `${text.slice(0,4000)}\u2026` : text, truncated: text.length > 4000 }) }
+      const text = localCommandOutput(row.content)
+      if (text) {
+        role = 'user'
+        parts.push({
+          kind: 'notice',
+          source: 'local-command',
+          text: text.length > 4000 ? `${text.slice(0, 4000)}\u2026` : text,
+          truncated: text.length > 4000
+        })
       }
     } else if (row.type === 'user') {
       const content =

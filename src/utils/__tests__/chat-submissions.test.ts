@@ -1,0 +1,130 @@
+import { describe, expect, test } from 'bun:test'
+import {
+  corroboratedSubmission,
+  restoreSubmissions,
+  submissionBaseline,
+  submissionFailurePhase,
+  submissionLabel,
+  type IChatSubmission
+} from '../chat-submissions.ts'
+import type { IConversationContribution } from '../../types/conversation.ts'
+
+const target = {
+  paneId: 'pane',
+  terminalId: 'terminal',
+  expectedMode: 'agent' as const,
+  agentSessionId: 'agent-session'
+}
+const row = (
+  id: string,
+  position: number,
+  text = 'hello'
+): IConversationContribution => ({
+  id,
+  position,
+  role: 'user',
+  ts: '2026-10-12T08:30:01Z',
+  parts: [{ kind: 'text', text }]
+})
+const record: IChatSubmission = {
+  operationId: 'op',
+  text: 'hello',
+  target,
+  generation: 'browser',
+  submittedAt: '2026-10-12T08:30:00Z',
+  baseline: submissionBaseline('history', [row('old', 10)]),
+  phase: 'submitted-awaiting-transcript'
+}
+const match = (
+  records = [record],
+  rows = [row('old', 10), row('new', 20)],
+  selected = target,
+  history = 'history'
+) => corroboratedSubmission(record, records, selected, history, rows)
+
+describe('submission evidence, never delivery authority', () => {
+  test('acknowledgement remains awaiting transcript, not execution', () => {
+    expect(submissionLabel(record)).toContain('execution not confirmed')
+    expect(match([record], [row('old', 10)])).toBeNull()
+    expect(match()).toBe('new')
+  })
+  test('old text and older paginated rows cannot confirm', () => {
+    expect(match([record], [row('old', 10), row('older', 2)])).toBeNull()
+    expect(
+      match([record], [{ ...row('new', 20), ts: '2026-10-12T08:29:00Z' }])
+    ).toBeNull()
+    expect(match([record], [{ ...row('new', 20), ts: null }])).toBeNull()
+  })
+  test('exact target and history prevent session replacement confirmation', () => {
+    expect(
+      match([record], [row('new', 20)], {
+        ...target,
+        agentSessionId: 'replacement'
+      })
+    ).toBeNull()
+    expect(
+      match([record], [row('new', 20)], {
+        ...target,
+        terminalId: 'replacement'
+      })
+    ).toBeNull()
+    expect(match([record], [row('new', 20)], target, 'replacement')).toBeNull()
+  })
+  test('identical native rows or repeated submissions are ambiguous', () => {
+    expect(match([record], [row('new', 20), row('second', 30)])).toBeNull()
+    expect(match([record, { ...record, operationId: 'repeat' }])).toBeNull()
+  })
+  test('truncation, partial text, or absent frontier cannot corroborate', () => {
+    expect(match([record], [row('new', 20, 'hell')])).toBeNull()
+    expect(
+      match(
+        [record],
+        [
+          {
+            ...row('new', 20),
+            parts: [{ kind: 'text', text: 'hello', truncated: true }]
+          }
+        ]
+      )
+    ).toBeNull()
+    expect(
+      corroboratedSubmission(
+        { ...record, baseline: null },
+        [record],
+        target,
+        'history',
+        [row('new', 20)]
+      )
+    ).toBeNull()
+  })
+  test('unknown transport keeps uncertain, only explicit rejection is rejected', () => {
+    expect(submissionFailurePhase(new Error('network'))).toBe('uncertain')
+    expect(submissionFailurePhase({ outcome: 'unknown' })).toBe('uncertain')
+    expect(submissionFailurePhase({ outcome: 'rejected' })).toBe('rejected')
+    expect(
+      corroboratedSubmission(
+        { ...record, phase: 'uncertain' },
+        [record],
+        target,
+        'history',
+        [row('new', 20)]
+      )
+    ).toBeNull()
+  })
+  test('reload preserves inert submitted evidence and makes in-flight uncertain', () => {
+    const restored = restoreSubmissions(
+      JSON.stringify([
+        record,
+        { ...record, operationId: 'flight', phase: 'sending' }
+      ])
+    )
+    expect(restored[0].phase).toBe('submitted-awaiting-transcript')
+    expect(restored[0].restored).toBe(true)
+    expect(restored[1].phase).toBe('uncertain')
+    expect(submissionLabel(restored[1])).toContain('never replayed')
+    expect(restoreSubmissions('{bad')).toEqual([])
+    expect(
+      restoreSubmissions(JSON.stringify([{ ...record, target: null }]))
+    ).toEqual([])
+  })
+})

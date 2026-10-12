@@ -188,7 +188,17 @@ export type ILifecycleActionRequest = Extract<
   { type: 'workspace-create' | 'workspace-close' | 'tab-close' }
 >
 
-export type IActionRequest = IStrictActionRequest
+export type IHeldActionRequest =
+  | {
+      type: 'held-enqueue'
+      operationId: string
+      target: IActionTargetIdentity
+      text: string
+    }
+  | { type: 'held-send'; operationId: string; heldId: string }
+  | { type: 'held-discard'; operationId: string; heldId: string }
+
+export type IActionRequest = IStrictActionRequest | IHeldActionRequest
 
 export type ICatalogSourceKind =
   'repo-config' | 'native-agent' | 'server-preset'

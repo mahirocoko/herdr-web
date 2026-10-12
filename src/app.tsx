@@ -12,6 +12,7 @@ import {
 } from '@/utils/prompt-answer.ts'
 import type { PromptAnswerIntent } from '@/types/interactive-prompt.ts'
 import { sendAction } from '@/services/api-client.ts'
+import { submissionFailurePhase } from '@/utils/chat-submissions.ts'
 import HorizonHeader from '@/components/horizon-header.tsx'
 import AttentionHorizon from '@/components/attention-horizon.tsx'
 import TerminalCanvas from '@/components/terminal-canvas.tsx'
@@ -77,6 +78,8 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
     setSelectedPaneId,
     refreshSnapshot,
     lifecycle,
+    submissions,
+    held,
     push,
     viewportGeometry,
     drawerTriggerRef,
@@ -533,14 +536,26 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
     const operationId = crypto.randomUUID()
 
     return executeGuardedAction({
-      action: () => {
+      action: async () => {
         markChatSend()
-        return sendAction({
-          type: actionType,
-          operationId,
-          target: targetResult.target!,
-          text
-        })
+        const target = { ...targetResult.target! }
+        const projectSubmission = canonicalHasAgent
+        if (projectSubmission) submissions.begin(operationId, text, target)
+        try {
+          const result = await sendAction({
+            type: actionType,
+            operationId,
+            target,
+            text
+          })
+          if (projectSubmission)
+            submissions.settle(operationId, 'submitted-awaiting-transcript')
+          return result
+        } catch (error) {
+          if (projectSubmission)
+            submissions.settle(operationId, submissionFailurePhase(error))
+          throw error
+        }
       },
       onSuccessRefresh: () => {
         void Promise.allSettled([refreshSnapshot(), refetchActiveSurface()])
@@ -924,7 +939,11 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
 
                   {viewMode === 'chat' && (
                     <ChatView
+                      key={`${selectedPaneId}:${targetResult.target?.terminalId}:${targetResult.target?.agentSessionId ?? ''}`}
                       paneId={selectedPaneId}
+                      actionTarget={targetResult.target}
+                      submissions={submissions}
+                      held={held}
                       sendRevision={
                         chatSend?.paneId === selectedPaneId
                           ? chatSend.revision
@@ -1084,6 +1103,25 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
                   }
                   error={actionError || targetResult.error}
                   onSubmitText={handleSubmitText}
+                  onQueueText={
+                    canonicalExpectedMode === 'agent'
+                      ? async (text) => {
+                          if (!targetResult.target)
+                            throw new Error('Target unavailable')
+                          try {
+                            await held.enqueue(text, { ...targetResult.target })
+                          } catch (error) {
+                            setActionError(
+                              error instanceof Error
+                                ? error.message
+                                : 'Queue failed'
+                            )
+                            throw error
+                          }
+                          return 'acknowledged'
+                        }
+                      : undefined
+                  }
                   onSendKeys={handleSendKeys}
                   isPickerOpen={isPickerOpen}
                   onPickerOpenChange={(open) => {

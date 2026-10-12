@@ -27,6 +27,7 @@ import {
   readPaneContent
 } from './herdr-adapter.ts'
 import { HerdrSocketError } from './herdr-socket.ts'
+import { HeldQueue, HELD_CAPABILITY_HEADER } from './held-queue.ts'
 import {
   InteractivePromptService,
   type IPromptDeps
@@ -259,6 +260,7 @@ export const createServer = (
 ) => {
   const coordinator =
     options.deps?.coordinator ?? getSharedOperationCoordinator()
+  const heldQueue = new HeldQueue()
   const interactivePrompts = new InteractivePromptService({
     fetchSnapshot: options.deps?.fetchSnapshot,
     ...options.deps?.promptDeps
@@ -499,6 +501,52 @@ export const createServer = (
         }
       }
 
+      // Capability-scoped informational recovery; never dispatches or reconstructs authority.
+      if (req.method === 'POST' && pathname === '/api/held/read') {
+        const auth = validateOwnerAuth(
+          req,
+          hostHeader,
+          originHeader,
+          getConfiguredOwnerLogin(),
+          { requireOrigin: true }
+        )
+        if (!auth.allowed)
+          return Response.json(
+            { ok: false, error: auth.error || 'Forbidden' },
+            { status: auth.status, headers: { 'cache-control': 'no-store' } }
+          )
+        const parsed = await parseBoundedJsonBody(req, 8192)
+        const data = parsed.data as { operationIds?: unknown } | undefined
+        if (
+          !parsed.ok ||
+          !data ||
+          typeof data !== 'object' ||
+          Object.keys(data).some((key) => key !== 'operationIds') ||
+          !Array.isArray(data.operationIds) ||
+          data.operationIds.length > 32 ||
+          data.operationIds.some(
+            (id) =>
+              typeof id !== 'string' || !/^[a-zA-Z0-9_.:-]{1,128}$/.test(id)
+          )
+        )
+          return Response.json(
+            { ok: false, error: 'Invalid bounded held projection request' },
+            {
+              status: parsed.status ?? 400,
+              headers: { 'cache-control': 'no-store' }
+            }
+          )
+        return heldQueue.read(
+          data.operationIds,
+          req.headers.get(HELD_CAPABILITY_HEADER),
+          JSON.stringify([
+            getConfiguredOwnerLogin() ?? null,
+            req.headers.get('Tailscale-User-Login') ?? 'loopback-development'
+          ]),
+          originHeader!
+        )
+      }
+
       // POST /api/action
       if (req.method === 'POST' && pathname === '/api/action') {
         const auth = validateOwnerAuth(
@@ -550,6 +598,28 @@ export const createServer = (
         }
 
         const action = validation.data
+        if (
+          action.type === 'held-enqueue' ||
+          action.type === 'held-send' ||
+          action.type === 'held-discard'
+        ) {
+          return heldQueue.action(
+            action,
+            req.headers.get(HELD_CAPABILITY_HEADER),
+            JSON.stringify([
+              getConfiguredOwnerLogin() ?? null,
+              req.headers.get('Tailscale-User-Login') ?? 'loopback-development'
+            ]),
+            originHeader!,
+            {
+              coordinator,
+              snapshot: () =>
+                (options.deps?.fetchSnapshot ?? getHerdrSnapshot)(3000),
+              ready: (target) => interactivePrompts.heldReadiness(target),
+              prompt: options.deps?.executePrompt ?? executePrompt
+            }
+          )
+        }
         const fingerprint = computePayloadFingerprint(action)
 
         // 1. Synchronous token-fenced admission arbiter BEFORE ANY await

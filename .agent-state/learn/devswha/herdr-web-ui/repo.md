@@ -4,11 +4,29 @@
 
 - GitHub: https://github.com/devswha/herdr-web-ui
 - Origin: `./origin/` → `/Users/mahiro/ghq/github.com/devswha/herdr-web-ui`
-- Current pinned source: `54e5a1f67090cb09552d182e7e30dd0ecc314918`
-- Fast-forwarded canonical clone from origin/main on 2026-10-06 21:24 Asia/Bangkok, then kept read-only. Delta from previous study:116 files,+7,617/−638 lines. No install, build, test, browser, SSH or live integration ran for this study.
-- App metadata:0.3.52. HEAD includes two commits after release tag v0.3.52; remote runtime counter19 is a separate owner, not a verified published/installed bundle.
+- Current pinned source: `7f12ec6176ec7f4921ab4a7f1ab31c4ae826e116`
+- Fast-forwarded the clean canonical clone on 2026-10-12 13:47 Asia/Bangkok from `59791189f76add8ddfba8d038264bb1a549d47da`: 544 files, +66,514/−2,883 lines. Against the October 6 study SHA: 611 files, +80,615/−5,632 lines. These are repository diff statistics, not application-code-only counts.
+- App metadata: `0.4.8`; HEAD is nine commits after local tag `v0.4.8` (`cb65ecb`). The tagged release preparation names remote runtime `v27`, a separate owner. This study does not verify published assets or installed runtime versions.
+- No install, build, test, browser, SSH or live integration is part of this source study.
 
-## Current deep study — 2026-10-06 2125
+## Incremental study — 2026-10-12 1347
+
+Three independent read-only readers completed architecture, source patterns and usage studies. Main synthesized their reports and spot-checked release metadata, queue schema, Codex steering, split transitions and returned focus/capability snippets. The source clone remains clean after the authorized pull. No adaptation or product implementation is authorized by this study. Requested reader model was `gpt-6-luna-max`; runtime identity/effort was not independently exposed to readers, so it is not claimed as verified.
+
+- [Architecture](2026-10-12/1347_ARCHITECTURE.md)
+- [Source patterns](2026-10-12/1347_CODE-SNIPPETS.md)
+- [Quick reference](2026-10-12/1347_QUICK-REFERENCE.md)
+
+### Source delta to retain
+
+- Desktop split tabs are a browser composition over Herdr's existing native layouts, not a replacement native layout owner. This is in the current Unreleased changelog.
+- Shared settings distinguish server-shared preferences from device-local geometry/input preferences; merely opening a browser must not overwrite shared state.
+- Codex explicit **Send now** can interrupt only after its exact queued message is observed. Ordinary Send and automatic next-turn delivery are separate behaviors.
+- File previews, remote-machine permissions, and network-exposure warnings need their own security boundaries; a warning does not change authentication policy.
+
+The October 6 notes below are historical evidence pinned to their recorded SHA, not current capability or installation guidance.
+
+## Historical deep study — 2026-10-06 2125
 
 Five independent read-only readers returned findings; Main is the single writer of these project-owned documents. Main compared their claims and spot-checked source: test filename count/CI list, helper side effects, release-vs-HEAD, explicit take-over authorization and source excerpts. No implementation/adoption or runtime PASS is claimed.
 

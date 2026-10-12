@@ -302,6 +302,39 @@ export const validateActionRequest = (
   const raw = body as Record<string, unknown>
   const type = raw.type
 
+  if (type === 'held-enqueue') {
+    if (
+      Object.keys(raw).some(
+        (key) => !['type', 'operationId', 'target', 'text'].includes(key)
+      ) ||
+      typeof raw.text !== 'string' ||
+      new TextEncoder().encode(raw.text).byteLength > 4096
+    )
+      return {
+        valid: false,
+        error: 'Invalid held text or fields (4096 UTF-8 bytes maximum)'
+      }
+    const validated = validateActionRequest({ ...raw, type: 'prompt' })
+    if (!validated.valid || validated.data?.type !== 'prompt') return validated
+    return { valid: true, data: { ...validated.data, type: 'held-enqueue' } }
+  }
+  if (type === 'held-send' || type === 'held-discard') {
+    if (
+      Object.keys(raw).some(
+        (key) => !['type', 'operationId', 'heldId'].includes(key)
+      ) ||
+      typeof raw.operationId !== 'string' ||
+      !/^[a-zA-Z0-9_.:-]{1,128}$/.test(raw.operationId) ||
+      typeof raw.heldId !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(raw.heldId)
+    )
+      return { valid: false, error: 'Invalid held action identity or fields' }
+    return {
+      valid: true,
+      data: { type, operationId: raw.operationId, heldId: raw.heldId }
+    }
+  }
+
   if (
     type !== 'prompt' &&
     type !== 'prompt-answer' &&

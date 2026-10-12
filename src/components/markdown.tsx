@@ -12,6 +12,8 @@ import {
 import { OpenChatToolFileContext } from './chat-tool-content.tsx'
 import { codeIsFilePath, splitFilePaths } from '@/utils/chat-file-paths.ts'
 import { Math } from './math.tsx'
+import Button from './ui/button.tsx'
+import Textarea from './ui/textarea.tsx'
 import {
   foldCode,
   type IListBlock,
@@ -173,14 +175,22 @@ const CodeBlock = ({
   value: string
 }): ReactNode => {
   const [copied, setCopied] = useState(false)
+  const [manualCopy, setManualCopy] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const block = useRef<HTMLDivElement>(null)
   const fold = useMemo(() => foldCode(value), [value])
 
   const copy = async (): Promise<void> => {
-    await navigator.clipboard.writeText(value)
-    setCopied(true)
-    window.setTimeout(() => setCopied(false), 1500)
+    try {
+      if (!navigator.clipboard?.writeText)
+        throw new Error('Clipboard unavailable')
+      await navigator.clipboard.writeText(value)
+      setCopied(true)
+      setManualCopy(false)
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      setManualCopy(true)
+    }
   }
 
   const folding = useRef(false)
@@ -207,15 +217,28 @@ const CodeBlock = ({
     <div className="markdown-code" ref={block}>
       <div className="markdown-code-header">
         <span>{language || 'text'}</span>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           className="icon-button markdown-code-copy"
           onClick={() => void copy()}
           aria-label={copied ? 'Code copied' : 'Copy code'}
         >
           {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-        </button>
+        </Button>
       </div>
+      {manualCopy && (
+        <div className="markdown-code-manual-copy">
+          <p role="status">
+            Clipboard unavailable. Select and copy the code below.
+          </p>
+          <Textarea
+            aria-label="Code to copy"
+            readOnly
+            value={value}
+            onFocus={(event) => event.currentTarget.select()}
+          />
+        </div>
+      )}
       <pre>
         <code>{fold !== null && !expanded ? fold.head : value}</code>
       </pre>
