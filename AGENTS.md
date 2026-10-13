@@ -2,6 +2,10 @@
 
 ## Current Reality
 
+- Active document-owned Web-held intent presentation belongs to `HeldQueueStack` in the App footer directly before the existing composer, including blocked-agent visibility with strict Send fencing. Front card, decorative noninteractive backs, count and expanded bounded list share Root's existing record callbacks; display ordering is first-observed presentation only, never a delivery scheduler. Restored and terminal held evidence remains read-only in Chat; do not duplicate live actionable cards there or mix ordinary Send receipts into the stack. An empty stack reserves no space. Shell enqueue eligibility, original targets, capability lifetime and server delivery contracts are unchanged.
+
+- Ordinary Send receipts are not a queue. `SubmissionReceipts` in Chat keeps current matching sending/uncertain/rejected issues visible; acknowledged, restored, stale and corroborated records live in one initially closed `Submission history (not queued)` disclosure. Global Clear and its no-cancellation explanation belong inside that read-only evidence disclosure. Preserve stored provenance and strict corroboration; hiding historical presentation must never confer delivery authority or automatically retry/clear records. Capability-owned held intents remain a separate owner.
+
 - Chat's current owners are `server/conversation/` for selected native records, `server/prompt-parser.ts` for the pinned source parser, `server/interactive-prompt.ts` plus the existing authenticated action/coordinator pipeline for typed answers, and `use-interactive-prompt` for binding-specific browser readiness. Implemented macOS readers cover Letta/Agy/Codex/Claude/OMP/OmO/GJC/PI; never equate fixture coverage with every provider's live availability. Unknown/unread Chat prompt state must not fall through to generic Composer input. Native read/send is not conditional CAS; preserve the documented identical-question-repeat limitation. Question remains read-only; do not create another prompt/answer owner.
 
 - Private, single-user mobile command center for a local Herdr server.

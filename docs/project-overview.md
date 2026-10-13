@@ -1,5 +1,9 @@
 # Project Overview
 
+Active Web-held intents appear as a compact card stack directly above the composer: front item with manual actions, decorative backs/count and an expandable bounded list. The stack uses the existing Root-held state and original-record callbacks; it is not a native queue, automatic scheduler or new store. Empty, restored and completed records do not create a live stack; read-only historical evidence remains in Chat. Blocked-agent views retain the stack but strict target/mode fencing withholds Send authority.
+
+Ordinary Send evidence is distinct from Web-held Queue. Current sending/uncertain/rejected issues remain visible in Chat; acknowledged, restored, stale and corroborated receipts are available in the closed `Submission history (not queued)` disclosure, with the global Clear control and its no-cancellation explanation. This is presentation only: no stored evidence is automatically cleared, retried or upgraded into delivery authority.
+
 ## Product Job
 
 Herdr Web lets the operator inspect and steer existing Herdr panes from a phone or tablet over a private Tailnet. It is an agent-aware mobile companion, not a generic SSH client.
