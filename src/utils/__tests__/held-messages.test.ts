@@ -116,9 +116,20 @@ test('production UI guards restored/stale Send and labels informational dismissa
   expect(chat).toContain('!record.restored')
   expect(chat).toContain('sameSubmissionTarget(record.target, actionTarget)')
   expect(chat).toContain('Restored informational copy')
-  expect(chat).toContain('Clear saved receipts (all panes)')
-  expect(chat).toContain(
+  const receipts = chat.slice(
+    chat.indexOf('const SubmissionReceipts ='),
+    chat.indexOf('const ChatView:')
+  )
+  expect(receipts).toContain(
+    '<details className="chat-compact submission-history">'
+  )
+  expect(receipts).toContain('Submission history (not queued)')
+  expect(receipts).toContain('Clear saved receipts (all panes)')
+  expect(receipts).toContain(
     'Removes Web evidence only; does not cancel native input.'
+  )
+  expect(chat.slice(chat.indexOf('const ChatView:'))).not.toContain(
+    'Clear saved receipts (all panes)'
   )
   expect(chat).toContain('Dismiss saved copy')
   const hook = readFileSync(

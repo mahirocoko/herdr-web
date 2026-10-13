@@ -52,8 +52,11 @@ import { dismissKeyboardOn } from '@/utils/chat-keyboard.ts'
 import type { IActionTargetIdentity } from '@/types/herdr.ts'
 import type { useChatSubmissions } from '@/hooks/use-chat-submissions.ts'
 import type { useHeldMessages } from '@/hooks/use-held-messages.ts'
+import { isLiveHeldMessage } from './held-queue-stack.tsx'
 import {
   corroboratedSubmission,
+  isCurrentSubmissionIssue,
+  type IChatSubmission,
   sameSubmissionTarget,
   submissionBaseline,
   submissionLabel
@@ -454,6 +457,110 @@ const SkillActivity = ({ parts }: { parts: ConversationPart[] }) => {
   )
 }
 
+interface ISubmissionReceiptsProps {
+  records: IChatSubmission[]
+  actionTarget: IActionTargetIdentity | null
+  sessionKey: string | null
+  corroborations: Map<string, string | null>
+  onClear: () => void
+}
+
+const SubmissionReceipt = ({
+  record,
+  nativeId,
+  historical
+}: {
+  record: IChatSubmission
+  nativeId: string | null | undefined
+  historical: boolean
+}) => (
+  <article className={historical ? undefined : 'chat-turn chat-turn-user'}>
+    <div className={historical ? undefined : 'chat-user-row'}>
+      {historical ? (
+        <pre>{record.text}</pre>
+      ) : (
+        <div className="chat-bubble">
+          <Markdown>{record.text}</Markdown>
+        </div>
+      )}
+      <p className="chat-inline-state" role={historical ? undefined : 'status'}>
+        {nativeId
+          ? 'Corroborated in native transcript — execution not confirmed.'
+          : submissionLabel(record)}
+      </p>
+      {historical && (
+        <>
+          <p>Operation: {record.operationId}</p>
+          <p>
+            Target: {record.target.paneId} / {record.target.terminalId} /{' '}
+            {record.target.agentSessionId ?? 'session unavailable'} /{' '}
+            {record.target.expectedMode}
+          </p>
+          <p>
+            Captured history: {record.baseline?.sessionKey ?? 'unavailable'}
+          </p>
+          <p>Browser generation: {record.generation}</p>
+          <time dateTime={record.submittedAt}>{record.submittedAt}</time>
+        </>
+      )}
+    </div>
+  </article>
+)
+
+/** Ordinary Send evidence is separate from the capability-owned held records. */
+const SubmissionReceipts = ({
+  records,
+  actionTarget,
+  sessionKey,
+  corroborations,
+  onClear
+}: ISubmissionReceiptsProps) => {
+  if (!records.length) return null
+  const current = records.filter((record) =>
+    isCurrentSubmissionIssue(record, actionTarget, sessionKey)
+  )
+  const history = records.filter((record) => !current.includes(record))
+  return (
+    <>
+      {current.map((record) => (
+        <SubmissionReceipt
+          key={record.operationId}
+          record={record}
+          historical={false}
+          nativeId={corroborations.get(record.operationId)}
+        />
+      ))}
+      <details className="chat-compact submission-history">
+        <summary>Submission history (not queued)</summary>
+        <div className="chat-compact-text">
+          <p>
+            Read-only ordinary Send evidence, not held messages or proof of
+            native delivery. Captured target/history may differ or be
+            unavailable; these records do not authorize input.
+          </p>
+          {history.map((record) => (
+            <SubmissionReceipt
+              key={record.operationId}
+              record={record}
+              historical
+              nativeId={corroborations.get(record.operationId)}
+            />
+          ))}
+          {current.length > 0 && (
+            <p>Current sending or problem receipts are shown above.</p>
+          )}
+          <Button variant="ghost" onClick={onClear}>
+            Clear saved receipts (all panes)
+          </Button>
+          <p className="chat-inline-state">
+            Removes Web evidence only; does not cancel native input.
+          </p>
+        </div>
+      </details>
+    </>
+  )
+}
+
 const ChatView: FC<IChatViewProps> = ({
   paneId,
   sendRevision = 0,
@@ -765,70 +872,42 @@ const ChatView: FC<IChatViewProps> = ({
               )
             })}
 
-            {paneSubmissions.map((record) => {
-              const nativeId = corroborations.get(record.operationId)
-              const currentSession =
-                sameSubmissionTarget(record.target, actionTarget) &&
-                (!record.baseline || record.baseline.sessionKey === sessionKey)
-              return (
-                <article
-                  key={record.operationId}
-                  className="chat-turn chat-turn-user"
-                >
-                  <div className="chat-user-row">
-                    {!nativeId && (
-                      <div className="chat-bubble">
-                        <Markdown>{record.text}</Markdown>
-                      </div>
-                    )}
-                    <p className="chat-inline-state" role="status">
-                      {nativeId
-                        ? 'Corroborated in native transcript — execution not confirmed.'
-                        : submissionLabel(record)}
-                      {!currentSession &&
-                        ' Captured target/history differs or is unavailable; this evidence does not authorize input.'}
-                    </p>
-                    <details className="chat-compact">
-                      <summary>Submission evidence</summary>
-                      <div className="chat-compact-text">
-                        <p>Operation: {record.operationId}</p>
-                        <p>
-                          Target: {record.target.paneId} /{' '}
-                          {record.target.terminalId} /{' '}
-                          {record.target.agentSessionId ??
-                            'session unavailable'}
-                        </p>
-                        <p>Browser generation: {record.generation}</p>
-                        <time dateTime={record.submittedAt}>
-                          {record.submittedAt}
-                        </time>
-                      </div>
-                    </details>
-                  </div>
-                </article>
-              )
-            })}
+            <SubmissionReceipts
+              records={paneSubmissions}
+              actionTarget={actionTarget}
+              sessionKey={sessionKey}
+              corroborations={corroborations}
+              onClear={() => submissions?.clear()}
+            />
             {held?.records
-              .filter((record) => record.target.paneId === paneId)
+              .filter(
+                (record) =>
+                  record.target.paneId === paneId && !isLiveHeldMessage(record)
+              )
               .map((record) => (
-                <article className="chat-turn" key={record.operationId}>
+                <article
+                  className="chat-turn held-message-history"
+                  key={record.operationId}
+                >
                   <div className="chat-compact-text">
                     <p>{record.text}</p>
                   </div>
                   <p className="chat-inline-state" role="status">
-                    {record.state === 'held'
-                      ? 'Held in Web — send manually'
-                      : record.state === 'consumed'
-                        ? 'Submitted — native execution not confirmed'
-                        : record.state === 'discarded'
-                          ? 'Discarded unsent Web-held text — no native cancellation'
-                          : record.state === 'uncertain'
-                            ? 'Outcome uncertain — inspect Terminal; no retry'
-                            : record.state === 'enqueue-unknown'
-                              ? 'Enqueue outcome unknown — refresh held evidence; do not enqueue again.'
-                              : record.state === 'rejected'
-                                ? 'Enqueue rejected — no retained Web intent.'
-                                : record.state}
+                    {record.restored
+                      ? 'Saved Web-held evidence (not live queue)'
+                      : record.state === 'held'
+                        ? 'Held in Web — send manually'
+                        : record.state === 'consumed'
+                          ? 'Submitted — native execution not confirmed'
+                          : record.state === 'discarded'
+                            ? 'Discarded unsent Web-held text — no native cancellation'
+                            : record.state === 'uncertain'
+                              ? 'Outcome uncertain — inspect Terminal; no retry'
+                              : record.state === 'enqueue-unknown'
+                                ? 'Enqueue outcome unknown — refresh held evidence; do not enqueue again.'
+                                : record.state === 'rejected'
+                                  ? 'Enqueue rejected — no retained Web intent.'
+                                  : record.state}
                     {record.restored &&
                       ' Restored informational copy — no delivery or discard authority.'}
                   </p>
@@ -839,29 +918,6 @@ const ChatView: FC<IChatViewProps> = ({
                     </p>
                   )}
                   {record.error && <p role="alert">{record.error}</p>}
-                  {record.state === 'held' &&
-                    !record.restored &&
-                    sameSubmissionTarget(record.target, actionTarget) && (
-                      <>
-                        <Button
-                          variant="secondary"
-                          onClick={() => void held.send(record)}
-                        >
-                          Send now
-                        </Button>
-                        <p className="chat-inline-state">
-                          Submit now; does not guarantee native interruption.
-                        </p>
-                      </>
-                    )}
-                  {record.state === 'held' && !record.restored && (
-                    <Button
-                      variant="ghost"
-                      onClick={() => void held.discard(record)}
-                    >
-                      Discard unsent Web-held text
-                    </Button>
-                  )}
                   {!record.restored && (
                     <Button
                       variant="ghost"
@@ -893,16 +949,6 @@ const ChatView: FC<IChatViewProps> = ({
                   </Button>
                 </article>
               ))}
-            {paneSubmissions.length > 0 && (
-              <div>
-                <Button variant="ghost" onClick={() => submissions?.clear()}>
-                  Clear saved receipts (all panes)
-                </Button>
-                <p className="chat-inline-state">
-                  Removes Web evidence only; does not cancel native input.
-                </p>
-              </div>
-            )}
             {held?.storageError && (
               <p className="chat-inline-state" role="status">
                 {held.storageError}
@@ -965,5 +1011,5 @@ const ChatView: FC<IChatViewProps> = ({
   )
 }
 
-export { Turn, ToolRow }
+export { Turn, ToolRow, SubmissionReceipts }
 export default ChatView

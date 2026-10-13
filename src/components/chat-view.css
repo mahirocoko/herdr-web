@@ -1007,6 +1007,25 @@
   border-left: var(--hairline) solid var(--border);
 }
 
+.submission-history {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.submission-history pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.held-message-history {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.held-message-history .chat-compact-text {
+  white-space: pre-wrap;
+}
+
 @media (pointer: coarse) {
   .work-block-head,
   .work-row-head,

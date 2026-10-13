@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import {
   corroboratedSubmission,
+  isCurrentSubmissionIssue,
+  sameSubmissionTarget,
   restoreSubmissions,
   submissionBaseline,
   submissionFailurePhase,
@@ -43,6 +45,44 @@ const match = (
 ) => corroboratedSubmission(record, records, selected, history, rows)
 
 describe('submission evidence, never delivery authority', () => {
+  test('mode flips and transient unread history are not proof of stale storage', () => {
+    const blocked = { ...target, expectedMode: 'blocked-agent' as const }
+    expect(sameSubmissionTarget(target, blocked)).toBe(false)
+    expect(
+      corroboratedSubmission(record, [record], blocked, 'history', [
+        row('new', 20)
+      ])
+    ).toBeNull()
+    expect(
+      corroboratedSubmission(record, [record], target, null, [row('new', 20)])
+    ).toBeNull()
+    expect(match()).toBe('new')
+  })
+  test('only current live sending and problems remain outside history', () => {
+    for (const phase of ['sending', 'uncertain', 'rejected'] as const) {
+      const issue = { ...record, phase }
+      expect(isCurrentSubmissionIssue(issue, target, 'history')).toBe(true)
+      expect(
+        isCurrentSubmissionIssue(
+          { ...issue, restored: true },
+          target,
+          'history'
+        )
+      ).toBe(false)
+      expect(isCurrentSubmissionIssue(issue, target, 'replacement')).toBe(false)
+      expect(
+        isCurrentSubmissionIssue(
+          issue,
+          { ...target, agentSessionId: 'replacement' },
+          'history'
+        )
+      ).toBe(false)
+    }
+    expect(isCurrentSubmissionIssue(record, target, 'history')).toBe(false)
+    expect(
+      isCurrentSubmissionIssue({ ...record, baseline: null }, target, 'history')
+    ).toBe(false)
+  })
   test('acknowledgement remains awaiting transcript, not execution', () => {
     expect(submissionLabel(record)).toContain('execution not confirmed')
     expect(match([record], [row('old', 10)])).toBeNull()

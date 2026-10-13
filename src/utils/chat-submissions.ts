@@ -97,11 +97,22 @@ export const corroboratedSubmission = (
   return matches.length === 1 ? matches[0].id : null
 }
 
+/** Presentation only. Historical evidence never becomes a queue or action authority. */
+export const isCurrentSubmissionIssue = (
+  record: IChatSubmission,
+  target: IActionTargetIdentity | null,
+  sessionKey: string | null
+): boolean =>
+  !record.restored &&
+  record.phase !== 'submitted-awaiting-transcript' &&
+  sameSubmissionTarget(record.target, target) &&
+  (!record.baseline || record.baseline.sessionKey === sessionKey)
+
 export const submissionLabel = (record: IChatSubmission): string => {
   const label = {
     sending: 'Sending…',
     'submitted-awaiting-transcript':
-      'Submitted — awaiting native transcript; execution not confirmed.',
+      'Submitted (not queued) — native transcript inclusion and execution not confirmed.',
     rejected: 'Rejected — draft retained; not submitted.',
     uncertain:
       'Outcome uncertain — inspect Terminal before sending again. No automatic retry.'

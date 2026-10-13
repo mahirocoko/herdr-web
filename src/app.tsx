@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/sheet.tsx'
 import ThumbDeck from '@/components/thumb-deck.tsx'
 import PromptComposer from '@/components/prompt-composer.tsx'
+import HeldQueueStack from '@/components/held-queue-stack.tsx'
 import Button from '@/components/ui/button.tsx'
 import TabRail from '@/components/tab-rail.tsx'
 import NavigationSearchSheet from '@/components/navigation-search-sheet.tsx'
@@ -1052,6 +1053,15 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
                       </Button>
                     </div>
                   )}
+                {canonicalHasAgent && (
+                  <HeldQueueStack
+                    paneId={selectedPaneId}
+                    actionTarget={targetResult.target}
+                    held={held}
+                    disabled={isBusy}
+                    onInspectTerminal={() => setViewMode('stream')}
+                  />
+                )}
                 <PromptComposer
                   contextControls={
                     viewMode === 'chat' ? (
