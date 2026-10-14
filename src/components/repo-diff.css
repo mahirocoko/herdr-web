@@ -1,0 +1,32 @@
+/* MIT License - Copyright (c) 2026 devswha; adapted dc2f11de RepoDiff.css. */
+.repo-diff {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: min(60dvh, 680px);
+  min-height: 180px;
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 20px;
+}
+.repo-diff-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.repo-diff-column {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+.repo-diff-file {
+  display: block;
+  flex: 1 0 auto;
+}
+@media (max-width: 600px) {
+  .repo-diff {
+    height: 50dvh;
+  }
+}

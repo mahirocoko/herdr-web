@@ -87,6 +87,60 @@
   width: 100%;
 }
 
+.chat-find {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--color-bg-surface);
+  padding-block: var(--space-2);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.chat-find-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.chat-find-controls .ui-input {
+  flex: 1;
+  min-width: 0;
+}
+.chat-find-options {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  font-size: var(--fs-sm);
+}
+.chat-find-options label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.chat-find-hint {
+  margin: var(--space-1) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+.chat-find-open {
+  align-self: flex-end;
+}
+.chat-match-source {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-sm);
+  padding: var(--space-2);
+  border-left: 2px solid var(--color-accent);
+}
+.chat-match-source mark {
+  background: var(--color-accent);
+  color: var(--color-text-strong);
+}
+[data-chat-match] {
+  scroll-margin-block: 140px;
+}
+
 .chat-terminal-fallback {
   color: var(--text-dim);
   font-size: var(--fs-sm);
@@ -129,6 +183,42 @@
   font-size: var(--chat-fs-body);
   line-height: var(--lh-prose);
   overflow-wrap: anywhere;
+}
+
+/* MIT devswha dc2f11de ChatView.css: measured cap, full Markdown retained. */
+.chat-bubble.is-capped .chat-bubble-body {
+  --chat-fold-lines: 12;
+  max-height: calc(
+    var(--chat-fold-lines) * var(--chat-fs-body) * var(--lh-prose)
+  );
+  overflow: hidden;
+}
+.chat-bubble.is-folded .chat-bubble-body {
+  mask-image: linear-gradient(
+    currentColor calc(100% - var(--chat-fs-body) * var(--lh-prose)),
+    transparent
+  );
+}
+.chat-bubble-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-1);
+}
+.turn-changed-files {
+  min-width: 0;
+  font-size: var(--chat-fs-sm);
+  color: var(--color-text-secondary);
+}
+.turn-changed-files ul {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-1) 0;
+}
+.turn-changed-files button {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
 }
 
 .chat-turn-meta {
@@ -1096,19 +1186,9 @@
   flex-direction: column;
   gap: var(--space-1);
 }
-.chat-preferences-controls input:not([type='checkbox']),
-.chat-preferences-controls select {
-  min-height: var(--control-h);
+.chat-preferences-controls label {
+  min-width: 0;
   max-width: 100%;
-  color: var(--text);
-  border: var(--hairline) solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-panel);
-  font: inherit;
-  padding-inline: var(--space-2);
-}
-.chat-preferences-controls input[type='checkbox'] {
-  accent-color: var(--accent);
 }
 .chat-recorded-metadata {
   color: var(--text-dim);

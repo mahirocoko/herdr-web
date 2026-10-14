@@ -134,6 +134,34 @@ describe('ordinary Send receipt presentation', () => {
 })
 
 describe('ChatView component', () => {
+  it('retains full long Markdown and reveals the selected hidden Thai source occurrence outside the cap', () => {
+    const prefix = 'first line\n'.repeat(20)
+    const text = `${prefix}ข้อความไทย [real link](https://example.test)`
+    const html = renderToStaticMarkup(
+      createElement(Turn, {
+        live: false,
+        waiting: false,
+        turn: {
+          id: 'long-user',
+          role: 'user',
+          ts: null,
+          parts: [{ kind: 'text', text }]
+        },
+        match: {
+          rowKey: 'long-user',
+          start: prefix.length,
+          end: prefix.length + 'ข้อความไทย'.length
+        }
+      })
+    )
+    expect(html).toContain('chat-bubble is-capped')
+    expect(html).toContain('href="https://example.test"')
+    expect(html).toContain('<mark>ข้อความไทย</mark>')
+    expect(html.indexOf('chat-match-source')).toBeGreaterThan(
+      html.indexOf('chat-turn-meta')
+    )
+    expect(html).toContain('Copy message')
+  })
   it('exposes real Skill tool identity without claiming workflow completion', () => {
     const html = renderToStaticMarkup(
       createElement(ToolRow, {

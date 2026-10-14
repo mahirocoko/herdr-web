@@ -1164,6 +1164,31 @@ body {
   z-index: 20;
 }
 
+/* Read-only context below the unchanged composer card. */
+.prompt-composer__byte-limit {
+  margin: 0;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.prompt-composer__strip {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+.prompt-composer__strip > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prompt-composer__strip > span:first-child {
+  flex-shrink: 1;
+}
+.prompt-composer__strip > span:last-child {
+  flex-shrink: 2;
+}
 /* Prompt Composer */
 .prompt-composer {
   display: flex;

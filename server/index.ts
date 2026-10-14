@@ -40,6 +40,7 @@ import {
 import { handleConversationOutputRequest } from './conversation/output-route.ts'
 import { handleConversationImageRequest } from './conversation/image-route.ts'
 import { handleFileViewerRequest } from './file-viewer.ts'
+import { handleRepoDiffRequest } from './repo-diff.ts'
 import { getSharedPushService } from './push/service.ts'
 import { loadPushConfig } from './push/config.ts'
 import {
@@ -353,6 +354,20 @@ export const createServer = (
         const pushService = getSharedPushService()
         return (
           pushService.getConfig()?.ownerLogin ?? loadPushConfig()?.ownerLogin
+        )
+      }
+
+      if (
+        pathname === '/api/workspace/diff/files' ||
+        pathname === '/api/workspace/diff/file'
+      ) {
+        return handleRepoDiffRequest(
+          req,
+          pathname.endsWith('/files') ? 'files' : 'file',
+          {
+            ownerLogin: getConfiguredOwnerLogin(),
+            snapshot: options.deps?.fetchSnapshot ?? getHerdrSnapshot
+          }
         )
       }
 
@@ -2803,6 +2818,19 @@ export const createServer = (
       message(ws, message) {
         if (ws.data.kind === 'terminal-rejected') return
         if (ws.data.kind === 'events') {
+          // Application liveness is independent of topology activity and native
+          // bridge health. A ping only reads the current bridge status.
+          if (
+            message === '{"type":"events.ping"}' &&
+            !ws.data.closed &&
+            ws.readyState === 1
+          ) {
+            const bridge =
+              options.deps?.snapshotBridge ?? getSharedSnapshotBridge()
+            ws.send(
+              JSON.stringify({ type: 'status', status: bridge.getStatus() })
+            )
+          }
           return
         }
 

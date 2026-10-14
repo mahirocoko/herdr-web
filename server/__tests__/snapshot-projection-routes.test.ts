@@ -83,18 +83,23 @@ describe('HTTP /api/snapshot and WebSocket /api/events snapshot projection guard
         fetchSnapshot: async () => rawSnap,
         projectBrowserSnapshot: (snap: any) => {
           projectionCallCount++
-          const { projectBrowserSnapshot } = require('../snapshot-projection.ts')
+          const {
+            projectBrowserSnapshot
+          } = require('../snapshot-projection.ts')
           return projectBrowserSnapshot(snap)
         }
       }
     })
 
     try {
-      const response = await fetch(`http://127.0.0.1:${server.port}/api/snapshot`, {
-        headers: {
-          origin: `http://127.0.0.1:${server.port}`
+      const response = await fetch(
+        `http://127.0.0.1:${server.port}/api/snapshot`,
+        {
+          headers: {
+            origin: `http://127.0.0.1:${server.port}`
+          }
         }
-      })
+      )
       expect(response.status).toBe(200)
       const body = await response.json()
       expect(body.ok).toBe(true)
@@ -138,6 +143,65 @@ describe('HTTP /api/snapshot and WebSocket /api/events snapshot projection guard
     }
   })
 
+  it('answers application pings on an idle stream without inventing native bridge health', async () => {
+    const bridge = new SnapshotBridge({
+      snapshotFetcher: async () => createMaliciousRawSnapshot()
+    })
+    bridge.start = () => {}
+    bridge.getStatus = () => 'reconnecting'
+    let snapshotReads = 0
+    const server = createServer(0, '127.0.0.1', {
+      startPushBridge: false,
+      deps: {
+        snapshotBridge: bridge,
+        fetchSnapshot: async () => {
+          snapshotReads++
+          return createMaliciousRawSnapshot()
+        }
+      }
+    })
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const ws = new WebSocket(`ws://127.0.0.1:${server.port}/api/events`, {
+          headers: { origin: `http://127.0.0.1:${server.port}` }
+        } as any)
+        const timer = setTimeout(() => {
+          ws.close()
+          reject(new Error('Ping response timed out'))
+        }, 1000)
+        let initial = true
+        ws.onmessage = (event) => {
+          try {
+            expect(JSON.parse(event.data)).toEqual({
+              type: 'status',
+              status: 'reconnecting'
+            })
+            if (initial) {
+              initial = false
+              ws.send('{"type":"events.ping"}')
+            } else {
+              clearTimeout(timer)
+              ws.close()
+              resolve()
+            }
+          } catch (error) {
+            clearTimeout(timer)
+            ws.close()
+            reject(error)
+          }
+        }
+        ws.onerror = () => {
+          clearTimeout(timer)
+          reject(new Error('Ping socket failed'))
+        }
+      })
+      expect(snapshotReads).toBe(0)
+    } finally {
+      bridge.stop()
+      server.stop(true)
+    }
+  })
+
   it('proves WebSocket /api/events calls browser projection for initial snapshot and real-time updates', async () => {
     let projectionCallCount = 0
     const rawSnap1 = createMaliciousRawSnapshot()
@@ -164,7 +228,9 @@ describe('HTTP /api/snapshot and WebSocket /api/events snapshot projection guard
         snapshotBridge: isolatedBridge,
         projectBrowserSnapshot: (snap: any) => {
           projectionCallCount++
-          const { projectBrowserSnapshot } = require('../snapshot-projection.ts')
+          const {
+            projectBrowserSnapshot
+          } = require('../snapshot-projection.ts')
           return projectBrowserSnapshot(snap)
         }
       }
@@ -197,7 +263,9 @@ describe('HTTP /api/snapshot and WebSocket /api/events snapshot projection guard
           try {
             const parsed = JSON.parse(event.data.toString())
             messages.push(parsed)
-            const snapshotMessages = messages.filter((m) => m.type === 'snapshot')
+            const snapshotMessages = messages.filter(
+              (m) => m.type === 'snapshot'
+            )
             if (snapshotMessages.length >= 2) {
               clearTimeout(timer)
               ws.close()
@@ -226,16 +294,22 @@ describe('HTTP /api/snapshot and WebSocket /api/events snapshot projection guard
       expect(initialSnapshot.layouts).toBeUndefined()
       expect(initialSnapshot.secret_daemon_key).toBeUndefined()
       expect(initialSnapshot.workspaces[0].label).toBe('Workspace Alpha')
-      expect(initialSnapshot.workspaces[0].tokens.arbitrary_token).toBeUndefined()
+      expect(
+        initialSnapshot.workspaces[0].tokens.arbitrary_token
+      ).toBeUndefined()
       expect(initialSnapshot.workspaces[0].worktree.repo_root).toBeUndefined()
 
       const realtimeSnapshot = snapshotMessages[1].data
       expect(realtimeSnapshot.layouts).toBeUndefined()
       expect(realtimeSnapshot.secret_daemon_key).toBeUndefined()
       expect(realtimeSnapshot.workspaces[0].label).toBe('Workspace Realtime')
-      expect(realtimeSnapshot.workspaces[0].tokens.arbitrary_token).toBeUndefined()
+      expect(
+        realtimeSnapshot.workspaces[0].tokens.arbitrary_token
+      ).toBeUndefined()
       expect(realtimeSnapshot.workspaces[0].worktree.repo_root).toBeUndefined()
-      expect(realtimeSnapshot.agents).toEqual([{ target: 'p-1', pane_id: 'p-1' }])
+      expect(realtimeSnapshot.agents).toEqual([
+        { target: 'p-1', pane_id: 'p-1' }
+      ])
 
       // Guard: shared singleton was never mutated or touched
       const sharedBridge = getSharedSnapshotBridge()

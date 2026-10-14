@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { FC, FormEvent, KeyboardEvent, ReactNode } from 'react'
 import { Loader2, SendHorizontal, SquareTerminal } from 'lucide-react'
 import {
@@ -16,6 +16,7 @@ import InteractionPickerSheet, {
 } from './interaction-picker-sheet.tsx'
 import Button from '@/components/ui/button.tsx'
 import Textarea from '@/components/ui/textarea.tsx'
+import { MAX_DRAFT_BYTES, utf8Bytes } from '@/utils/composer-draft.ts'
 
 export interface IPromptComposerProps {
   paneId: string | null
@@ -34,6 +35,15 @@ export interface IPromptComposerProps {
   onSubmitText: (text: string) => Promise<ActionResultStatus | void>
   onQueueText?: (text: string) => Promise<ActionResultStatus | void>
   onSendKeys?: (keys: string[]) => void
+  draftIdentity?: string | null
+  draftRevision?: number
+  focusRequest?: number
+  draftNotice?: string | null
+  contextStrip?: {
+    path: string | null
+    folder: string | null
+    source: string | null
+  } | null
   draftText?: string
   onDraftChange?: (text: string) => void
   isPickerOpen?: boolean
@@ -60,6 +70,11 @@ const PromptComposer: FC<IPromptComposerProps> = ({
   onQueueText,
   onSendKeys,
   draftText,
+  draftIdentity,
+  draftRevision,
+  focusRequest = 0,
+  draftNotice,
+  contextStrip,
   onDraftChange,
   isPickerOpen,
   onPickerOpenChange,
@@ -73,18 +88,31 @@ const PromptComposer: FC<IPromptComposerProps> = ({
     effectiveMode === 'agent' || effectiveMode === 'blocked-agent'
 
   const [internalText, setInternalText] = useState('')
+  const [draftInputError, setDraftInputError] = useState<string | null>(null)
   const isControlled = draftText !== undefined
   const text = isControlled ? draftText : internalText
   const isComposingRef = useRef(false)
 
   const setText = (updater: string | ((prev: string) => string)) => {
     const nextVal = typeof updater === 'function' ? updater(text) : updater
+    if (utf8Bytes(nextVal) > MAX_DRAFT_BYTES) {
+      setDraftInputError(
+        `Text exceeds ${MAX_DRAFT_BYTES} UTF-8 bytes. Your previous draft is unchanged.`
+      )
+      return
+    }
+    setDraftInputError(null)
     if (!isControlled) {
       setInternalText(nextVal)
     }
     onDraftChange?.(nextVal)
   }
 
+  const liveDraftRef = useRef({ text, onDraftChange, draftRevision })
+  liveDraftRef.current = { text, onDraftChange, draftRevision }
+  const scopeIdentity = draftIdentity ?? paneId
+  useEffect(() => setDraftInputError(null), [scopeIdentity])
+  const previousIdentityRef = useRef(scopeIdentity)
   const prevPaneIdRef = useRef<string | null>(paneId)
   const paneGenerationRef = useRef<number>(0)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -104,7 +132,8 @@ const PromptComposer: FC<IPromptComposerProps> = ({
   }
 
   // Track a monotonically increasing pane-generation whenever paneId changes, including A -> B -> A
-  if (paneId !== prevPaneIdRef.current) {
+  if (scopeIdentity !== previousIdentityRef.current) {
+    previousIdentityRef.current = scopeIdentity
     prevPaneIdRef.current = paneId
     paneGenerationRef.current += 1
   }
@@ -150,6 +179,13 @@ const PromptComposer: FC<IPromptComposerProps> = ({
     })
   }
 
+  const mountedRef = useRef(true)
+  useLayoutEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
   const submittingRef = useRef(false)
   const submitDraft = async (queue = false) => {
     // Strictly prevent submission while IME composition is active
@@ -159,6 +195,7 @@ const PromptComposer: FC<IPromptComposerProps> = ({
     // Prevent duplicate submission while already sending or empty or disabled target
     if (
       !trimmed ||
+      utf8Bytes(text) > MAX_DRAFT_BYTES ||
       !paneId ||
       !hasValidTarget ||
       (!queue && !isPromptEvidenceReady) ||
@@ -171,25 +208,32 @@ const PromptComposer: FC<IPromptComposerProps> = ({
     const submittedPaneId = paneId
     const submittedGeneration = paneGenerationRef.current
     const submittedDraft = text
+    const submittedRevision = draftRevision
     if (queue && !onQueueText) return
     submittingRef.current = true
     try {
       const status = await (queue ? onQueueText! : onSubmitText)(trimmed)
       // Clear only when status is acknowledged and exact draft/pane/generation remain unchanged
-      if (status === 'acknowledged') {
+      if (status === 'acknowledged' && mountedRef.current) {
         const currentPaneId = prevPaneIdRef.current
         const currentGeneration = paneGenerationRef.current
-        setText((current) =>
-          resolveDraftAfterSubmit(
-            current,
-            submittedDraft,
-            'acknowledged',
-            currentPaneId,
-            submittedPaneId,
-            currentGeneration,
-            submittedGeneration
-          )
+        const current = liveDraftRef.current
+        const next = resolveDraftAfterSubmit(
+          current.text,
+          submittedDraft,
+          'acknowledged',
+          currentPaneId,
+          submittedPaneId,
+          currentGeneration,
+          submittedGeneration
         )
+        if (
+          next !== current.text &&
+          current.draftRevision === submittedRevision
+        ) {
+          if (!isControlled) setInternalText(next)
+          current.onDraftChange?.(next)
+        }
       }
     } catch {
       // Retain draft on failure
@@ -252,7 +296,31 @@ const PromptComposer: FC<IPromptComposerProps> = ({
   // Textarea is disabled only when there is no pane selected or no valid target identity.
   const isInputDisabled =
     !paneId || !hasValidTarget || !isPromptEvidenceReady || isControlActive
-  const isSubmitDisabled = isInputDisabled || isBusy || text.trim().length === 0
+  const consumedFocusRequest = useRef(0)
+  useEffect(() => {
+    if (
+      !focusRequest ||
+      consumedFocusRequest.current === focusRequest ||
+      isInputDisabled
+    )
+      return
+    consumedFocusRequest.current = focusRequest
+    const input = textareaRef.current
+    // Do not steal focus if the reader chose another control while waiting.
+    if (
+      !input ||
+      (document.activeElement !== document.body &&
+        document.activeElement !== input)
+    )
+      return
+    input.focus({ preventScroll: true })
+    input.setSelectionRange(input.value.length, input.value.length)
+  }, [focusRequest, isInputDisabled])
+  const isSubmitDisabled =
+    isInputDisabled ||
+    isBusy ||
+    text.trim().length === 0 ||
+    utf8Bytes(text) > MAX_DRAFT_BYTES
   const isQuickDisabled =
     !paneId ||
     !terminalId ||
@@ -288,11 +356,11 @@ const PromptComposer: FC<IPromptComposerProps> = ({
             id="herdr-prompt-input"
             name="prompt"
             rows={1}
-            maxLength={4096}
             className="prompt-composer__input prompt-composer__textarea"
             placeholder={promptPlaceholder ?? placeholder}
             value={text}
             onChange={(e) => setText(e.target.value)}
+            aria-describedby="herdr-prompt-byte-limit"
             onKeyDown={handleKeyDown}
             onCompositionStart={() => {
               isComposingRef.current = true
@@ -329,6 +397,7 @@ const PromptComposer: FC<IPromptComposerProps> = ({
                 variant="ghost"
                 disabled={
                   !text.trim() ||
+                  utf8Bytes(text) > MAX_DRAFT_BYTES ||
                   !paneId ||
                   !hasValidTarget ||
                   isBusy ||
@@ -362,6 +431,30 @@ const PromptComposer: FC<IPromptComposerProps> = ({
         </div>
       </form>
 
+      {contextStrip && (
+        <div className="prompt-composer__strip" aria-label="Composer context">
+          {contextStrip.folder && (
+            <span
+              title={contextStrip.path ?? undefined}
+              aria-label={contextStrip.path ?? undefined}
+            >
+              {contextStrip.folder}
+            </span>
+          )}
+          {contextStrip.source && (
+            <span title={contextStrip.source}>{contextStrip.source}</span>
+          )}
+        </div>
+      )}
+      <p
+        id="herdr-prompt-byte-limit"
+        className="prompt-composer__byte-limit"
+        role="status"
+      >
+        {draftInputError ??
+          `${utf8Bytes(text)} / ${MAX_DRAFT_BYTES} UTF-8 bytes`}
+      </p>
+      {draftNotice && <p role="status">{draftNotice}</p>}
       {/* Quick Commands Interaction Picker Sheet */}
       {effectivePickerOpen && (
         <InteractionPickerSheet

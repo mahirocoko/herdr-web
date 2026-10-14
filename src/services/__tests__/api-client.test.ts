@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'bun:test'
-import { ActionError, sendAction } from '../api-client.ts'
+import { ActionError, fetchSnapshot, sendAction } from '../api-client.ts'
 import type { IActionRequest } from '@/types/herdr.ts'
 
 const request: IActionRequest = {
@@ -17,10 +17,53 @@ afterEach(() => {
   globalThis.fetch = originalFetch
 })
 
+describe('snapshot read deadlines', () => {
+  it('aborts and settles a hanging fetch within its deadline', async () => {
+    let signal: AbortSignal | undefined
+    globalThis.fetch = ((_url: unknown, options: RequestInit) => {
+      signal = options.signal as AbortSignal
+      expect(options.cache).toBe('no-store')
+      return new Promise(() => {})
+    }) as unknown as typeof fetch
+    await expect(fetchSnapshot(undefined, 5)).rejects.toMatchObject({
+      name: 'AbortError'
+    })
+    expect(signal?.aborted).toBe(true)
+  })
+
+  it('bounds response-body stalls and external cancellation', async () => {
+    globalThis.fetch = (async () => ({
+      ok: true,
+      json: () => new Promise(() => {})
+    })) as unknown as typeof fetch
+    await expect(fetchSnapshot(undefined, 5)).rejects.toMatchObject({
+      name: 'AbortError'
+    })
+    const controller = new AbortController()
+    const pending = fetchSnapshot(controller.signal)
+    controller.abort()
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('preserves the snapshot success contract', async () => {
+    globalThis.fetch = (async () =>
+      Response.json({
+        ok: true,
+        snapshot: { version: 'test' }
+      })) as unknown as typeof fetch
+    expect((await fetchSnapshot()).version).toBe('test')
+  })
+})
+
 describe('api-client: sendAction ambiguity normalization', () => {
   it('normalizes network and aborted fetch failures to unknown ActionError', async () => {
-    for (const error of [new TypeError('offline'), Object.assign(new Error('aborted'), { name: 'AbortError' })]) {
-      globalThis.fetch = (async () => { throw error }) as unknown as typeof fetch
+    for (const error of [
+      new TypeError('offline'),
+      Object.assign(new Error('aborted'), { name: 'AbortError' })
+    ]) {
+      globalThis.fetch = (async () => {
+        throw error
+      }) as unknown as typeof fetch
       try {
         await sendAction(request)
         expect.unreachable()
@@ -36,8 +79,13 @@ describe('api-client: sendAction ambiguity normalization', () => {
     const responses = [
       new Response('not-json', { status: 200 }),
       new Response(JSON.stringify({ ok: true }), { status: 200 }),
-      new Response(JSON.stringify({ ok: true, outcome: 'invented' }), { status: 200 }),
-      new Response(JSON.stringify({ ok: true, outcome: 'observed', result: null }), { status: 200 })
+      new Response(JSON.stringify({ ok: true, outcome: 'invented' }), {
+        status: 200
+      }),
+      new Response(
+        JSON.stringify({ ok: true, outcome: 'observed', result: null }),
+        { status: 200 }
+      )
     ]
     for (const response of responses) {
       globalThis.fetch = (async () => response) as unknown as typeof fetch
@@ -49,11 +97,15 @@ describe('api-client: sendAction ambiguity normalization', () => {
   })
 
   it('preserves a rejected HTTP response outcome from the server', async () => {
-    globalThis.fetch = (async () => new Response(JSON.stringify({
-      ok: false,
-      outcome: 'rejected',
-      error: 'Last Tab cannot close'
-    }), { status: 409 })) as unknown as typeof fetch
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          ok: false,
+          outcome: 'rejected',
+          error: 'Last Tab cannot close'
+        }),
+        { status: 409 }
+      )) as unknown as typeof fetch
 
     await expect(sendAction(request)).rejects.toMatchObject({
       name: 'ActionError',
@@ -64,11 +116,15 @@ describe('api-client: sendAction ambiguity normalization', () => {
   })
 
   it('accepts a well-formed observed lifecycle response', async () => {
-    globalThis.fetch = (async () => new Response(JSON.stringify({
-      ok: true,
-      outcome: 'observed',
-      result: { workspaceId: 'ws-1' }
-    }), { status: 200 })) as unknown as typeof fetch
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          ok: true,
+          outcome: 'observed',
+          result: { workspaceId: 'ws-1' }
+        }),
+        { status: 200 }
+      )) as unknown as typeof fetch
 
     expect(await sendAction(request)).toEqual({
       ok: true,

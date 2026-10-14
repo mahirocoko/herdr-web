@@ -14,24 +14,81 @@ describe('fetchPaneConversation', () => {
   })
 
   it('fetches opaque native image as exact bounded Blob with MIME/dimensions, signal and no-store', async () => {
-    const bytes=Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64'))
-    const controller=new AbortController()
-    let url='',init:RequestInit|undefined
-    globalThis.fetch=(async(input:RequestInfo|URL,options?:RequestInit)=>{url=String(input);init=options;return new Response(bytes,{headers:{'content-type':'image/png','x-image-width':'1','x-image-height':'1'}})}) as unknown as typeof fetch
-    const image=await fetchConversationImage('p1','history','opaque',{signal:controller.signal})
-    expect(url).toBe('/api/conversation/image?pane_id=p1&history_id=history&ref=opaque')
-    expect(init?.signal).toBe(controller.signal);expect(init?.cache).toBe('no-store')
-    expect(image).toMatchObject({mediaType:'image/png',width:1,height:1})
+    const bytes = Uint8Array.from(
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',
+        'base64'
+      )
+    )
+    const controller = new AbortController()
+    let url = '',
+      init: RequestInit | undefined
+    globalThis.fetch = (async (
+      input: RequestInfo | URL,
+      options?: RequestInit
+    ) => {
+      url = String(input)
+      init = options
+      return new Response(bytes, {
+        headers: {
+          'content-type': 'image/png',
+          'x-image-width': '1',
+          'x-image-height': '1'
+        }
+      })
+    }) as unknown as typeof fetch
+    const image = await fetchConversationImage('p1', 'history', 'opaque', {
+      signal: controller.signal
+    })
+    expect(url).toBe(
+      '/api/conversation/image?pane_id=p1&history_id=history&ref=opaque'
+    )
+    expect(init?.signal).toBe(controller.signal)
+    expect(init?.cache).toBe('no-store')
+    expect(image).toMatchObject({ mediaType: 'image/png', width: 1, height: 1 })
     expect(new Uint8Array(await image.blob.arrayBuffer())).toEqual(bytes)
   })
   it('refuses SVG/invalid dimensions and cancels oversized native image stream', async () => {
-    for(const headers of [{'content-type':'image/svg+xml','x-image-width':'1','x-image-height':'1'},{'content-type':'image/png','x-image-width':'9000','x-image-height':'1'}]) {
-      globalThis.fetch=(async()=>new Response('invalid',{headers})) as unknown as typeof fetch
-      await expect(fetchConversationImage('p1','history','opaque')).rejects.toThrow('Invalid native-image payload')
+    for (const headers of [
+      {
+        'content-type': 'image/svg+xml',
+        'x-image-width': '1',
+        'x-image-height': '1'
+      },
+      {
+        'content-type': 'image/png',
+        'x-image-width': '9000',
+        'x-image-height': '1'
+      }
+    ]) {
+      globalThis.fetch = (async () =>
+        new Response('invalid', { headers })) as unknown as typeof fetch
+      await expect(
+        fetchConversationImage('p1', 'history', 'opaque')
+      ).rejects.toThrow('Invalid native-image payload')
     }
-    let cancelled=false
-    globalThis.fetch=(async()=>new Response(new ReadableStream({start(controller){controller.enqueue(new Uint8Array(8*1024*1024+1))},cancel(){cancelled=true}}),{headers:{'content-type':'image/png','x-image-width':'1','x-image-height':'1'}})) as unknown as typeof fetch
-    await expect(fetchConversationImage('p1','history','opaque')).rejects.toThrow('exceeds limit')
+    let cancelled = false
+    globalThis.fetch = (async () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new Uint8Array(8 * 1024 * 1024 + 1))
+          },
+          cancel() {
+            cancelled = true
+          }
+        }),
+        {
+          headers: {
+            'content-type': 'image/png',
+            'x-image-width': '1',
+            'x-image-height': '1'
+          }
+        }
+      )) as unknown as typeof fetch
+    await expect(
+      fetchConversationImage('p1', 'history', 'opaque')
+    ).rejects.toThrow('exceeds limit')
     expect(cancelled).toBe(true)
   })
   it('fetches whole output with frozen identity, cancellation signal and no-store', async () => {
@@ -105,6 +162,36 @@ describe('fetchPaneConversation', () => {
       expect((error as ConversationError).code).toBe('history_changed')
       expect((error as ConversationError).status).toBe(409)
     }
+  })
+
+  it('bounds hanging request and body reads, aborting the underlying transport', async () => {
+    let signal: AbortSignal | null | undefined
+    for (const bodyStall of [false, true]) {
+      globalThis.fetch = ((_input: unknown, options: RequestInit) => {
+        signal = options.signal
+        expect(options.cache).toBe('no-store')
+        return bodyStall
+          ? Promise.resolve({ ok: true, json: () => new Promise(() => {}) })
+          : new Promise(() => {})
+      }) as unknown as typeof fetch
+      await expect(
+        fetchPaneConversation('p1', { timeoutMs: 5 })
+      ).rejects.toMatchObject({ code: 'read_timeout' })
+      expect(signal?.aborted).toBe(true)
+    }
+  })
+
+  it('relays owner cancellation and rejects even a noncooperating read', async () => {
+    let signal: AbortSignal | null | undefined
+    globalThis.fetch = ((_input: unknown, options: RequestInit) => {
+      signal = options.signal
+      return new Promise(() => {})
+    }) as unknown as typeof fetch
+    const controller = new AbortController()
+    const pending = fetchPaneConversation('p1', { signal: controller.signal })
+    controller.abort()
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    expect(signal?.aborted).toBe(true)
   })
 
   it('fetches conversation with pane_id parameter', async () => {

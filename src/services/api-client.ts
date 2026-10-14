@@ -52,21 +52,51 @@ export const fetchHealth = async (): Promise<{
   return res.json()
 }
 
-export const fetchSnapshot = async (): Promise<ISnapshotResult> => {
-  const res = await fetch('/api/snapshot')
-  if (!res.ok) {
-    const errorData = await res
-      .json()
-      .catch(() => ({ error: `HTTP ${res.status}` }))
-    throw new Error(
-      errorData.error || `Failed to fetch snapshot (status ${res.status})`
-    )
+export const SNAPSHOT_READ_TIMEOUT_MS = 10000
+
+export const fetchSnapshot = async (
+  signal?: AbortSignal,
+  timeoutMs = SNAPSHOT_READ_TIMEOUT_MS
+): Promise<ISnapshotResult> => {
+  const controller = new AbortController()
+  const abort = () => controller.abort()
+  signal?.addEventListener('abort', abort, { once: true })
+  if (signal?.aborted) abort()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const cancelled = new Promise<never>((_, reject) => {
+    const rejectAbort = () =>
+      reject(new DOMException('Snapshot read aborted', 'AbortError'))
+    controller.signal.addEventListener('abort', rejectAbort, { once: true })
+    if (controller.signal.aborted) rejectAbort()
+    timer = setTimeout(abort, timeoutMs)
+  })
+  try {
+    return await Promise.race([
+      cancelled,
+      (async () => {
+        const res = await fetch('/api/snapshot', {
+          signal: controller.signal,
+          cache: 'no-store'
+        })
+        if (!res.ok) {
+          const errorData = await res
+            .json()
+            .catch(() => ({ error: `HTTP ${res.status}` }))
+          throw new Error(
+            errorData.error || `Failed to fetch snapshot (status ${res.status})`
+          )
+        }
+        const data = await res.json()
+        if (!data.ok || !data.snapshot) {
+          throw new Error(data.error || 'Invalid snapshot payload from server')
+        }
+        return data.snapshot
+      })()
+    ])
+  } finally {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', abort)
   }
-  const data = await res.json()
-  if (!data.ok || !data.snapshot) {
-    throw new Error(data.error || 'Invalid snapshot payload from server')
-  }
-  return data.snapshot
 }
 
 const ACTION_OUTCOMES = new Set<IActionOutcome>([

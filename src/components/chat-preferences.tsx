@@ -2,6 +2,9 @@ import { useEffect, useState, type CSSProperties } from 'react'
 import type { IChatPreferences } from '@/utils/chat-preferences.ts'
 import { DEFAULT_CHAT_PREFERENCES } from '@/utils/chat-preferences.ts'
 import Button from './ui/button.tsx'
+import Input from './ui/input.tsx'
+import Select from './ui/select.tsx'
+import Checkbox from './ui/checkbox.tsx'
 interface IChatPreferencesProps {
   preferences: IChatPreferences
   onChange: (value: IChatPreferences) => void
@@ -20,60 +23,74 @@ const ChatPreferences = ({
       <div className="chat-preferences-controls">
         <label>
           Text size
-          <select
-            name="chat-font-size"
-            value={preferences.fontSize ?? ''}
-            onChange={(e) =>
+          <Select
+            aria-label="Text size"
+            value={
+              preferences.fontSize === null
+                ? 'default'
+                : String(preferences.fontSize)
+            }
+            options={[
+              { value: 'default', label: 'Default' },
+              ...Array.from({ length: 14 }, (_, i) => ({
+                value: String(i + 11),
+                label: `${i + 11}px`
+              }))
+            ]}
+            onValueChange={(value) =>
               onChange({
                 ...preferences,
-                fontSize: e.target.value ? Number(e.target.value) : null
+                fontSize: value === 'default' ? null : Number(value)
               })
             }
-          >
-            <option value="">Default</option>
-            {Array.from({ length: 14 }, (_, i) => i + 11).map((size) => (
-              <option key={size} value={size}>
-                {size}px
-              </option>
-            ))}
-          </select>
+          />
         </label>
         <label>
           Lane width
-          <select
-            name="chat-lane-width"
+          <Select
+            aria-label="Lane width"
             value={preferences.width}
-            onChange={(e) =>
+            options={['narrow', 'default', 'wide', 'full'].map((value) => ({
+              value,
+              label: value
+            }))}
+            onValueChange={(value) =>
               onChange({
                 ...preferences,
-                width: e.target.value as IChatPreferences['width']
+                width: value as IChatPreferences['width']
               })
             }
-          >
-            {['narrow', 'default', 'wide', 'full'].map((width) => (
-              <option key={width} value={width}>
-                {width}
-              </option>
-            ))}
-          </select>
+          />
         </label>
         <label>
           Font family
-          <input
+          <Input
             name="chat-font-family"
             value={family}
             placeholder="Default UI font"
+            maxLength={256}
+            spellCheck={false}
+            onKeyDown={(event) => {
+              // dc2f11de SettingsDialog.FontFamilyInput: Enter commits, IME keeps Enter.
+              if (
+                event.key !== 'Enter' ||
+                event.nativeEvent.isComposing ||
+                event.nativeEvent.keyCode === 229
+              )
+                return
+              event.preventDefault()
+              onChange({ ...preferences, fontFamily: family })
+            }}
             onChange={(e) => setFamily(e.target.value)}
             onBlur={() => onChange({ ...preferences, fontFamily: family })}
           />
         </label>
         <label>
-          <input
+          <Checkbox
             name="chat-show-thinking"
-            type="checkbox"
             checked={preferences.showThinking}
-            onChange={(e) =>
-              onChange({ ...preferences, showThinking: e.target.checked })
+            onCheckedChange={(checked) =>
+              onChange({ ...preferences, showThinking: checked })
             }
           />
           Show thinking

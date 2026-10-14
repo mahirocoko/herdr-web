@@ -1,4 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore
+} from 'react'
+import { composerDrafts, composerDraftScope } from '@/utils/composer-draft.ts'
+import { composerStrip } from '@/utils/composer-strip.ts'
+import {
+  appendQuote,
+  formatTerminalQuote,
+  quoteMatchesTarget
+} from '@/utils/terminal-quote.ts'
 import type { FC } from 'react'
 import { useNavigate, useOutletContext } from 'react-router'
 import { usePaneRead } from '@/hooks/use-pane-read.ts'
@@ -434,7 +448,63 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
     targetResult.target ?? undefined,
     viewMode === 'chat' && isAgentPaneForControl
   )
-  const [composerDraft, setComposerDraft] = useState('')
+  const draftScope = composerDraftScope(
+    selectedPaneId,
+    targetResult.target?.terminalId,
+    targetResult.target?.agentSessionId
+  )
+  const draftSelectionRef = useRef({ scope: draftScope, generation: 0 })
+  if (draftSelectionRef.current.scope !== draftScope)
+    draftSelectionRef.current = {
+      scope: draftScope,
+      generation: draftSelectionRef.current.generation + 1
+    }
+  const draftGeneration = draftSelectionRef.current.generation
+  const [quoteFocus, setQuoteFocus] = useState<{
+    scope: string | null
+    generation: number
+    revision: number
+  } | null>(null)
+  const savedDraft = useSyncExternalStore(composerDrafts.subscribe, () =>
+    composerDrafts.read(draftScope)
+  )
+  const composerDraft = savedDraft.text
+  const setComposerDraft = (text: string) => {
+    composerDrafts.set(draftScope, text)
+  }
+  const contextStrip = composerStrip(selectedPane, activeWorkspace)
+  const quoteSelection = (text: string) => {
+    if (
+      !isAgentPaneForControl ||
+      !targetResult.target ||
+      !quoteMatchesTarget(
+        draftScope,
+        draftGeneration,
+        draftSelectionRef.current.scope,
+        draftSelectionRef.current.generation
+      )
+    )
+      return
+    const block = formatTerminalQuote({
+      label: selectedPane?.display_agent || selectedPane?.agent || 'terminal',
+      text
+    })
+    if (!block) return
+    const next = appendQuote(composerDrafts.read(draftScope).text, block)
+    if (next === null) {
+      setActionError(
+        'Quote exceeds the 4096 UTF-8 byte draft limit. Select less text.'
+      )
+      return
+    }
+    composerDrafts.set(draftScope, next)
+    setQuoteFocus((previous) => ({
+      scope: draftScope,
+      generation: draftGeneration,
+      revision: (previous?.revision ?? 0) + 1
+    }))
+    setViewMode('chat')
+  }
   const [chatSend, setChatSend] = useState<{
     paneId: string
     revision: number
@@ -450,6 +520,9 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
     id: string
     answer: PromptAnswerIntent
     draft: string
+    scope: string | null
+    generation: number
+    revision: number
   } | null>(null)
   useEffect(() => {
     setTypedPromptAnswer(null)
@@ -519,7 +592,14 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
         throw new Error(refusal)
       }
       if (needsConfirmation(interactive.prompt, answer)) {
-        setTypedPromptAnswer({ id: interactive.prompt.id, answer, draft: text })
+        setTypedPromptAnswer({
+          id: interactive.prompt.id,
+          answer,
+          draft: text,
+          scope: draftScope,
+          generation: draftGeneration,
+          revision: savedDraft.revision
+        })
         return 'skipped_busy' // Inert until this occurrence's explicit Confirm.
       }
       const result = await answerInteractivePrompt(answer)
@@ -942,6 +1022,11 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
                     <ChatView
                       key={`${selectedPaneId}:${targetResult.target?.terminalId}:${targetResult.target?.agentSessionId ?? ''}`}
                       paneId={selectedPaneId}
+                      cwd={
+                        selectedPane?.foreground_cwd ||
+                        selectedPane?.cwd ||
+                        null
+                      }
                       actionTarget={targetResult.target}
                       submissions={submissions}
                       held={held}
@@ -968,7 +1053,12 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
                       aria-label="Live Terminal"
                     >
                       <TerminalCanvas
-                        key={selectedPaneId}
+                        key={`${draftScope}:${draftGeneration}`}
+                        onQuoteSelection={
+                          isAgentPaneForControl && targetResult.target
+                            ? quoteSelection
+                            : undefined
+                        }
                         paneId={selectedPaneId}
                         terminalId={selectedPane?.terminal_id}
                         isAgentPane={isAgentPaneForControl}
@@ -1018,9 +1108,18 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
                     onAnswered={(focus) => {
                       if (
                         typedPromptAnswer &&
-                        composerDraft === typedPromptAnswer.draft
+                        quoteMatchesTarget(
+                          typedPromptAnswer.scope,
+                          typedPromptAnswer.generation,
+                          draftSelectionRef.current.scope,
+                          draftSelectionRef.current.generation
+                        ) &&
+                        composerDrafts.read(typedPromptAnswer.scope)
+                          .revision === typedPromptAnswer.revision &&
+                        composerDrafts.read(typedPromptAnswer.scope).text ===
+                          typedPromptAnswer.draft
                       )
-                        setComposerDraft('')
+                        composerDrafts.set(typedPromptAnswer.scope, '')
                       setTypedPromptAnswer(null)
                       void interactive.refresh()
                       void refreshSnapshot()
@@ -1086,6 +1185,26 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
                     ) : undefined
                   }
                   draftText={composerDraft}
+                  draftIdentity={draftScope}
+                  draftRevision={savedDraft.revision}
+                  focusRequest={
+                    viewMode === 'chat' &&
+                    quoteFocus &&
+                    quoteMatchesTarget(
+                      quoteFocus.scope,
+                      quoteFocus.generation,
+                      draftScope,
+                      draftGeneration
+                    )
+                      ? quoteFocus.revision
+                      : 0
+                  }
+                  contextStrip={contextStrip}
+                  draftNotice={
+                    savedDraft.memoryOnly
+                      ? 'Draft is memory-only — browser storage unavailable or invalid.'
+                      : null
+                  }
                   onDraftChange={setComposerDraft}
                   promptPlaceholder={
                     viewMode === 'chat'
