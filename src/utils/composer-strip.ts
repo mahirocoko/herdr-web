@@ -14,6 +14,9 @@ export const composerStrip = (
   return {
     path,
     folder: path ? path.replace(/\/+$/, '').split('/').pop() || '/' : null,
-    source: source ? `Space checkout: ${source}` : null
+    source: source ? `Space checkout: ${source}` : null,
+    branch: workspace?.tokens?.mahiro_workspace_branch?.trim() || null,
+    dirty: workspace?.tokens?.mahiro_workspace_git_status === 'dirty',
+    worktree: workspace?.tokens?.mahiro_workspace_worktree?.trim() || null
   }
 }

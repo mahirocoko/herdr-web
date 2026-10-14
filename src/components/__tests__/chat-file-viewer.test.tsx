@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'bun:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { FileTextPreview } from '../chat-file-viewer.tsx'
+import { Dialog } from '@base-ui/react/dialog'
+import { FileTextPreview, FileViewerHeading } from '../chat-file-viewer.tsx'
 import {
   canReadMarkdownPreview,
   resolveViewedFileLink,
@@ -17,6 +18,63 @@ const render = (
   renderToStaticMarkup(
     createElement(FileTextPreview, { path, text, size, onOpen: () => {} })
   )
+
+describe('source-led file viewer ownership', () => {
+  it('keeps the extension separate and publishes the full Thai path plus truthful preview size', () => {
+    const name = `${'รายงานยาว'.repeat(30)}.markdown`
+    const path = `/repo/${'โฟลเดอร์/'.repeat(30)}${name}`
+    const html = renderToStaticMarkup(
+      createElement(
+        Dialog.Root,
+        { open: true },
+        createElement(FileViewerHeading, {
+          name,
+          path,
+          size: 131072,
+          truncated: true
+        })
+      )
+    )
+    expect(html).toContain('file-viewer-stem')
+    expect(html).toContain('</span>.markdown')
+    expect(html).toContain(`title="${path}"`)
+    expect(html).toContain('64 KiB of 128.0 KiB')
+    expect(html).toContain('dir="ltr"')
+  })
+  it('isolates the bounded frame and narrow-screen source header from Terminal image recipes', async () => {
+    const css = await Bun.file(
+      new URL('../chat-file-viewer.css', import.meta.url)
+    ).text()
+    const source = await Bun.file(
+      new URL('../chat-file-viewer.tsx', import.meta.url)
+    ).text()
+    expect(css).toContain('width: min(96vw, 1100px)')
+    expect(css).toContain('max-height: min(92vh, 100%)')
+    expect(css).toContain(
+      "grid-template-areas: 'title close' 'actions actions'"
+    )
+    expect(css).toContain('text-overflow: ellipsis')
+    expect(css).toContain('@media (pointer: coarse)')
+    expect(css).toMatch(
+      /\.file-viewer-action\.ui-button\s*\{\s*width: 44px;\s*height: 44px;\s*min-width: 44px;\s*min-height: 44px;/
+    )
+    expect(css).toContain('.file-viewer-body--media')
+    expect(css).toContain('margin-block: auto')
+    expect(source).toContain("['image', 'video', 'audio'].includes(info.kind)")
+    expect(css).not.toContain('ui-image-lightbox')
+    expect(source).not.toContain('ui-image-lightbox__')
+    // Wiring guard only, not interactive Escape/focus or download proof.
+    expect(source).toContain('<Dialog.Root')
+    expect(source).toContain('<Dialog.Close')
+    expect(source).toContain('<TerminalImagePreview')
+    expect(source).toContain('open={zoom}')
+    expect(source).toContain('onClose={() => setZoom(false)}')
+    expect(source).toContain("fileContentUrl(file.ref, 'download')")
+    expect(source).toContain('open(file.parent!)')
+    expect(source).toContain('onClick={() => setPage(source.current + 1)}')
+    expect(source).toContain('createPortal(controls, actionsHost)')
+  })
+})
 
 describe('selected local file text preview', () => {
   it('uses the Chat AST renderer for both Markdown extensions; HTML and unsafe URLs stay inert', () => {

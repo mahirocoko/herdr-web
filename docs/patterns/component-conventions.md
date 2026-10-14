@@ -41,12 +41,16 @@ Long user messages fold only beyond 12 source-visible lines or 900 visible
 characters (Markdown link labels count, not URLs), and only measured clipping
 shows a disclosure. Full Markdown and Copy payload remain intact. Stable keyed
 Turn identity retains disclosure through polling; session/pane remount resets it.
-P1's full native source passage and selected occurrence stay outside the visual
-cap, including Thai and hidden matches. Show less returns an above-viewport card
+The full native source passage and selected occurrence stay outside the visual
+cap in Find's single source preview, including Thai and hidden matches. Show less returns an above-viewport card
 to view. No minimap or global shortcut installation: Find/source navigation and
 Latest already own those reading needs; density/virtualization remain deferred
 until measured cost. Existing appearance options retain semantics but now use
-canonical Select/Input/Checkbox controls; no second font picker is installed.
+canonical Select/Input/Checkbox controls in the existing Settings route's Chat
+section; no second font picker is installed. Root mounts the single preference
+hook and shares its value/update/error through outlet context. Route navigation
+never rereads storage or drops memory-only edits; Reset and document remount retain
+the existing policy. Font Enter commit remains IME-protected.
 
 ## Chat reading contracts
 
@@ -54,8 +58,12 @@ canonical Select/Input/Checkbox controls; no second font picker is installed.
 current conversation only. The loaded native turns are searched, including folded
 work/tool/thinking source; images, synthetic retention notices and omitted text
 are not searched. Tool output is the supplied preview, not an implicit whole-output
-fetch. A matched row reveals the real source passage with a semantic `mark`, since
-source offsets cannot be applied to transformed Markdown. Copy and disclosure
+fetch. Find's source-owned preview slot reveals the real source passage with a
+semantic `mark`, since source offsets cannot be applied to transformed Markdown.
+The matched row retains its selected marker and scroll ownership, without a second
+preview. Explicit fold changes re-reveal that selected row while the passage stays
+in Find; ordinary resize/reader scrolling does not force navigation. Standalone
+Turn rendering retains its existing source-passage fallback. Copy and disclosure
 state remain with the original components.
 
 Only visible selected Chat handles platform Mod+F; dialogs and existing shortcut

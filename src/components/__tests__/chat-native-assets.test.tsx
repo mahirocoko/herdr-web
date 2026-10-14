@@ -77,9 +77,17 @@ describe('real native asset consumer anatomy', () => {
         }}
       />
     )
-    expect(html).toContain('Context compacted')
-    expect(html).toContain('instructions loaded')
-    expect(html).toContain('not proof the workflow completed')
+    expect(html).toContain('Conversation compacted')
+    expect(html).toContain('Native summary')
+    expect(html).toContain('chat-compact-text chat-notice-text')
+    expect(html).toContain('data-status="loaded"')
+    expect(html).toContain('class="chat-skill-name">example</span>')
+    expect(html).toContain('Skill instructions loaded')
+    expect(html).toContain(
+      'The transcript records loading this skill’s instructions.'
+    )
+    expect(html).toContain('This does not confirm every step was followed.')
+    expect(html).toContain('aria-label="Recorded skill activity"')
     expect(html).not.toContain('work-block-head')
   })
 })

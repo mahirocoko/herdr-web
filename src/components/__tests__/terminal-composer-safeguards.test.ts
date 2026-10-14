@@ -6,12 +6,17 @@ import {
   resolveLayoutViewportHeight
 } from '@/utils/visual-viewport.ts'
 
-it('lets the mobile trailing slot own both Queue and Send widths', () => {
+it('keeps source textarea-top anatomy and content-sized trailing Queue/Send on mobile', () => {
   const css = readFileSync(new URL('../../app.css', import.meta.url), 'utf8')
-  const columns = css.match(
-    /\.prompt-composer__form\s*\{\s*display:\s*grid;[\s\S]*?grid-template-columns:\s*([^;]+);/
-  )?.[1]
-  expect(columns).toBe('var(--touch-target) minmax(0, 1fr) auto')
+  expect(css).toContain("grid-template-areas: 'text text' 'actions actions'")
+  expect(css).not.toContain(
+    'grid-template-columns: var(--touch-target) minmax(0, 1fr) auto'
+  )
+  expect(css).toContain(
+    '.prompt-composer__controls-right {\n  flex-wrap: wrap;'
+  )
+  expect(css).toContain('width: calc(100% - 2 * var(--composer-strip-inset))')
+  expect(css).toContain('margin: calc(-1 * var(--space-4)) auto 0')
 })
 
 describe('terminal-composer-safeguards: Thai IME and Enter submission', () => {

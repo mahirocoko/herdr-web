@@ -26,6 +26,9 @@ it('owns primary and secondary pressed/focus/disabled states in shared recipes',
     '.ui-button--default:active:not(:disabled):not([data-disabled])'
   )
   expect(recipes).toContain(
+    '.ui-button--secondary:active:not(:disabled):not([data-disabled])'
+  )
+  expect(recipes).toContain(
     '.ui-button--ghost:active:not(:disabled):not([data-disabled])'
   )
   expect(recipes).toContain('background-color: var(--color-accent-pressed);')
@@ -45,5 +48,19 @@ it('owns primary and secondary pressed/focus/disabled states in shared recipes',
   expect(chat).toContain(
     ".work-row[data-tool-name='Skill']:not(.is-error) .work-row-name"
   )
-  expect(css).toMatch(/\.prompt-composer__context-controls\s*\{\s*grid-row: 2;/)
+})
+
+it('keeps context controls in the source Composer trailing action group, not a separate grid row', () => {
+  const composer = readFileSync('src/components/prompt-composer.tsx', 'utf8')
+  const contextRule = css.match(
+    /\.prompt-composer__context-controls\s*\{([^}]+)\}/
+  )?.[1]
+  expect(contextRule).toContain('min-width: 0')
+  expect(contextRule).not.toContain('grid-row:')
+  expect(
+    composer.indexOf('className="prompt-composer__controls-right"')
+  ).toBeLessThan(
+    composer.indexOf('className="prompt-composer__context-controls"')
+  )
+  expect(composer).toContain('{contextControls}')
 })

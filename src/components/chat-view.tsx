@@ -14,6 +14,7 @@ import {
 } from 'react'
 import {
   ArrowDown,
+  BookOpen,
   Check,
   ChevronDown,
   ChevronRight,
@@ -39,6 +40,7 @@ import {
 import { Markdown } from './markdown.tsx'
 import {
   ChatTaskResults,
+  ChatRecordNotice,
   ChatAbandonedBranches
 } from './chat-provider-records.tsx'
 import {
@@ -59,14 +61,18 @@ import {
 import Button from '@/components/ui/button.tsx'
 import type {
   ConversationPart,
+  IConversationMetadata,
   IConversationTurn
 } from '@/types/conversation.ts'
 import './chat-view.css'
 import { ChatFiles } from './chat-file-viewer.tsx'
 import { TurnChangedFiles } from './turn-changed-files.tsx'
 import { shouldFoldUserMessage } from '@/utils/user-message-fold.ts'
-import { useChatPreferences } from '@/hooks/use-chat-preferences.ts'
-import { ChatPreferences, chatPreferenceStyle } from './chat-preferences.tsx'
+import {
+  DEFAULT_CHAT_PREFERENCES,
+  type IChatPreferences
+} from '@/utils/chat-preferences.ts'
+import { chatPreferenceStyle } from './chat-preferences.tsx'
 import { ChatRenderBoundary } from './chat-render-boundary.tsx'
 import { dismissKeyboardOn } from '@/utils/chat-keyboard.ts'
 import type { IActionTargetIdentity } from '@/types/herdr.ts'
@@ -82,9 +88,16 @@ import {
   submissionLabel
 } from '@/utils/chat-submissions.ts'
 
+export interface IRecordedConversationMetadata {
+  target: IActionTargetIdentity
+  sessionKey: string
+  metadata: IConversationMetadata
+}
+
 export interface IChatViewProps {
   paneId: string | null
   cwd?: string | null
+  preferences?: IChatPreferences
   sendRevision?: number
   actionTarget?: IActionTargetIdentity | null
   submissions?: ReturnType<typeof useChatSubmissions>
@@ -94,6 +107,7 @@ export interface IChatViewProps {
   connected?: boolean
   isAgent?: boolean
   onSwitchToStream: () => void
+  onRecordedMetadata?: (record: IRecordedConversationMetadata | null) => void
 }
 
 const formatTime = (ts: string | null): string | null => {
@@ -314,17 +328,20 @@ const UserMessage = ({ text }: { text: string }) => {
   const [clipped, setClipped] = useState(false)
   useLayoutEffect(() => {
     const node = body.current
-    if (!capped || !node) {
+    if (!canFold || !node) {
       setClipped(false)
       return
     }
+    // Keep the measured disclosure mounted while expanded. Clearing this flag
+    // removes its focused button for one render when keyboard users collapse.
+    if (!capped) return
     const measure = () => setClipped(node.scrollHeight > node.clientHeight)
     measure()
     if (typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(measure)
     observer.observe(node)
     return () => observer.disconnect()
-  }, [capped, text])
+  }, [canFold, capped, text])
   useLayoutEffect(() => {
     if (!disclosureChanged.current) return
     disclosureChanged.current = false
@@ -332,14 +349,20 @@ const UserMessage = ({ text }: { text: string }) => {
     folding.current = false
     const node = card.current
     const view = node?.closest<HTMLElement>('.chat-view')
-    const mark = node
-      ?.closest('[data-chat-match]')
-      ?.querySelector<HTMLElement>('.chat-match-source mark')
+    const selectedRow = node?.closest<HTMLElement>('[data-chat-match]')
+    const mark =
+      selectedRow?.querySelector<HTMLElement>('.chat-match-source mark') ??
+      (selectedRow
+        ? view?.querySelector<HTMLElement>('.chat-find .chat-match-source mark')
+        : null)
     // Only an explicit disclosure change of the selected Find row re-reveals
     // its passage. Ordinary resizing and away-reader scrolling stay untouched.
     if (mark && view) {
       view.scrollTop +=
-        mark.getBoundingClientRect().top -
+        (selectedRow?.querySelector('.chat-match-source')
+          ? mark
+          : (selectedRow ?? mark)
+        ).getBoundingClientRect().top -
         view.getBoundingClientRect().top -
         view.clientHeight / 2
       return
@@ -386,6 +409,7 @@ interface ITurnProps {
   live: boolean
   waiting: boolean
   showThinking?: boolean
+  sourcePreview?: boolean
   match?: IChatSearchMatch | null
 }
 
@@ -394,10 +418,11 @@ const Turn: FC<ITurnProps> = ({
   live,
   waiting,
   showThinking = false,
+  sourcePreview = true,
   match = null
 }) => {
   const matchingSource =
-    match?.rowKey === turn.id ? (
+    sourcePreview && match?.rowKey === turn.id ? (
       <ChatMatchSource text={chatSearchText(turn)} match={match} />
     ) : null
   const time = formatTime(turn.ts)
@@ -423,22 +448,19 @@ const Turn: FC<ITurnProps> = ({
           {part.truncated && <p>Recorded error detail truncated in Chat.</p>}
         </div>
       )
-    const text =
-      part.kind === 'notice' || part.kind === 'compact'
-        ? part.text
-        : (part.kind === 'text' || part.kind === 'thinking') && part.truncated
-          ? `${part.kind === 'thinking' ? 'Thinking' : 'Text'} truncated in Chat.`
-          : null
-    return text === null ? null : (
-      <details key={index} className="chat-compact">
-        <summary>
-          {part.kind === 'compact' ? 'Context compacted' : 'Notice'}
-        </summary>
-        <div className="chat-compact-text">
-          <pre>{text}</pre>
-        </div>
-      </details>
-    )
+    if (part.kind === 'notice' || part.kind === 'compact')
+      return <ChatRecordNotice key={part.nativeKey ?? index} part={part} />
+    if ((part.kind === 'text' || part.kind === 'thinking') && part.truncated)
+      return (
+        <ChatRecordNotice
+          key={part.nativeKey ?? index}
+          part={{
+            kind: 'notice',
+            text: `${part.kind === 'thinking' ? 'Thinking' : 'Text'} truncated in Chat.`
+          }}
+        />
+      )
+    return null
   })
 
   if (turn.role === 'user') {
@@ -454,7 +476,7 @@ const Turn: FC<ITurnProps> = ({
       <article
         className="chat-turn chat-turn-user"
         data-chat-row={turn.id}
-        data-chat-match={matchingSource ? '' : undefined}
+        data-chat-match={match?.rowKey === turn.id ? '' : undefined}
       >
         {notices}
         <div className="chat-user-row">
@@ -471,6 +493,7 @@ const Turn: FC<ITurnProps> = ({
             {text.length > 0 && <CopyButton text={text} label="Copy message" />}
           </div>
         </div>
+        <SkillActivity parts={turn.parts} />
         {matchingSource}
       </article>
     )
@@ -491,9 +514,10 @@ const Turn: FC<ITurnProps> = ({
     <article
       className="chat-turn chat-turn-agent"
       data-chat-row={turn.id}
-      data-chat-match={matchingSource ? '' : undefined}
+      data-chat-match={match?.rowKey === turn.id ? '' : undefined}
     >
       {notices}
+      <SkillActivity parts={turn.parts} />
       {work.length > 0 && (
         <WorkBlockView
           parts={work}
@@ -505,7 +529,6 @@ const Turn: FC<ITurnProps> = ({
         />
       )}
       <TurnChangedFiles parts={turn.parts} />
-      <SkillActivity parts={turn.parts} />
       {answer.map((part, index) => (
         <Markdown key={part.nativeKey ?? index}>{part.text}</Markdown>
       ))}
@@ -548,24 +571,43 @@ const SkillActivity = ({ parts }: { parts: ConversationPart[] }) => {
   }
   if (!recorded.size) return null
   return (
-    <div className="chat-skills" aria-label="Recorded skill activity">
+    <div
+      className="chat-skills"
+      role="group"
+      aria-label="Recorded skill activity"
+    >
       {[...recorded.entries()].map(([key, skill]) => (
-        <details key={key} className="chat-skill" data-status={skill.status}>
+        <details
+          key={key}
+          className={`chat-skill${skill.status === 'failed' ? ' is-error' : ''}`}
+          data-status={skill.status}
+        >
           <summary>
-            {skill.name} ·{' '}
-            {skill.status === 'loaded'
-              ? 'instructions loaded'
-              : skill.status === 'failed'
-                ? 'failed'
-                : 'invoked'}
+            <BookOpen aria-hidden="true" />
+            <span className="chat-skill-name">{skill.name}</span>
+            <span className="chat-skill-status">
+              {skill.evidence === 'invocation'
+                ? skill.status === 'failed'
+                  ? 'Skill invocation failed'
+                  : skill.status === 'requested'
+                    ? 'Skill requested'
+                    : 'Skill invoked'
+                : skill.status === 'failed'
+                  ? 'Skill read failed'
+                  : skill.status === 'requested'
+                    ? 'Reading skill requested'
+                    : 'Skill instructions loaded'}
+            </span>
+            <ChevronDown className="chat-skill-caret" aria-hidden="true" />
           </summary>
-          <p>
-            {skill.evidence === 'instructions'
-              ? 'Native record contains skill instructions.'
-              : 'Native record contains a skill invocation.'}{' '}
-            This is activity evidence, not proof the workflow completed.
-          </p>
-          {skill.path && <code>{skill.path}</code>}
+          <div className="chat-skill-detail">
+            <p>
+              {skill.evidence === 'instructions'
+                ? 'The transcript records loading this skill’s instructions. This does not confirm every step was followed.'
+                : 'Recorded by the agent’s Skill tool. This does not mean the skill’s work is complete.'}
+            </p>
+            {skill.path && <code>{skill.path}</code>}
+          </div>
         </details>
       ))}
     </div>
@@ -679,6 +721,7 @@ const SubmissionReceipts = ({
 const ChatView: FC<IChatViewProps> = ({
   paneId,
   cwd = null,
+  preferences = DEFAULT_CHAT_PREFERENCES,
   sendRevision = 0,
   actionTarget = null,
   submissions,
@@ -686,7 +729,8 @@ const ChatView: FC<IChatViewProps> = ({
   agentStatus,
   connected = true,
   isAgent = true,
-  onSwitchToStream
+  onSwitchToStream,
+  onRecordedMetadata
 }) => {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const stickToBottomRef = useRef(true)
@@ -705,7 +749,6 @@ const ChatView: FC<IChatViewProps> = ({
     page: IConversationTurn[]
     turn: IConversationTurn | null
   } | null>(null)
-  const { preferences, update, storageError } = useChatPreferences()
 
   const {
     turns,
@@ -726,6 +769,27 @@ const ChatView: FC<IChatViewProps> = ({
     isEnabled: isAgent && Boolean(paneId),
     pollIntervalMs: 2000
   })
+
+  // Share the existing reader's recorded facts only; keyed target remounts retire them.
+  useEffect(() => {
+    if (!onRecordedMetadata) return
+    onRecordedMetadata(
+      isAgent && sessionKey && actionTarget?.paneId === paneId
+        ? { target: { ...actionTarget }, sessionKey, metadata }
+        : null
+    )
+    return () => onRecordedMetadata(null)
+  }, [
+    onRecordedMetadata,
+    isAgent,
+    paneId,
+    actionTarget?.paneId,
+    actionTarget?.terminalId,
+    actionTarget?.agentSessionId,
+    actionTarget?.expectedMode,
+    sessionKey,
+    metadata
+  ])
 
   const scope =
     paneId && sessionKey
@@ -1142,29 +1206,25 @@ const ChatView: FC<IChatViewProps> = ({
                 {restoreNotice}
               </p>
             )}
-            <ChatPreferences
-              preferences={preferences}
-              onChange={update}
-              storageError={storageError}
-            />
-            {(metadata.model ||
-              metadata.reasoning_effort ||
-              metadata.context) && (
-              <p
-                className="chat-recorded-metadata"
-                aria-label="Recorded conversation metadata"
-              >
-                {[
-                  metadata.model,
-                  metadata.reasoning_effort,
-                  metadata.context
-                    ? `${metadata.context.used.toLocaleString()}${metadata.context.window ? ` / ${metadata.context.window.toLocaleString()}` : ''} tokens`
-                    : null
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </p>
-            )}
+            {!onRecordedMetadata &&
+              (metadata.model ||
+                metadata.reasoning_effort ||
+                metadata.context) && (
+                <p
+                  className="chat-recorded-metadata"
+                  aria-label="Recorded conversation metadata"
+                >
+                  {[
+                    metadata.model,
+                    metadata.reasoning_effort,
+                    metadata.context
+                      ? `${metadata.context.used.toLocaleString()}${metadata.context.window ? ` / ${metadata.context.window.toLocaleString()}` : ''} tokens`
+                      : null
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
+              )}
             {hasOlder && (
               <button
                 type="button"
@@ -1205,6 +1265,7 @@ const ChatView: FC<IChatViewProps> = ({
                     live={live}
                     waiting={waiting}
                     showThinking={preferences.showThinking}
+                    sourcePreview={false}
                     match={match?.rowKey === turn.id ? match : null}
                   />
                 </ChatRenderBoundary>

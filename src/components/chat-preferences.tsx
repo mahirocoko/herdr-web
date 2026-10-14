@@ -1,4 +1,6 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+// MIT License - Copyright (c) 2026 devswha
+// SettingsDialog Chat / SettingsControls row-group anatomy adapted from dc2f11de.
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import type { IChatPreferences } from '@/utils/chat-preferences.ts'
 import { DEFAULT_CHAT_PREFERENCES } from '@/utils/chat-preferences.ts'
 import Button from './ui/button.tsx'
@@ -10,6 +12,27 @@ interface IChatPreferencesProps {
   onChange: (value: IChatPreferences) => void
   storageError: boolean
 }
+interface IPreferenceRowProps {
+  label: string
+  description: string
+  wide?: boolean
+  children: ReactNode
+}
+const PreferenceRow = ({
+  label,
+  description,
+  wide = false,
+  children
+}: IPreferenceRowProps) => (
+  <div className={`chat-settings-row${wide ? ' is-wide' : ''}`}>
+    <div className="chat-settings-row-text">
+      <span className="chat-settings-label">{label}</span>
+      <span className="chat-settings-description">{description}</span>
+    </div>
+    {children}
+  </div>
+)
+
 const ChatPreferences = ({
   preferences,
   onChange,
@@ -18,11 +41,15 @@ const ChatPreferences = ({
   const [family, setFamily] = useState(preferences.fontFamily)
   useEffect(() => setFamily(preferences.fontFamily), [preferences.fontFamily])
   return (
-    <details className="chat-preferences">
-      <summary>Chat appearance</summary>
-      <div className="chat-preferences-controls">
-        <label>
-          Text size
+    <section className="settings-section chat-settings">
+      <div className="settings-section__intro">
+        <h2 className="settings-section__heading">Chat</h2>
+      </div>
+      <div className="chat-settings-card">
+        <PreferenceRow
+          label="Text size"
+          description="Message text and code in the Chat view."
+        >
           <Select
             aria-label="Text size"
             value={
@@ -44,9 +71,12 @@ const ChatPreferences = ({
               })
             }
           />
-        </label>
-        <label>
-          Lane width
+        </PreferenceRow>
+        <PreferenceRow
+          label="Lane width"
+          description="How wide the conversation runs on a large screen."
+          wide
+        >
           <Select
             aria-label="Lane width"
             value={preferences.width}
@@ -61,11 +91,15 @@ const ChatPreferences = ({
               })
             }
           />
-        </label>
-        <label>
-          Font family
+        </PreferenceRow>
+        <PreferenceRow
+          label="Font family"
+          description="Message text; code stays monospace. Comma-separated, tried in order. Unavailable fonts fall back to the default."
+          wide
+        >
           <Input
             name="chat-font-family"
+            aria-label="Font family"
             value={family}
             placeholder="Default UI font"
             maxLength={256}
@@ -84,33 +118,39 @@ const ChatPreferences = ({
             onChange={(e) => setFamily(e.target.value)}
             onBlur={() => onChange({ ...preferences, fontFamily: family })}
           />
-        </label>
-        <label>
+        </PreferenceRow>
+        <PreferenceRow
+          label="Show thinking"
+          description="Include the agent's reasoning blocks."
+        >
           <Checkbox
             name="chat-show-thinking"
+            aria-label="Show thinking"
             checked={preferences.showThinking}
             onCheckedChange={(checked) =>
               onChange({ ...preferences, showThinking: checked })
             }
           />
-          Show thinking
-        </label>
-        <Button
-          variant="ghost"
-          onClick={() => {
-            setFamily('')
-            onChange({ ...DEFAULT_CHAT_PREFERENCES })
-          }}
-        >
-          Reset Chat appearance
-        </Button>
-        {storageError && (
-          <p role="status">
-            Preference changed for this view; browser storage is unavailable.
-          </p>
-        )}
+        </PreferenceRow>
+        <div className="chat-settings-item">
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setFamily('')
+              onChange({ ...DEFAULT_CHAT_PREFERENCES })
+            }}
+          >
+            Reset Chat appearance
+          </Button>
+          {storageError && (
+            <p role="status">
+              Preference changed for this document; browser storage is
+              unavailable.
+            </p>
+          )}
+        </div>
       </div>
-    </details>
+    </section>
   )
 }
 export const chatPreferenceStyle = (prefs: IChatPreferences): CSSProperties => {

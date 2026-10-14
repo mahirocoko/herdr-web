@@ -1,7 +1,7 @@
 // MIT License - Copyright (c) 2026 devswha
 // Adapted from herdr-web-ui dc2f11d src/components/ChatFind.tsx
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Search, X } from 'lucide-react'
 import Button from './ui/button.tsx'
 import Input from './ui/input.tsx'
 import Checkbox from './ui/checkbox.tsx'
@@ -142,20 +142,30 @@ export const ChatFind = ({
       }}
     >
       <div className="chat-find-controls">
-        <Input
-          ref={input}
-          type="search"
-          aria-label="Find in Chat"
-          placeholder="Find in Chat"
-          maxLength={1024}
-          value={query}
-          onChange={(event) => {
-            cancel()
-            setQuery(event.target.value)
-            setChosen(null)
-            setHint('')
-          }}
-        />
+        <label className="chat-find-query">
+          <Search size={16} aria-hidden="true" />
+          <Input
+            ref={input}
+            type="search"
+            aria-label="Find in Chat"
+            placeholder="Find in Chat"
+            maxLength={1024}
+            value={query}
+            onChange={(event) => {
+              cancel()
+              setQuery(event.target.value)
+              setChosen(null)
+              setHint('')
+            }}
+          />
+        </label>
+        <span className="chat-find-count" role="status">
+          {query
+            ? result.count
+              ? `${index + 1} of ${result.count}${result.limited ? ' (first 10,000 matches)' : ''}`
+              : 'No matches'
+            : ''}
+        </span>
         <Button
           variant="ghost"
           size="icon"
@@ -199,13 +209,6 @@ export const ChatFind = ({
           />{' '}
           Match case
         </label>
-        <span role="status">
-          {query
-            ? result.count
-              ? `${index + 1} of ${result.count}${result.limited ? ' (first 10,000 matches)' : ''}`
-              : 'No matches'
-            : 'Enter a literal query'}
-        </span>
         {searching ? (
           <Button variant="ghost" size="sm" onClick={cancel}>
             Cancel search
@@ -234,7 +237,17 @@ export const ChatFind = ({
           : hint ||
             'Loaded native source, including folded content. Tool-output previews only; omitted or truncated source is not searched.'}
       </p>
-      {error && <p role="alert">Could not read conversation: {error}</p>}
+      {error && (
+        <p className="chat-find-error" role="alert">
+          Could not read conversation: {error}
+        </p>
+      )}
+      {match && (
+        <ChatMatchSource
+          text={rows.find((row) => row.key === match.rowKey)?.text ?? ''}
+          match={match}
+        />
+      )}
     </form>
   )
 }
@@ -246,16 +259,31 @@ export const ChatMatchSource = ({
 }: {
   text: string
   match: IChatSearchMatch
-}) => (
-  <pre
-    className="chat-match-source"
-    tabIndex={-1}
-    aria-label="Matching native source"
-  >
-    {match.start > 80 ? '…' : ''}
-    {text.slice(Math.max(0, match.start - 80), match.start)}
-    <mark>{text.slice(match.start, match.end)}</mark>
-    {text.slice(match.end, match.end + 120)}
-    {text.length > match.end + 120 ? '…' : ''}
-  </pre>
-)
+}) => {
+  const passage = useRef<HTMLPreElement>(null)
+  useLayoutEffect(() => {
+    const node = passage.current
+    const mark = node?.querySelector('mark')
+    if (!node || !mark) return
+    // Keep the chosen occurrence visible inside the bounded source preview only.
+    // Do not move input focus or compete with ChatView's selected-row scroll owner.
+    node.scrollTop +=
+      mark.getBoundingClientRect().top -
+      node.getBoundingClientRect().top -
+      node.clientHeight / 2
+  }, [text, match.start, match.end])
+  return (
+    <pre
+      ref={passage}
+      className="chat-match-source"
+      tabIndex={-1}
+      aria-label="Matching native source"
+    >
+      {match.start > 80 ? '…' : ''}
+      {text.slice(Math.max(0, match.start - 80), match.start)}
+      <mark>{text.slice(match.start, match.end)}</mark>
+      {text.slice(match.end, match.end + 120)}
+      {text.length > match.end + 120 ? '…' : ''}
+    </pre>
+  )
+}

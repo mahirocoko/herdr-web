@@ -12,6 +12,7 @@ import {
 import { useSnapshot } from '@/hooks/use-snapshot.ts'
 import { useChatSubmissions } from '@/hooks/use-chat-submissions.ts'
 import { useHeldMessages } from '@/hooks/use-held-messages.ts'
+import { useChatPreferences } from '@/hooks/use-chat-preferences.ts'
 import {
   useLifecycleOperations,
   type ILifecycleOperations
@@ -61,6 +62,7 @@ export interface IAppOutletContext {
   submissions: ReturnType<typeof useChatSubmissions>
   held: ReturnType<typeof useHeldMessages>
   push: ReturnType<typeof usePushSubscription>
+  chatPreferences: ReturnType<typeof useChatPreferences>
   viewportGeometry: IVisualViewportGeometry | null
   drawerTriggerRef: React.RefObject<HTMLButtonElement | null>
   menuTriggerRef: React.RefObject<HTMLButtonElement | null>
@@ -117,6 +119,7 @@ const Root = () => {
   const held = useHeldMessages()
   const lifecycle = useLifecycleOperations()
   const push = usePushSubscription()
+  const chatPreferences = useChatPreferences()
   const viewportGeometry = useVisualViewport()
   const location = useLocation()
   const navigate = useNavigate()
@@ -351,6 +354,7 @@ const Root = () => {
     submissions,
     held,
     push,
+    chatPreferences,
     viewportGeometry,
     drawerTriggerRef,
     menuTriggerRef,
