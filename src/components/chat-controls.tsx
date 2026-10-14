@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Button from '@/components/ui/button.tsx'
+import { Ellipsis, Square } from 'lucide-react'
 import type { ActionResultStatus } from '@/utils/action-orchestrator.ts'
 
 interface IChatControlsProps {
@@ -99,7 +100,7 @@ const ChatControls = ({
           }}
           aria-label="Request agent stop using Ctrl+C"
         >
-          ■{' '}
+          <Square size={14} aria-hidden="true" />
           {request?.phase === 'sending' || request?.phase === 'waiting'
             ? 'Requesting stop…'
             : 'Stop'}
@@ -108,8 +109,15 @@ const ChatControls = ({
       <span role="status" aria-live="polite">
         {notice}
       </span>
-      <Button type="button" variant="ghost" size="sm" onClick={onMore}>
-        More controls
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        onClick={onMore}
+        aria-label="More controls"
+        title="More controls"
+      >
+        <Ellipsis size={18} aria-hidden="true" />
       </Button>
     </div>
   )

@@ -32,7 +32,9 @@ import AttentionHorizon from '@/components/attention-horizon.tsx'
 import TerminalCanvas from '@/components/terminal-canvas.tsx'
 import QuestionView from '@/components/question-view.tsx'
 import PanelView from '@/components/panel-view.tsx'
-import ChatView from '@/components/chat-view.tsx'
+import ChatView, {
+  type IRecordedConversationMetadata
+} from '@/components/chat-view.tsx'
 import ChatControls from '@/components/chat-controls.tsx'
 import PaneDrawer from '@/components/pane-drawer.tsx'
 import SpaceDrawer from '@/components/space-drawer.tsx'
@@ -82,6 +84,8 @@ export interface ISpaceDashboardProps {
 }
 
 export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
+  const [recordedMetadata, setRecordedMetadata] =
+    useState<IRecordedConversationMetadata | null>(null)
   const {
     snapshot,
     status,
@@ -96,6 +100,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
     submissions,
     held,
     push,
+    chatPreferences,
     viewportGeometry,
     drawerTriggerRef,
     menuTriggerRef,
@@ -1028,6 +1033,8 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
                         null
                       }
                       actionTarget={targetResult.target}
+                      onRecordedMetadata={setRecordedMetadata}
+                      preferences={chatPreferences.preferences}
                       submissions={submissions}
                       held={held}
                       sendRevision={
@@ -1090,48 +1097,50 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
                 {viewMode === 'chat' && interactive.error && (
                   <p role="status">{interactive.error}</p>
                 )}
-                {viewMode === 'chat' && interactive.prompt && (
-                  <PromptCard
-                    paneId={selectedPaneId!}
-                    prompt={interactive.prompt}
-                    answerPrompt={answerInteractivePrompt}
-                    isUnknown={interactive.unknown}
-                    typedAnswer={
-                      typedPromptAnswer?.id === interactive.prompt.id
-                        ? typedPromptAnswer.answer
-                        : null
-                    }
-                    onTypedAnswerDone={() => setTypedPromptAnswer(null)}
-                    onPromptChanged={() => {
-                      void interactive.refresh()
-                    }}
-                    onAnswered={(focus) => {
-                      if (
-                        typedPromptAnswer &&
-                        quoteMatchesTarget(
-                          typedPromptAnswer.scope,
-                          typedPromptAnswer.generation,
-                          draftSelectionRef.current.scope,
-                          draftSelectionRef.current.generation
-                        ) &&
-                        composerDrafts.read(typedPromptAnswer.scope)
-                          .revision === typedPromptAnswer.revision &&
-                        composerDrafts.read(typedPromptAnswer.scope).text ===
-                          typedPromptAnswer.draft
-                      )
-                        composerDrafts.set(typedPromptAnswer.scope, '')
-                      setTypedPromptAnswer(null)
-                      void interactive.refresh()
-                      void refreshSnapshot()
-                      if (focus)
-                        document
-                          .querySelector<HTMLTextAreaElement>(
-                            '.prompt-composer textarea'
-                          )
-                          ?.focus()
-                    }}
-                  />
-                )}
+                <div className="prompt-dock" aria-live="polite">
+                  {viewMode === 'chat' && interactive.prompt && (
+                    <PromptCard
+                      paneId={selectedPaneId!}
+                      prompt={interactive.prompt}
+                      answerPrompt={answerInteractivePrompt}
+                      isUnknown={interactive.unknown}
+                      typedAnswer={
+                        typedPromptAnswer?.id === interactive.prompt.id
+                          ? typedPromptAnswer.answer
+                          : null
+                      }
+                      onTypedAnswerDone={() => setTypedPromptAnswer(null)}
+                      onPromptChanged={() => {
+                        void interactive.refresh()
+                      }}
+                      onAnswered={(focus) => {
+                        if (
+                          typedPromptAnswer &&
+                          quoteMatchesTarget(
+                            typedPromptAnswer.scope,
+                            typedPromptAnswer.generation,
+                            draftSelectionRef.current.scope,
+                            draftSelectionRef.current.generation
+                          ) &&
+                          composerDrafts.read(typedPromptAnswer.scope)
+                            .revision === typedPromptAnswer.revision &&
+                          composerDrafts.read(typedPromptAnswer.scope).text ===
+                            typedPromptAnswer.draft
+                        )
+                          composerDrafts.set(typedPromptAnswer.scope, '')
+                        setTypedPromptAnswer(null)
+                        void interactive.refresh()
+                        void refreshSnapshot()
+                        if (focus)
+                          document
+                            .querySelector<HTMLTextAreaElement>(
+                              '.prompt-composer textarea'
+                            )
+                            ?.focus()
+                      }}
+                    />
+                  )}
+                </div>
                 {viewMode === 'chat' &&
                   canonicalHasAgent &&
                   !interactive.ready &&
@@ -1198,6 +1207,18 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
                     )
                       ? quoteFocus.revision
                       : 0
+                  }
+                  recordedMetadata={
+                    viewMode === 'chat' &&
+                    recordedMetadata?.target.paneId === selectedPaneId &&
+                    recordedMetadata?.target.terminalId ===
+                      targetResult.target?.terminalId &&
+                    recordedMetadata?.target.agentSessionId ===
+                      targetResult.target?.agentSessionId &&
+                    recordedMetadata?.target.expectedMode ===
+                      targetResult.target?.expectedMode
+                      ? recordedMetadata.metadata
+                      : null
                   }
                   contextStrip={contextStrip}
                   draftNotice={

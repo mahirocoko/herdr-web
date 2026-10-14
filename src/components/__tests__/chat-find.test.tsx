@@ -19,6 +19,17 @@ describe('Find in Chat presentation', () => {
     )
     expect(html).toContain('role="search"')
     expect(html).toContain('aria-label="Find in Chat"')
+    expect(html).toContain('chat-find-query')
+    expect(html).toContain('lucide-search')
+    expect(html.indexOf('chat-find-query')).toBeLessThan(
+      html.indexOf('chat-find-count')
+    )
+    expect(html.indexOf('chat-find-count')).toBeLessThan(
+      html.indexOf('Previous match')
+    )
+    expect(html.indexOf('chat-find-count')).toBeLessThan(
+      html.indexOf('chat-find-options')
+    )
     expect(html).toContain('ui-input')
     expect(html).toContain('ui-button--ghost')
     expect(html).toContain('ui-checkbox')

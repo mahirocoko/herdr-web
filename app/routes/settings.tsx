@@ -3,17 +3,17 @@ import SettingsView from '@/components/settings-view.tsx'
 import type { IAppOutletContext } from '../root.tsx'
 
 const SettingsRoute = () => {
-  const {
-    push,
-    viewportGeometry,
-    shouldRestoreMenuFocusRef
-  } = useOutletContext<IAppOutletContext>()
+  const { push, chatPreferences, viewportGeometry, shouldRestoreMenuFocusRef } =
+    useOutletContext<IAppOutletContext>()
   const navigate = useNavigate()
   const location = useLocation()
 
   const handleBackFromSettings = () => {
     shouldRestoreMenuFocusRef.current = true
-    if (location.state && (location.state as Record<string, unknown>).appOwned) {
+    if (
+      location.state &&
+      (location.state as Record<string, unknown>).appOwned
+    ) {
       navigate(-1)
     } else {
       navigate('/', { replace: true })
@@ -36,7 +36,11 @@ const SettingsRoute = () => {
       style={appStyle}
       data-keyboard-open={viewportGeometry?.isKeyboardOpen ? 'true' : undefined}
     >
-      <SettingsView push={push} onBack={handleBackFromSettings} />
+      <SettingsView
+        push={push}
+        chatPreferences={chatPreferences}
+        onBack={handleBackFromSettings}
+      />
     </div>
   )
 }

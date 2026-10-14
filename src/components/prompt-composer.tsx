@@ -1,6 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { FC, FormEvent, KeyboardEvent, ReactNode } from 'react'
-import { Loader2, SendHorizontal, SquareTerminal } from 'lucide-react'
+import {
+  ArrowUp,
+  Folder,
+  FolderGit2,
+  GitBranch,
+  Loader2,
+  SquareTerminal
+} from 'lucide-react'
 import {
   COMPOSER_MAX_HEIGHT,
   COMPOSER_MIN_HEIGHT,
@@ -10,6 +17,7 @@ import {
   type ActionResultStatus
 } from '@/utils/prompt-composer.ts'
 import type { IExpectedPaneMode } from '@/types/herdr.ts'
+import type { IConversationMetadata } from '@/types/conversation.ts'
 import { applyDraftAction } from '@/utils/interaction-picker.ts'
 import InteractionPickerSheet, {
   type IPickerSheetTab
@@ -43,6 +51,9 @@ export interface IPromptComposerProps {
     path: string | null
     folder: string | null
     source: string | null
+    branch?: string | null
+    dirty?: boolean
+    worktree?: string | null
   } | null
   draftText?: string
   onDraftChange?: (text: string) => void
@@ -50,6 +61,7 @@ export interface IPromptComposerProps {
   onPickerOpenChange?: (open: boolean) => void
   pickerInitialTab?: IPickerSheetTab
   contextControls?: ReactNode
+  recordedMetadata?: IConversationMetadata | null
 }
 
 const PromptComposer: FC<IPromptComposerProps> = ({
@@ -79,7 +91,8 @@ const PromptComposer: FC<IPromptComposerProps> = ({
   isPickerOpen,
   onPickerOpenChange,
   pickerInitialTab,
-  contextControls
+  contextControls,
+  recordedMetadata
 }) => {
   const effectiveMode: IExpectedPaneMode =
     expectedMode ?? (isBlocked ? 'blocked-agent' : hasAgent ? 'agent' : 'shell')
@@ -345,11 +358,6 @@ const PromptComposer: FC<IPromptComposerProps> = ({
       )}
 
       <form className="prompt-composer__form" onSubmit={handleSubmit}>
-        {contextControls && (
-          <div className="prompt-composer__context-controls">
-            {contextControls}
-          </div>
-        )}
         <div className="prompt-composer__input-wrapper">
           <Textarea
             ref={textareaRef}
@@ -374,6 +382,44 @@ const PromptComposer: FC<IPromptComposerProps> = ({
         </div>
 
         <div className="prompt-composer__toolbar">
+          {(recordedMetadata?.model ||
+            recordedMetadata?.reasoning_effort ||
+            recordedMetadata?.context) && (
+            <div
+              className="prompt-composer__metadata"
+              aria-label="Recorded conversation metadata"
+            >
+              <span className="prompt-composer__recorded">Recorded</span>
+              {recordedMetadata.model && (
+                <span
+                  className="prompt-composer__model"
+                  title={`Recorded model: ${recordedMetadata.model}`}
+                >
+                  {recordedMetadata.model}
+                </span>
+              )}
+              {recordedMetadata.reasoning_effort && (
+                <span
+                  className="prompt-composer__reasoning"
+                  title={`Recorded reasoning effort: ${recordedMetadata.reasoning_effort}`}
+                >
+                  {recordedMetadata.reasoning_effort}
+                </span>
+              )}
+              {recordedMetadata.context && (
+                <span
+                  className="prompt-composer__tokens"
+                  title="Recorded token usage, not live context remaining"
+                >
+                  {recordedMetadata.context.used.toLocaleString()}
+                  {recordedMetadata.context.window
+                    ? ` / ${recordedMetadata.context.window.toLocaleString()}`
+                    : ''}{' '}
+                  tokens
+                </span>
+              )}
+            </div>
+          )}
           <div className="prompt-composer__controls-left">
             <Button
               ref={quickTriggerRef}
@@ -391,6 +437,11 @@ const PromptComposer: FC<IPromptComposerProps> = ({
           </div>
 
           <div className="prompt-composer__controls-right">
+            {contextControls && (
+              <div className="prompt-composer__context-controls">
+                {contextControls}
+              </div>
+            )}
             {onQueueText && (
               <Button
                 type="button"
@@ -424,7 +475,7 @@ const PromptComposer: FC<IPromptComposerProps> = ({
                   aria-hidden="true"
                 />
               ) : (
-                <SendHorizontal size={18} aria-hidden="true" />
+                <ArrowUp size={18} aria-hidden="true" />
               )}
             </Button>
           </div>
@@ -435,14 +486,44 @@ const PromptComposer: FC<IPromptComposerProps> = ({
         <div className="prompt-composer__strip" aria-label="Composer context">
           {contextStrip.folder && (
             <span
+              className="prompt-composer__strip-item prompt-composer__strip-folder"
               title={contextStrip.path ?? undefined}
-              aria-label={contextStrip.path ?? undefined}
+              aria-label={`Pane working folder: ${contextStrip.path ?? contextStrip.folder}`}
             >
-              {contextStrip.folder}
+              <Folder aria-hidden="true" />
+              <span className="prompt-composer__strip-text">
+                {contextStrip.folder}
+              </span>
             </span>
           )}
           {contextStrip.source && (
-            <span title={contextStrip.source}>{contextStrip.source}</span>
+            <span
+              className="prompt-composer__strip-item prompt-composer__strip-branch"
+              title={contextStrip.source}
+              aria-label={contextStrip.source}
+            >
+              {contextStrip.branch ? (
+                <GitBranch aria-hidden="true" />
+              ) : (
+                <FolderGit2 aria-hidden="true" />
+              )}
+              <span className="prompt-composer__strip-text">
+                Space checkout:{' '}
+                {contextStrip.branch
+                  ? `${contextStrip.branch}${contextStrip.dirty ? ' *' : ''}`
+                  : contextStrip.dirty
+                    ? 'dirty *'
+                    : contextStrip.worktree}
+              </span>
+              {contextStrip.worktree && (
+                <span
+                  className="prompt-composer__strip-kind"
+                  title={`Space worktree: ${contextStrip.worktree}`}
+                >
+                  Worktree
+                </span>
+              )}
+            </span>
           )}
         </div>
       )}

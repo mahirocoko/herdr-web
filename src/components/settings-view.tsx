@@ -3,15 +3,18 @@ import type { FC } from 'react'
 import { ChevronLeft } from 'lucide-react'
 import type { IUsePushSubscriptionResult } from '@/hooks/use-push-subscription.ts'
 import Button from '@/components/ui/button.tsx'
+import { ChatPreferences } from './chat-preferences.tsx'
+import type { useChatPreferences } from '@/hooks/use-chat-preferences.ts'
 
 export interface ISettingsViewProps {
   push: IUsePushSubscriptionResult
+  chatPreferences?: ReturnType<typeof useChatPreferences>
   onBack: () => void
 }
 
 const getLiveStatusAnnouncement = (
   state: string,
-  error: string | null,
+  error: string | null
 ): string => {
   switch (state) {
     case 'busy':
@@ -33,7 +36,11 @@ const getLiveStatusAnnouncement = (
   }
 }
 
-const SettingsView: FC<ISettingsViewProps> = ({ push, onBack }) => {
+const SettingsView: FC<ISettingsViewProps> = ({
+  push,
+  chatPreferences,
+  onBack
+}) => {
   const {
     state,
     error,
@@ -42,7 +49,7 @@ const SettingsView: FC<ISettingsViewProps> = ({ push, onBack }) => {
     subscribe,
     unsubscribe,
     sendTestAlert,
-    refresh,
+    refresh
   } = push
   const headingRef = useRef<HTMLHeadingElement | null>(null)
 
@@ -320,6 +327,13 @@ const SettingsView: FC<ISettingsViewProps> = ({ push, onBack }) => {
             )}
           </div>
         </section>
+        {chatPreferences && (
+          <ChatPreferences
+            preferences={chatPreferences.preferences}
+            onChange={chatPreferences.update}
+            storageError={chatPreferences.storageError}
+          />
+        )}
       </div>
     </div>
   )

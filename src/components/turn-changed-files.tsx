@@ -20,11 +20,9 @@ export const TurnChangedFiles = ({
       className="turn-changed-files"
       aria-label="Files edited in this turn"
     >
-      <p>
-        Files edited in this turn ·{' '}
-        <span>
-          Open current unstaged / untracked changes, not the historical edit
-        </span>
+      <p className="turn-changed-files-title">
+        Files edited in this turn{' '}
+        <span>· Current working tree, not historical</span>
       </p>
       <ul>
         {files.map((path) => (
@@ -32,7 +30,8 @@ export const TurnChangedFiles = ({
             {open ? (
               <Button
                 variant="ghost"
-                title={`Open current changes for ${path}`}
+                className="turn-changed-file-link"
+                title={`Open current unstaged / untracked changes for ${path}, not the historical edit`}
                 onClick={() => open(path)}
               >
                 {path}

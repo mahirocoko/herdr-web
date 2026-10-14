@@ -1,7 +1,8 @@
-/* Adapted from devswha/herdr-web-ui@5979118 src/components/PromptCard.css.
+/* Adapted from devswha/herdr-web-ui@dc2f11d src/components/PromptCard.css.
    MIT License, Copyright (c) 2026 devswha. Source anatomy and geometry retained;
    feature-local aliases resolve canonical local tokens, never redefine app paint. */
 .prompt-card {
+  --prompt-card-strip: 0px;
   --bg: var(--color-bg-base);
   --bg-elevated: var(--color-bg-elevated);
   --bg-hover: var(--color-bg-hover);
@@ -18,7 +19,7 @@
   flex: 0 1 auto;
   min-height: 0;
   max-height: max(
-    calc(var(--app-height, 100dvh) * 0.6),
+    calc(var(--app-height, 100dvh) * 0.6 - var(--prompt-card-strip)),
     calc(var(--touch-target) * 6)
   );
   padding: var(--space-3) var(--space-3) 0;
@@ -319,6 +320,23 @@
   color: var(--status-blocked);
   font-size: var(--fs-xs);
   overflow-wrap: anywhere;
+}
+@media (min-width: 769px) {
+  .prompt-card {
+    max-height: max(
+      calc(
+        (var(--app-height, 100dvh) - var(--control-h)) * 0.6 -
+          var(--prompt-card-strip)
+      ),
+      calc(var(--touch-target) * 6)
+    );
+  }
+}
+.prompt-dock:has(~ .prompt-composer > .prompt-composer__strip) > .prompt-card {
+  --prompt-card-strip: calc(
+    var(--chip-h) + var(--space-5) + var(--space-1) + var(--hairline) -
+      var(--space-4)
+  );
 }
 @media (pointer: coarse), (max-width: 640px) {
   .prompt-card .prompt-card-option {

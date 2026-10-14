@@ -95,8 +95,15 @@ describe('forwarded mobile header, key rail and Working spinner scope', () => {
     expect(css).not.toContain('.horizon-header__workspace-label')
   })
 
-  it('starts the mobile composer as one row without changing desktop markup or IME handlers', () => {
-    expect(css.replace(/\s/g, '')).toContain(
+  it('keeps source textarea above the action row on mobile and desktop without changing IME handlers', () => {
+    const form = css.match(/\.prompt-composer__form\s*\{([^}]+)\}/)?.[1]
+    expect(form).toContain('display: grid')
+    expect(form).toContain("grid-template-areas: 'text text' 'actions actions'")
+    expect(css).toMatch(
+      /\.prompt-composer__input-wrapper\s*\{\s*grid-area: text;/
+    )
+    expect(css).toMatch(/\.prompt-composer__toolbar\s*\{\s*grid-area: actions;/)
+    expect(css.replace(/\s/g, '')).not.toContain(
       'grid-template-columns:var(--touch-target)minmax(0,1fr)auto'
     )
     expect(css).toContain(
@@ -116,7 +123,7 @@ describe('forwarded mobile header, key rail and Working spinner scope', () => {
     expect(composer).toContain('onCompositionEnd=')
   })
 
-  it('applies compact 1-row composer form and bounds height in low-height mobile landscape', () => {
+  it('bounds source textarea height in low-height mobile landscape', () => {
     expect(css).toContain(
       '(max-width: 1023px) and (max-height: 500px) and (orientation: landscape)'
     )

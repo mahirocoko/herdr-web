@@ -1151,7 +1151,9 @@ body {
 
 /* Footer Controls: Compact In-Flow Dock */
 .herdr-footer {
-  flex-shrink: 0;
+  --footer-gap: 6px;
+  flex: 0 1 auto;
+  min-height: 0;
   background-color: var(--color-bg-surface);
   border-top: 1px solid transparent;
   padding-top: 6px;
@@ -1160,41 +1162,83 @@ body {
   padding-right: max(8px, var(--safe-right));
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--footer-gap);
   z-index: 20;
 }
 
-/* Read-only context below the unchanged composer card. */
+/* In-flow prompt sibling on the local Composer column; held queue stays nearest input. */
+.prompt-dock {
+  flex: 0 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin-inline: auto;
+}
+.prompt-dock:empty {
+  margin-bottom: calc(-1 * var(--footer-gap));
+}
+
+/* Read-only attached context strip: devswha/herdr-web-ui@dc2f11d Composer.css.
+   Pane cwd and published Space checkout facts are deliberately distinct. */
 .prompt-composer__byte-limit {
   margin: 0;
   font-size: 11px;
   color: var(--color-text-secondary);
 }
 .prompt-composer__strip {
+  --composer-strip-inset: max(var(--radius-xl), var(--space-5));
+  position: relative;
   display: flex;
-  gap: 8px;
-  min-width: 0;
-  font-size: 11px;
-  color: var(--color-text-tertiary);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: calc(100% - 2 * var(--composer-strip-inset));
+  margin: calc(-1 * var(--space-4)) auto 0;
+  padding: var(--space-5) var(--space-3) var(--space-1);
+  border: var(--hairline) solid var(--color-control-border);
+  border-top: 0;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  background: var(--color-bg-input);
+  color: var(--color-text-secondary);
+  font-size: var(--fs-xs);
 }
-.prompt-composer__strip > span {
+.prompt-composer__strip-item {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  min-height: var(--chip-h);
+}
+.prompt-composer__strip-branch {
+  margin-inline-start: auto;
+}
+.prompt-composer__strip-item svg {
+  flex: none;
+  width: var(--fs-xs);
+  height: var(--fs-xs);
+}
+.prompt-composer__strip-text {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.prompt-composer__strip > span:first-child {
-  flex-shrink: 1;
-}
-.prompt-composer__strip > span:last-child {
-  flex-shrink: 2;
+.prompt-composer__strip-kind {
+  flex: none;
+  padding: 0 var(--space-1);
+  border: var(--hairline) solid var(--color-control-border);
+  border-radius: var(--radius-sm);
 }
 /* Prompt Composer */
 .prompt-composer {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
   width: 100%;
+  flex: none;
+  min-width: 0;
 }
 
 .prompt-composer__error {
@@ -1206,8 +1250,11 @@ body {
 }
 
 .prompt-composer__form {
-  display: flex;
-  flex-direction: column;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'text text' 'actions actions';
   width: 100%;
   background-color: var(--color-bg-input);
   border: 1px solid var(--color-control-border);
@@ -1251,8 +1298,15 @@ body {
   box-shadow: none;
 }
 
+.prompt-composer__input-wrapper {
+  grid-area: text;
+  min-width: 0;
+}
 .prompt-composer__toolbar {
+  grid-area: actions;
   display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
   align-items: center;
   justify-content: space-between;
   width: 100%;
@@ -1260,11 +1314,44 @@ body {
   padding: 2px 6px 6px;
 }
 
+.prompt-composer__metadata {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding-inline-start: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--fs-xs);
+}
+.prompt-composer__metadata > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.prompt-composer__model {
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+}
+.prompt-composer__reasoning,
+.prompt-composer__tokens {
+  border-inline-start: var(--hairline) solid var(--color-border-strong);
+  padding-inline-start: var(--space-2);
+}
+.prompt-composer__recorded {
+  font-size: var(--fs-2xs);
+}
 .prompt-composer__controls-left,
 .prompt-composer__controls-right {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.prompt-composer__controls-right {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-inline-start: auto;
 }
 
 .prompt-composer__submit-btn {
@@ -1277,47 +1364,15 @@ body {
 
 @media (max-width: 768px),
   (max-width: 1023px) and (max-height: 500px) and (orientation: landscape) {
-  .prompt-composer__form {
-    display: grid;
-    /* Queue and Send share the trailing owner; its width follows both controls. */
-    grid-template-columns: var(--touch-target) minmax(0, 1fr) auto;
-    align-items: end;
-    gap: var(--space-1);
-    padding: var(--space-1);
-  }
-
-  .prompt-composer__form .prompt-composer__input-wrapper {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .prompt-composer__context-controls {
-    grid-row: 2;
-    border-bottom: 0;
-    border-top: var(--hairline) solid var(--color-border-subtle);
-  }
-
+  /* Source textarea-top hierarchy also holds on a phone; actions never flank input. */
   .prompt-composer__form .ui-textarea {
     min-height: calc(var(--touch-target) + var(--space-1));
-    padding: var(--space-2) var(--space-1);
+    padding: var(--space-3) var(--space-3) var(--space-1);
+    font-size: 16px;
   }
 
   .prompt-composer__toolbar {
-    display: contents;
-  }
-
-  .prompt-composer__controls-left,
-  .prompt-composer__controls-right {
-    grid-row: 1;
-    padding-bottom: 2px;
-  }
-
-  .prompt-composer__controls-left {
-    grid-column: 1;
-  }
-
-  .prompt-composer__controls-right {
-    grid-column: 3;
+    padding: var(--space-1) var(--space-1) var(--space-2);
   }
 }
 
@@ -1330,7 +1385,7 @@ body {
   .herdr-footer {
     padding-top: var(--space-1);
     padding-bottom: calc(var(--space-1) + var(--footer-safe-bottom, 0px));
-    gap: var(--space-1);
+    --footer-gap: var(--space-1);
   }
 }
 
@@ -2869,6 +2924,77 @@ body {
    Settings View - Single-Column Dark Terminal Surface
    ========================================================================== */
 
+/* dc2f11de SettingsControls: one group surface, hairline-parted label/control rows. */
+.chat-settings-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--color-bg-elevated);
+  border: var(--hairline) solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+}
+.chat-settings-card > * {
+  padding: var(--space-3) var(--space-4);
+}
+.chat-settings-card > * + * {
+  border-top: var(--hairline) solid var(--color-border-subtle);
+}
+.chat-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-width: 0;
+  min-height: var(--control-h);
+}
+.chat-settings-row > :last-child {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+.chat-settings-row-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.chat-settings-label {
+  color: var(--color-text-primary);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+.chat-settings-description {
+  color: var(--color-text-secondary);
+  font-size: var(--fs-xs);
+  max-width: 54ch;
+}
+.chat-settings-row .ui-input {
+  flex: 0 1 16rem;
+  min-width: 0;
+}
+.chat-settings-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: start;
+}
+.chat-settings-item p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--fs-xs);
+}
+@media (max-width: 600px) {
+  .chat-settings-row.is-wide {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+  .chat-settings-row.is-wide .ui-input {
+    flex: 0 1 auto;
+    width: 100%;
+  }
+}
+
 .settings-page {
   display: flex;
   flex-direction: column;
@@ -3134,14 +3260,21 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-1) var(--space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  padding: 0;
 }
 .prompt-composer__context-controls {
-  grid-column: 1 / -1;
-  border-bottom: var(--hairline) solid var(--color-border-subtle);
+  min-width: 0;
+}
+.chat-controls > [role='status']:empty {
+  position: absolute;
+  width: 0;
+  height: 0;
 }
 .chat-controls > [role='status'] {
-  flex: 1;
+  flex: 1 1 100%;
+  order: 1;
   min-width: 0;
   font-size: var(--fs-xs);
   color: var(--color-text-secondary);

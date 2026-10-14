@@ -1,5 +1,5 @@
 // MIT License - Copyright (c) 2026 devswha
-// Content jobs from pinned5979118 FileViewer; existing local Dialog/lightbox recipe.
+// FileViewer anatomy from dc2f11d; Base UI retains local modal/focus ownership.
 import {
   useEffect,
   useMemo,
@@ -9,7 +9,18 @@ import {
   type ReactNode
 } from 'react'
 import { Dialog } from '@base-ui/react/dialog'
-import { X, Download, Folder, ArrowUp } from 'lucide-react'
+import {
+  X,
+  Download,
+  Folder,
+  ArrowUp,
+  Braces,
+  Copy,
+  Check,
+  TriangleAlert,
+  File
+} from 'lucide-react'
+import { createPortal } from 'react-dom'
 import { OpenChatToolFileContext } from './chat-tool-content.tsx'
 import {
   fileContentUrl,
@@ -43,12 +54,16 @@ interface IFileTextPreviewProps {
   size: number
   text: string
   onOpen: (path: string) => void
+  actionsHost?: HTMLElement | null
+  downloadAction?: ReactNode
 }
 export const FileTextPreview = ({
   path,
   size,
   text,
-  onOpen
+  onOpen,
+  actionsHost,
+  downloadAction
 }: IFileTextPreviewProps) => {
   const markdown = /\.(md|markdown)$/i.test(path)
   const readable = useMemo(() => canReadMarkdownPreview(text), [text])
@@ -72,39 +87,84 @@ export const FileTextPreview = ({
       setCopyState('manual')
     }
   }
-  return (
+  const controls = actionsHost ? (
     <>
-      <div className="file-text-controls">
-        {markdown && (
-          <ToggleGroup
-            aria-label="File view"
-            value={[mode]}
-            onValueChange={(values) => {
-              if (values[0] === 'reader' || values[0] === 'source')
-                setMode(values[0])
-            }}
+      {markdown && (
+        <div className="file-viewer-group">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="file-viewer-action"
+            aria-label="Show source"
+            title="Show source"
+            aria-pressed={mode === 'source'}
+            disabled={!readable}
+            onClick={() => setMode(mode === 'source' ? 'reader' : 'source')}
           >
-            <Toggle value="reader" variant="tab" disabled={!readable}>
-              Markdown
-            </Toggle>
-            <Toggle value="source" variant="tab">
-              Source
-            </Toggle>
-          </ToggleGroup>
-        )}
+            <Braces aria-hidden="true" />
+          </Button>
+        </div>
+      )}
+      <div className="file-viewer-group">
+        {downloadAction}
         <Button
-          variant="secondary"
+          variant="ghost"
+          size="icon"
+          className="file-viewer-action"
+          aria-label={truncated ? 'Copy preview' : 'Copy file'}
+          title={truncated ? 'Copy preview' : 'Copy file'}
           disabled={copyState === 'pending'}
           onClick={() => void copy()}
         >
-          {truncated ? 'Copy preview' : 'Copy file'}
+          {copyState === 'copied' ? (
+            <Check aria-hidden="true" />
+          ) : (
+            <Copy aria-hidden="true" />
+          )}
         </Button>
-        {copyState === 'copied' && (
-          <span role="status">
-            {truncated ? 'Preview copied' : 'File copied'}
-          </span>
-        )}
       </div>
+    </>
+  ) : (
+    <div className="file-text-controls">
+      {markdown && (
+        <ToggleGroup
+          aria-label="File view"
+          value={[mode]}
+          onValueChange={(values) => {
+            if (values[0] === 'reader' || values[0] === 'source')
+              setMode(values[0])
+          }}
+        >
+          <Toggle value="reader" variant="tab" disabled={!readable}>
+            Markdown
+          </Toggle>
+          <Toggle value="source" variant="tab">
+            Source
+          </Toggle>
+        </ToggleGroup>
+      )}
+      <Button
+        variant="secondary"
+        disabled={copyState === 'pending'}
+        onClick={() => void copy()}
+      >
+        {truncated ? 'Copy preview' : 'Copy file'}
+      </Button>
+      {copyState === 'copied' && (
+        <span role="status">
+          {truncated ? 'Preview copied' : 'File copied'}
+        </span>
+      )}
+    </div>
+  )
+  return (
+    <>
+      {actionsHost ? createPortal(controls, actionsHost) : controls}
+      {actionsHost && copyState === 'copied' && (
+        <span className="sr-only" role="status">
+          {truncated ? 'Preview copied' : 'File copied'}
+        </span>
+      )}
       {truncated && (
         <p className="file-text-notice" role="status">
           Showing the first 64 KiB. Copy includes only this preview; download
@@ -182,6 +242,66 @@ export const FileTextPreview = ({
   )
 }
 
+export const FileViewerHeading = ({
+  name,
+  path,
+  size,
+  truncated = false
+}: {
+  name: string
+  path: string
+  size?: number
+  truncated?: boolean
+}) => {
+  const dot = name.lastIndexOf('.')
+  const stem = dot > 0 ? name.slice(0, dot) : name
+  const extension = dot > 0 ? name.slice(dot) : ''
+  const folder = path.slice(0, path.lastIndexOf('/') + 1)
+  const bytes =
+    size === undefined
+      ? ''
+      : size < 1024
+        ? `${size} B`
+        : size < 1024 * 1024
+          ? `${(size / 1024).toFixed(1)} KiB`
+          : `${(size / (1024 * 1024)).toFixed(1)} MiB`
+  return (
+    <div className="file-viewer-title">
+      <Dialog.Title className="file-viewer-name">
+        <span className="file-viewer-stem">{stem}</span>
+        {extension}
+      </Dialog.Title>
+      <p className="file-viewer-meta" title={path}>
+        {size !== undefined && (
+          <span
+            className={truncated ? 'file-viewer-notice' : 'file-viewer-size'}
+            title={
+              truncated
+                ? 'Showing the first 64 KiB; download for the complete file.'
+                : undefined
+            }
+          >
+            {truncated && <TriangleAlert aria-hidden="true" />}
+            {truncated ? `64 KiB of ${bytes}` : bytes}
+          </span>
+        )}
+        {folder && (
+          <span className="file-viewer-path">
+            <span dir="ltr">
+              {size !== undefined && (
+                <span className="file-viewer-dot" aria-hidden="true">
+                  ·
+                </span>
+              )}
+              {folder}
+            </span>
+          </span>
+        )}
+      </p>
+    </div>
+  )
+}
+
 interface IChatFilesProps {
   paneId: string
   cwd?: string | null
@@ -243,6 +363,7 @@ const ChatFiles = ({ paneId, cwd = null, children }: IChatFilesProps) => {
   const [mediaError, setMediaError] = useState(false)
   const [image, setImage] = useState<{ blob: Blob; url: string } | null>(null)
   const [zoom, setZoom] = useState(false)
+  const [actionsHost, setActionsHost] = useState<HTMLDivElement | null>(null)
   const generation = useRef(0)
   useEffect(() => {
     const current = ++generation.current
@@ -344,7 +465,11 @@ const ChatFiles = ({ paneId, cwd = null, children }: IChatFilesProps) => {
               className="file-entry"
               onClick={() => open(item.path)}
             >
-              {item.directory && <Folder aria-hidden="true" />}
+              {item.directory ? (
+                <Folder aria-hidden="true" />
+              ) : (
+                <File aria-hidden="true" />
+              )}
               {item.name}
             </Button>
           ))}
@@ -377,6 +502,8 @@ const ChatFiles = ({ paneId, cwd = null, children }: IChatFilesProps) => {
           size={info.size}
           text={text}
           onOpen={open}
+          actionsHost={actionsHost}
+          downloadAction={downloadAction}
         />
       )
     if (info.kind === 'image')
@@ -424,6 +551,16 @@ const ChatFiles = ({ paneId, cwd = null, children }: IChatFilesProps) => {
     return <p>Binary file — download to open it.</p>
   }
   const file = !patchPath && info && 'kind' in info ? info : null
+  const downloadAction = file?.ref ? (
+    <a
+      className="ui-button ui-button--ghost ui-button--icon file-viewer-action"
+      href={fileContentUrl(file.ref, 'download')}
+      aria-label="Download complete file"
+      title="Download complete file"
+    >
+      <Download aria-hidden="true" />
+    </a>
+  ) : null
   return (
     <OpenChatToolFileContext.Provider
       value={(path) => {
@@ -456,43 +593,60 @@ const ChatFiles = ({ paneId, cwd = null, children }: IChatFilesProps) => {
         }}
       >
         <Dialog.Portal>
-          <Dialog.Backdrop className="ui-image-lightbox__backdrop" />
-          <Dialog.Popup className="ui-image-lightbox__popup file-viewer-popup">
-            <header className="ui-image-lightbox__header">
-              <Dialog.Title className="ui-image-lightbox__title">
-                {patchPath
-                  ? 'Current repository changes'
-                  : file?.name || target?.path || 'File'}
-              </Dialog.Title>
-              <div className="ui-image-lightbox__controls">
+          <Dialog.Backdrop className="file-viewer-backdrop" />
+          <Dialog.Popup className="file-viewer-popup">
+            <header className="file-viewer-header">
+              <FileViewerHeading
+                name={
+                  patchPath
+                    ? 'Current repository changes'
+                    : file?.name || target?.path.split('/').pop() || 'File'
+                }
+                path={patchPath || file?.path || target?.path || ''}
+                size={file?.kind === 'directory' ? undefined : file?.size}
+                truncated={file?.kind === 'text' && file.size > 64 * 1024}
+              />
+              <div className="file-viewer-actions">
                 {file?.parent && (
+                  <div className="file-viewer-group">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="file-viewer-action"
+                      onClick={() => open(file.parent!)}
+                      aria-label="Open parent directory"
+                      title="Open parent directory"
+                    >
+                      <ArrowUp aria-hidden="true" />
+                    </Button>
+                  </div>
+                )}
+                <div
+                  className="file-viewer-text-actions"
+                  ref={setActionsHost}
+                />
+                {!(file?.kind === 'text' && text !== null) &&
+                  downloadAction && (
+                    <div className="file-viewer-group">{downloadAction}</div>
+                  )}
+              </div>
+              <Dialog.Close
+                render={
                   <Button
                     variant="ghost"
-                    onClick={() => open(file.parent!)}
-                    aria-label="Open parent directory"
+                    size="icon"
+                    className="file-viewer-action file-viewer-close"
+                    aria-label="Close file viewer"
+                    title="Close file viewer"
                   >
-                    <ArrowUp />
+                    <X aria-hidden="true" />
                   </Button>
-                )}
-                {file?.ref && (
-                  <a
-                    className="file-download"
-                    href={fileContentUrl(file.ref, 'download')}
-                    aria-label="Download complete file"
-                  >
-                    <Download />
-                  </a>
-                )}
-                <Dialog.Close
-                  render={
-                    <Button variant="ghost" aria-label="Close file viewer">
-                      <X />
-                    </Button>
-                  }
-                />
-              </div>
+                }
+              />
             </header>
-            <div className="file-viewer-body">
+            <div
+              className={`file-viewer-body${!patchPath && info && 'kind' in info && ['image', 'video', 'audio'].includes(info.kind) ? ' file-viewer-body--media' : ''}`}
+            >
               {patchPath ? (
                 <>
                   <p>

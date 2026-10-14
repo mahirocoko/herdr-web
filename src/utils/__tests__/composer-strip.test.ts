@@ -9,7 +9,14 @@ test('absent metadata and labels never infer branch', () => {
     foreground_cwd: '/different/project'
   } as IPane
   expect(composerStrip(pane, { label: 'feature/guess' } as IWorkspace)).toEqual(
-    { path: '/different/project', folder: 'project', source: null }
+    {
+      path: '/different/project',
+      folder: 'project',
+      source: null,
+      branch: null,
+      dirty: false,
+      worktree: null
+    }
   )
 })
 test('full folder path retained; published checkout facts explicitly Space scoped', () => {
@@ -27,6 +34,9 @@ test('full folder path retained; published checkout facts explicitly Space scope
   ).toEqual({
     path: '/',
     folder: '/',
-    source: 'Space checkout: main * · linked'
+    source: 'Space checkout: main * · linked',
+    branch: 'main',
+    dirty: true,
+    worktree: 'linked'
   })
 })
