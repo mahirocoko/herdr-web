@@ -29,6 +29,14 @@ import {
   sourcePreviewPage
 } from '@/utils/file-viewer-text.ts'
 import './chat-file-viewer.css'
+import { ChatPatchContext } from './turn-changed-files.tsx'
+import { RepoPatchViewer } from './repo-changes.tsx'
+import { fetchRepoDiffFiles } from '@/services/repo-diff-api.ts'
+import {
+  turnPatchTarget,
+  repositoryTurnPath
+} from '@/utils/turn-changed-files.ts'
+import type { IRepoDiffTarget } from '@/types/repo-diff.ts'
 
 interface IFileTextPreviewProps {
   path: string
@@ -176,9 +184,56 @@ export const FileTextPreview = ({
 
 interface IChatFilesProps {
   paneId: string
+  cwd?: string | null
   children: ReactNode
 }
-const ChatFiles = ({ paneId, children }: IChatFilesProps) => {
+const ChatFiles = ({ paneId, cwd = null, children }: IChatFilesProps) => {
+  const [patchPath, setPatchPath] = useState<string | null>(null)
+  const [patchTarget, setPatchTarget] = useState<IRepoDiffTarget | null>(null)
+  const [patchError, setPatchError] = useState('')
+  const patchRead = useRef<AbortController | null>(null)
+  useEffect(() => {
+    setPatchTarget(null)
+    setPatchError('')
+    if (!patchPath) return
+    const controller = new AbortController()
+    patchRead.current = controller
+    void fetchRepoDiffFiles(
+      paneId,
+      { scope: 'workspace', base: null, head: null },
+      AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)])
+    ).then(
+      (list) => {
+        if (controller.signal.aborted) return
+        const next = turnPatchTarget(paneId, patchPath, cwd, list)
+        if (next) setPatchTarget(next)
+        else
+          setPatchError(
+            repositoryTurnPath({
+              path: patchPath,
+              cwd,
+              root: list.repository.root
+            }) === null
+              ? 'Path is outside the current repository or its relative base is unavailable.'
+              : list.truncated
+                ? 'This path is not in the bounded current changes list. Its current patch is unavailable.'
+                : 'This file is no longer in current unstaged / untracked changes (it may be staged or committed). Historical edits are not reconstructed.'
+          )
+      },
+      (reason) => {
+        if (!controller.signal.aborted)
+          setPatchError(
+            reason instanceof Error
+              ? reason.message
+              : 'Current changes unavailable'
+          )
+      }
+    )
+    return () => {
+      controller.abort()
+      patchRead.current = null
+    }
+  }, [patchPath, paneId, cwd])
   const [target, setTarget] = useState<{ path: string; offset: number } | null>(
     null
   )
@@ -368,14 +423,36 @@ const ChatFiles = ({ paneId, children }: IChatFilesProps) => {
       return <iframe title={info.name} src={src} className="file-pdf" />
     return <p>Binary file — download to open it.</p>
   }
-  const file = info && 'kind' in info ? info : null
+  const file = !patchPath && info && 'kind' in info ? info : null
   return (
-    <OpenChatToolFileContext.Provider value={(path) => open(path)}>
-      {children}
+    <OpenChatToolFileContext.Provider
+      value={(path) => {
+        patchRead.current?.abort()
+        setPatchPath(null)
+        setPatchTarget(null)
+        open(path)
+      }}
+    >
+      <ChatPatchContext.Provider
+        value={(path) => {
+          patchRead.current?.abort()
+          setTarget(null)
+          setPatchTarget(null)
+          setPatchError('')
+          setPatchPath(path)
+        }}
+      >
+        {children}
+      </ChatPatchContext.Provider>
       <Dialog.Root
-        open={target !== null}
+        open={target !== null || patchPath !== null}
         onOpenChange={(value) => {
-          if (!value) setTarget(null)
+          if (!value) {
+            patchRead.current?.abort()
+            setTarget(null)
+            setPatchPath(null)
+            setPatchTarget(null)
+          }
         }}
       >
         <Dialog.Portal>
@@ -383,7 +460,9 @@ const ChatFiles = ({ paneId, children }: IChatFilesProps) => {
           <Dialog.Popup className="ui-image-lightbox__popup file-viewer-popup">
             <header className="ui-image-lightbox__header">
               <Dialog.Title className="ui-image-lightbox__title">
-                {file?.name || target?.path || 'File'}
+                {patchPath
+                  ? 'Current repository changes'
+                  : file?.name || target?.path || 'File'}
               </Dialog.Title>
               <div className="ui-image-lightbox__controls">
                 {file?.parent && (
@@ -414,8 +493,31 @@ const ChatFiles = ({ paneId, children }: IChatFilesProps) => {
               </div>
             </header>
             <div className="file-viewer-body">
-              {content()}
-              {mediaError && (
+              {patchPath ? (
+                <>
+                  <p>
+                    Tool metadata names a historical edit. This viewer reads
+                    current unstaged / untracked changes only.
+                  </p>
+                  {patchError ? (
+                    <p role="status">{patchError}</p>
+                  ) : patchTarget ? (
+                    <RepoPatchViewer
+                      target={patchTarget}
+                      backLabel="Close current changes"
+                      onBack={() => {
+                        setPatchPath(null)
+                        setPatchTarget(null)
+                      }}
+                    />
+                  ) : (
+                    <p role="status">Reading current authorized changes…</p>
+                  )}
+                </>
+              ) : (
+                content()
+              )}
+              {!patchPath && mediaError && (
                 <p role="alert">
                   Media could not be decoded. Download the file or reopen it.
                 </p>

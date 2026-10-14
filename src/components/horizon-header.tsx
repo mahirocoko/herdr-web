@@ -18,6 +18,7 @@ import type { ILifecycleTicket } from '@/utils/lifecycle-operations.ts'
 import { formatTabLabel, isAgentPane } from '@/utils/workspace-helpers.ts'
 import Button from '@/components/ui/button.tsx'
 import TabActionsMenu from '@/components/tab-actions-menu.tsx'
+import { RepoChangesTrigger } from '@/components/repo-changes.tsx'
 import {
   getConnectionStatusLabel,
   getStatusDotClass
@@ -292,6 +293,13 @@ const HorizonHeader: FC<IHorizonHeaderProps> = ({
 
         {status === 'error' && (
           <span className="pill pill-offline">offline</span>
+        )}
+
+        {selectedPane && (
+          <RepoChangesTrigger
+            key={`${selectedPane.pane_id}:${selectedPane.terminal_id}`}
+            paneId={selectedPane.pane_id}
+          />
         )}
 
         <div className="header-more">

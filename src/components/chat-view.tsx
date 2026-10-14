@@ -1,11 +1,14 @@
 // MIT License - Copyright (c) 2026 devswha
+// Reading-position adaptation: Copyright (c) 2026 T3 Tools Inc. (see THIRD_PARTY_NOTICES)
 // Adapted from devswha/herdr-web-ui
 import {
   type FC,
   type ReactNode,
   useCallback,
+  useId,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState
 } from 'react'
@@ -15,9 +18,24 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
-  RotateCw
+  RotateCw,
+  Search
 } from 'lucide-react'
 import { useConversation } from '@/hooks/use-conversation.ts'
+import { ChatFind, ChatMatchSource } from './chat-find.tsx'
+import {
+  chatSearchText,
+  isChatFindShortcut,
+  type IChatSearchMatch
+} from '@/utils/chat-search.ts'
+import {
+  captureChatPosition,
+  chatPositionScope,
+  chatRestoreIndex,
+  readChatPosition,
+  rememberChatPosition,
+  type IChatPosition
+} from '@/utils/chat-scroll-memory.ts'
 import { Markdown } from './markdown.tsx'
 import {
   ChatTaskResults,
@@ -45,6 +63,8 @@ import type {
 } from '@/types/conversation.ts'
 import './chat-view.css'
 import { ChatFiles } from './chat-file-viewer.tsx'
+import { TurnChangedFiles } from './turn-changed-files.tsx'
+import { shouldFoldUserMessage } from '@/utils/user-message-fold.ts'
 import { useChatPreferences } from '@/hooks/use-chat-preferences.ts'
 import { ChatPreferences, chatPreferenceStyle } from './chat-preferences.tsx'
 import { ChatRenderBoundary } from './chat-render-boundary.tsx'
@@ -64,6 +84,7 @@ import {
 
 export interface IChatViewProps {
   paneId: string | null
+  cwd?: string | null
   sendRevision?: number
   actionTarget?: IActionTargetIdentity | null
   submissions?: ReturnType<typeof useChatSubmissions>
@@ -279,19 +300,106 @@ const WorkBlockView: FC<IWorkBlockProps> = ({
   )
 }
 
+// Source-owned fold anatomy from dc2f11de ChatView.UserMessage. Keyed Turn keeps
+// disclosure identity across polling; P1's full source reveal remains outside the cap.
+const UserMessage = ({ text }: { text: string }) => {
+  const [open, setOpen] = useState(false)
+  const canFold = useMemo(() => shouldFoldUserMessage(text), [text])
+  const capped = canFold && !open
+  const body = useRef<HTMLDivElement>(null)
+  const card = useRef<HTMLDivElement>(null)
+  const folding = useRef(false)
+  const disclosureChanged = useRef(false)
+  const id = useId()
+  const [clipped, setClipped] = useState(false)
+  useLayoutEffect(() => {
+    const node = body.current
+    if (!capped || !node) {
+      setClipped(false)
+      return
+    }
+    const measure = () => setClipped(node.scrollHeight > node.clientHeight)
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [capped, text])
+  useLayoutEffect(() => {
+    if (!disclosureChanged.current) return
+    disclosureChanged.current = false
+    const wasFolding = folding.current
+    folding.current = false
+    const node = card.current
+    const view = node?.closest<HTMLElement>('.chat-view')
+    const mark = node
+      ?.closest('[data-chat-match]')
+      ?.querySelector<HTMLElement>('.chat-match-source mark')
+    // Only an explicit disclosure change of the selected Find row re-reveals
+    // its passage. Ordinary resizing and away-reader scrolling stay untouched.
+    if (mark && view) {
+      view.scrollTop +=
+        mark.getBoundingClientRect().top -
+        view.getBoundingClientRect().top -
+        view.clientHeight / 2
+      return
+    }
+    if (
+      wasFolding &&
+      node &&
+      view &&
+      node.getBoundingClientRect().top < view.getBoundingClientRect().top
+    )
+      node.scrollIntoView({ block: 'start' })
+  }, [open])
+  return (
+    <div
+      ref={card}
+      className={`chat-bubble${capped ? ' is-capped' : ''}${clipped ? ' is-folded' : ''}`}
+    >
+      <div ref={body} id={id} className="chat-bubble-body">
+        <Markdown>{text}</Markdown>
+      </div>
+      {(open || clipped) && (
+        <div className="chat-bubble-foot">
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-expanded={open}
+            aria-controls={id}
+            onClick={() => {
+              disclosureChanged.current = true
+              folding.current = open
+              setOpen(!open)
+            }}
+          >
+            {open ? 'Show less' : 'Show full message'}
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface ITurnProps {
   turn: IConversationTurn
   live: boolean
   waiting: boolean
   showThinking?: boolean
+  match?: IChatSearchMatch | null
 }
 
 const Turn: FC<ITurnProps> = ({
   turn,
   live,
   waiting,
-  showThinking = false
+  showThinking = false,
+  match = null
 }) => {
+  const matchingSource =
+    match?.rowKey === turn.id ? (
+      <ChatMatchSource text={chatSearchText(turn)} match={match} />
+    ) : null
   const time = formatTime(turn.ts)
 
   const notices = turn.parts.map((part, index) => {
@@ -343,7 +451,11 @@ const Turn: FC<ITurnProps> = ({
       .join('\n\n')
 
     return (
-      <article className="chat-turn chat-turn-user">
+      <article
+        className="chat-turn chat-turn-user"
+        data-chat-row={turn.id}
+        data-chat-match={matchingSource ? '' : undefined}
+      >
         {notices}
         <div className="chat-user-row">
           {turn.parts
@@ -351,11 +463,7 @@ const Turn: FC<ITurnProps> = ({
             .map((part, index) => (
               <NativeImage key={part.nativeKey ?? index} part={part} />
             ))}
-          {text.length > 0 && (
-            <div className="chat-bubble">
-              <Markdown>{text}</Markdown>
-            </div>
-          )}
+          {text.length > 0 && <UserMessage text={text} />}
           <div className="chat-turn-meta">
             {time !== null && (
               <time dateTime={turn.ts ?? undefined}>{time}</time>
@@ -363,6 +471,7 @@ const Turn: FC<ITurnProps> = ({
             {text.length > 0 && <CopyButton text={text} label="Copy message" />}
           </div>
         </div>
+        {matchingSource}
       </article>
     )
   }
@@ -379,7 +488,11 @@ const Turn: FC<ITurnProps> = ({
   const answerText = answer.map((part) => part.text).join('\n\n')
 
   return (
-    <article className="chat-turn chat-turn-agent">
+    <article
+      className="chat-turn chat-turn-agent"
+      data-chat-row={turn.id}
+      data-chat-match={matchingSource ? '' : undefined}
+    >
       {notices}
       {work.length > 0 && (
         <WorkBlockView
@@ -391,6 +504,7 @@ const Turn: FC<ITurnProps> = ({
           showThinking={showThinking}
         />
       )}
+      <TurnChangedFiles parts={turn.parts} />
       <SkillActivity parts={turn.parts} />
       {answer.map((part, index) => (
         <Markdown key={part.nativeKey ?? index}>{part.text}</Markdown>
@@ -415,6 +529,7 @@ const Turn: FC<ITurnProps> = ({
           {time !== null && <time dateTime={turn.ts ?? undefined}>{time}</time>}
         </div>
       )}
+      {matchingSource}
     </article>
   )
 }
@@ -563,6 +678,7 @@ const SubmissionReceipts = ({
 
 const ChatView: FC<IChatViewProps> = ({
   paneId,
+  cwd = null,
   sendRevision = 0,
   actionTarget = null,
   submissions,
@@ -574,6 +690,8 @@ const ChatView: FC<IChatViewProps> = ({
 }) => {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const stickToBottomRef = useRef(true)
+  const strictReadingRef = useRef(false)
+  const lastScrollTopRef = useRef(0)
   const prependRef = useRef<{
     height: number
     top: number
@@ -593,6 +711,7 @@ const ChatView: FC<IChatViewProps> = ({
     turns,
     contributions,
     sessionKey,
+    source,
     metadata,
     abandoned,
     retentionLimited,
@@ -607,6 +726,104 @@ const ChatView: FC<IChatViewProps> = ({
     isEnabled: isAgent && Boolean(paneId),
     pollIntervalMs: 2000
   })
+
+  const scope =
+    paneId && sessionKey
+      ? chatPositionScope(
+          paneId,
+          actionTarget?.terminalId,
+          actionTarget?.agentSessionId,
+          source,
+          sessionKey
+        )
+      : null
+  const [findOpen, setFindOpen] = useState(false)
+  const [match, setMatch] = useState<IChatSearchMatch | null>(null)
+  const findButton = useRef<HTMLButtonElement>(null)
+  const rows = useMemo(
+    () =>
+      findOpen
+        ? turns.map((turn) => ({ key: turn.id, text: chatSearchText(turn) }))
+        : [],
+    [findOpen, turns]
+  )
+  const savedPlace = useRef<IChatPosition | null>(null)
+  const restoring = useRef<IChatPosition | null>(null)
+  const restorePages = useRef(0)
+  const [restoreNotice, setRestoreNotice] = useState('')
+  const rememberPlace = useCallback(() => {
+    const node = scrollerRef.current
+    if (scope && node && !restoring.current && turns.length) {
+      savedPlace.current = captureChatPosition(node, stickToBottomRef.current)
+      rememberChatPosition(scope, savedPlace.current)
+    }
+  }, [scope, turns.length])
+  const closeFind = useCallback(() => {
+    setFindOpen(false)
+    setMatch(null)
+  }, [])
+  const wasFinding = useRef(false)
+  useLayoutEffect(() => {
+    if (wasFinding.current && !findOpen)
+      findButton.current?.focus({ preventScroll: true })
+    wasFinding.current = findOpen
+  }, [findOpen])
+  useEffect(() => {
+    if (!scope || !isAgent) return
+    const onKey = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.isComposing ||
+        !scrollerRef.current?.getClientRects().length
+      )
+        return
+      if (
+        event.target instanceof Element &&
+        event.target.closest('[role="dialog"]')
+      )
+        return
+      if (event.key === 'Escape' && findOpen) {
+        event.preventDefault()
+        closeFind()
+        return
+      }
+      if (
+        !isChatFindShortcut(event, /Mac|iPhone|iPad/.test(navigator.platform))
+      )
+        return
+      event.preventDefault()
+      setFindOpen(true)
+      scrollerRef.current
+        .querySelector<HTMLInputElement>('.chat-find input')
+        ?.focus()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [scope, isAgent, findOpen, closeFind])
+  const showMatch = useCallback((next: IChatSearchMatch | null) => {
+    setMatch(next)
+    if (next) {
+      stickToBottomRef.current = false
+      strictReadingRef.current = true
+      setAway(true)
+    }
+  }, [])
+  useLayoutEffect(() => {
+    if (!match) return
+    const node = scrollerRef.current
+    const row = [
+      ...(node?.querySelectorAll<HTMLElement>('[data-chat-row]') ?? [])
+    ].find((row) => row.dataset.chatRow === match.rowKey)
+    if (node && row) {
+      node.scrollTop +=
+        row.getBoundingClientRect().top -
+        node.getBoundingClientRect().top -
+        node.clientHeight * 0.25
+      lastScrollTopRef.current = node.scrollTop
+      // Keep input focus for repeated Enter; the source passage is focusable for readers.
+      rememberPlace()
+    }
+  }, [match?.rowKey, match?.start, match?.end, rememberPlace])
 
   const observeSubmissionBaseline = submissions?.observe
   useEffect(() => {
@@ -651,27 +868,45 @@ const ChatView: FC<IChatViewProps> = ({
     }
   const finishedBeforeSend =
     sentOver.current?.page === turns ? sentOver.current.turn : null
-  const fetchOlder = useCallback(() => {
-    const node = scrollerRef.current
-    if (!node || !hasOlder || isLoading || isLoadingOlder || prependRef.current)
-      return
-    prependRef.current = {
-      height: node.scrollHeight,
-      top: node.scrollTop,
-      first: turns[0]?.id
-    }
-    void loadOlder()
-  }, [hasOlder, isLoading, isLoadingOlder, loadOlder, turns])
+  const fetchOlder = useCallback(
+    async (signal?: AbortSignal): Promise<boolean> => {
+      const node = scrollerRef.current
+      if (
+        !node ||
+        !hasOlder ||
+        isLoading ||
+        isLoadingOlder ||
+        prependRef.current
+      )
+        return false
+      prependRef.current = {
+        height: node.scrollHeight,
+        top: node.scrollTop,
+        first: turns[0]?.id
+      }
+      const loaded = await loadOlder(signal)
+      if (!loaded) prependRef.current = null
+      return loaded
+    },
+    [hasOlder, isLoading, isLoadingOlder, loadOlder, turns]
+  )
   const onScroll = useCallback(() => {
     const node = scrollerRef.current
     if (node === null) return
-    const isAtBottom =
-      node.scrollTop + node.clientHeight >= node.scrollHeight - 48
+    const isAtBottom = strictReadingRef.current
+      ? node.scrollTop > lastScrollTopRef.current &&
+        node.scrollHeight - node.clientHeight - node.scrollTop <= 1
+      : node.scrollTop + node.clientHeight >= node.scrollHeight - 48
+    lastScrollTopRef.current = node.scrollTop
+    if (isAtBottom) strictReadingRef.current = false
     stickToBottomRef.current = isAtBottom
     setAway(!isAtBottom)
     if (isAtBottom) setNewMessages(false)
-    if (node.scrollTop < 80) fetchOlder()
-  }, [fetchOlder])
+    if (prependRef.current) prependRef.current.top = node.scrollTop
+    rememberPlace()
+    if (node.scrollTop < 80 && !findOpen && !restoring.current)
+      void fetchOlder()
+  }, [fetchOlder, rememberPlace, findOpen])
 
   const scrollToBottom = useCallback(() => {
     const node = scrollerRef.current
@@ -683,21 +918,69 @@ const ChatView: FC<IChatViewProps> = ({
         : 'smooth'
     })
     stickToBottomRef.current = true
+    strictReadingRef.current = false
     setAway(false)
     setNewMessages(false)
   }, [])
 
   useLayoutEffect(() => {
-    stickToBottomRef.current = true
+    const saved = scope ? readChatPosition(scope) : undefined
+    restoring.current = saved && !saved.atEnd ? saved : null
+    savedPlace.current = saved ?? null
+    restorePages.current = 0
+    stickToBottomRef.current = !restoring.current
+    strictReadingRef.current = Boolean(restoring.current)
+    lastScrollTopRef.current = 0
     prependRef.current = null
-    setAway(false)
+    setAway(Boolean(restoring.current))
     setNewMessages(false)
+    setRestoreNotice('')
+    setFindOpen(false)
+    setMatch(null)
     latestRef.current = ''
-  }, [paneId, sessionKey])
+    return () => {
+      if (scope && savedPlace.current)
+        rememberChatPosition(scope, savedPlace.current)
+    }
+  }, [scope])
 
   useLayoutEffect(() => {
     const node = scrollerRef.current
     if (!node) return
+    const saved = restoring.current
+    if (saved && turns.length && !isLoading && !isLoadingOlder) {
+      const index = chatRestoreIndex(
+        saved,
+        turns.map((turn) => turn.id)
+      )
+      const row =
+        index === null
+          ? null
+          : [...node.querySelectorAll<HTMLElement>('[data-chat-row]')].find(
+              (row) => row.dataset.chatRow === turns[index].id
+            )
+      if (row) {
+        node.scrollTop +=
+          row.getBoundingClientRect().top -
+          node.getBoundingClientRect().top -
+          saved.offset
+        lastScrollTopRef.current = node.scrollTop
+        restoring.current = null
+        prependRef.current = null
+      } else if (hasOlder && !error && restorePages.current < 20) {
+        restorePages.current++
+        void fetchOlder()
+        return
+      } else {
+        restoring.current = null
+        stickToBottomRef.current = true
+        strictReadingRef.current = false
+        setAway(false)
+        setRestoreNotice(
+          'Saved reading position is outside available loaded history; showing latest.'
+        )
+      }
+    }
     const anchor = prependRef.current
     const last = turns.at(-1)
     const revision = last
@@ -716,13 +999,22 @@ const ChatView: FC<IChatViewProps> = ({
       prependRef.current = null
     } else if (stickToBottomRef.current) node.scrollTop = node.scrollHeight
     if (!isLoadingOlder) prependRef.current = null
-  }, [turns, isLoadingOlder, submissions?.records])
+    rememberPlace()
+  }, [
+    turns,
+    isLoading,
+    isLoadingOlder,
+    submissions?.records,
+    hasOlder,
+    error,
+    fetchOlder,
+    rememberPlace
+  ])
 
   useLayoutEffect(() => {
     const node = scrollerRef.current
     const content = node?.querySelector('.chat-transcript')
     if (!node || !content || typeof ResizeObserver === 'undefined') return
-    let lane = ''
     const follow = () => {
       if (stickToBottomRef.current && !prependRef.current)
         node.scrollTop = node.scrollHeight
@@ -733,12 +1025,9 @@ const ChatView: FC<IChatViewProps> = ({
           follow()
           continue
         }
-        const style = getComputedStyle(content)
-        const next = `${entry.contentRect.width}:${style.fontSize}:${style.fontFamily}:${style.getPropertyValue('--chat-fs-body')}`
-        if (next !== lane) {
-          lane = next
-          follow()
-        }
+        // A user-message disclosure changes height without changing font/width.
+        // Only following readers move; the existing away/prepend owners still win.
+        follow()
       }
     })
     observer.observe(node)
@@ -758,6 +1047,24 @@ const ChatView: FC<IChatViewProps> = ({
 
   useEffect(() => {
     const node = scrollerRef.current
+    if (!node) return
+    const cancelRestore = () => {
+      if (!restoring.current) return
+      restoring.current = null
+      stickToBottomRef.current = false
+      setAway(true)
+      rememberPlace()
+    }
+    for (const type of ['wheel', 'touchmove', 'pointerdown', 'keydown'])
+      node.addEventListener(type, cancelRestore, { passive: true })
+    return () => {
+      for (const type of ['wheel', 'touchmove', 'pointerdown', 'keydown'])
+        node.removeEventListener(type, cancelRestore)
+    }
+  }, [scope, rememberPlace])
+
+  useEffect(() => {
+    const node = scrollerRef.current
     return node ? dismissKeyboardOn(node) : undefined
   }, [paneId, sessionKey])
 
@@ -768,10 +1075,12 @@ const ChatView: FC<IChatViewProps> = ({
       node.scrollHeight <= node.clientHeight &&
       hasOlder &&
       !isLoading &&
-      !isLoadingOlder
+      !isLoadingOlder &&
+      !findOpen &&
+      !restoring.current
     )
-      fetchOlder()
-  }, [fetchOlder, hasOlder, isLoading, isLoadingOlder, turns])
+      void fetchOlder()
+  }, [fetchOlder, hasOlder, isLoading, isLoadingOlder, turns, findOpen])
 
   if (!isAgent || !paneId) {
     return (
@@ -790,7 +1099,7 @@ const ChatView: FC<IChatViewProps> = ({
   }
 
   return (
-    <ChatFiles key={`${paneId}:${sessionKey}`} paneId={paneId}>
+    <ChatFiles key={`${paneId}:${sessionKey}`} paneId={paneId} cwd={cwd}>
       <ChatAssetContext.Provider
         value={sessionKey ? { paneId, history: sessionKey } : null}
       >
@@ -804,6 +1113,35 @@ const ChatView: FC<IChatViewProps> = ({
           aria-label={`Conversation for pane ${paneId}`}
         >
           <div className="chat-transcript">
+            {findOpen && scope ? (
+              <ChatFind
+                key={scope}
+                rows={rows}
+                older={hasOlder}
+                loading={isLoading || isLoadingOlder}
+                limited={retentionLimited}
+                error={error}
+                onOlder={fetchOlder}
+                onMatch={showMatch}
+                onClose={closeFind}
+              />
+            ) : (
+              <Button
+                ref={findButton}
+                variant="ghost"
+                size="sm"
+                className="chat-find-open"
+                disabled={!scope}
+                onClick={() => setFindOpen(true)}
+              >
+                <Search aria-hidden="true" /> Find in Chat
+              </Button>
+            )}
+            {restoreNotice && (
+              <p className="chat-inline-state" role="status">
+                {restoreNotice}
+              </p>
+            )}
             <ChatPreferences
               preferences={preferences}
               onChange={update}
@@ -832,7 +1170,7 @@ const ChatView: FC<IChatViewProps> = ({
                 type="button"
                 className="chat-older"
                 disabled={isLoadingOlder}
-                onClick={fetchOlder}
+                onClick={() => void fetchOlder()}
               >
                 {isLoadingOlder
                   ? 'Loading earlier messages…'
@@ -867,6 +1205,7 @@ const ChatView: FC<IChatViewProps> = ({
                     live={live}
                     waiting={waiting}
                     showThinking={preferences.showThinking}
+                    match={match?.rowKey === turn.id ? match : null}
                   />
                 </ChatRenderBoundary>
               )

@@ -7,6 +7,7 @@ import {
   Square,
   ArrowDown,
   Copy,
+  Quote,
   Check,
   Pause,
   Play
@@ -48,6 +49,7 @@ export type TerminalMode = 'observer' | 'control'
 export interface ITerminalCanvasProps {
   paneId: string | null
   terminalId?: string | null
+  onQuoteSelection?: (text: string) => void
   isAgentPane?: boolean
   cols?: number
   rows?: number
@@ -61,6 +63,7 @@ export interface ITerminalCanvasProps {
 const TerminalCanvas: FC<ITerminalCanvasProps> = ({
   paneId,
   terminalId,
+  onQuoteSelection,
   isAgentPane = false,
   cols = 80,
   rows = 24,
@@ -723,6 +726,23 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
                 </Button>
               )}
 
+              {selectedText && onQuoteSelection && isAgentPane && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="compact"
+                  className="terminal-scope-btn"
+                  onClick={() => {
+                    const text = terminalRef.current?.getSelection()
+                    if (text) onQuoteSelection(text)
+                  }}
+                  aria-label="Quote in message — draft only"
+                  title="Quote in message — draft only"
+                >
+                  <Quote size={13} aria-hidden="true" />
+                  <span>Quote in message</span>
+                </Button>
+              )}
               {/* Latest affordance button: restores vertical bottom prompt and resets native scroll offset */}
               {!isManuallyPaused &&
                 (isScrolledAway || (scrollState?.offset ?? 0) > 0) && (

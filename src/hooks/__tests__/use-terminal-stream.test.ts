@@ -96,10 +96,13 @@ const createSocket = (readyState: number) => {
 }
 
 describe('closeTerminalSocketSafely', () => {
-  it('waits for a connecting socket to open before closing it', () => {
+  it('cancels a connecting socket immediately even when open never arrives', () => {
     const target = createSocket(WebSocket.CONNECTING)
     closeTerminalSocketSafely(target.socket)
-    expect(target.closeCalls()).toBe(0)
+    expect(target.closeCalls()).toBe(1)
+    expect(target.socket.onopen).toBeNull()
+    expect(target.socket.onmessage).toBeNull()
+    expect(target.socket.onclose).toBeNull()
     target.open()
     expect(target.closeCalls()).toBe(1)
   })

@@ -106,13 +106,10 @@ export const closeTerminalSocketSafely = (socket: WebSocket): void => {
   socket.onerror = null
   socket.onclose = null
 
-  if (socket.readyState === WebSocket.CONNECTING) {
-    socket.addEventListener('open', () => socket.close(), { once: true })
-    socket.addEventListener('error', () => {}, { once: true })
-    return
-  }
-
-  if (socket.readyState === WebSocket.OPEN) {
+  if (
+    socket.readyState === WebSocket.CONNECTING ||
+    socket.readyState === WebSocket.OPEN
+  ) {
     socket.close()
   }
 }
@@ -215,6 +212,7 @@ export const useTerminalStream = ({
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isManuallyClosedRef = useRef<boolean>(false)
   const admissionBlockedRef = useRef(false)
+  const admissionTargetRef = useRef<string | null>(null)
   const connectRef = useRef<(() => void) | null>(null)
   const onDataRef = useRef(onData)
   onDataRef.current = onData
@@ -284,10 +282,21 @@ export const useTerminalStream = ({
   useEffect(() => {
     paneGenerationRef.current += 1
     const currentGeneration = paneGenerationRef.current
+    let connectDeadline: ReturnType<typeof setTimeout> | null = null
+    const clearConnectDeadline = () => {
+      if (connectDeadline) clearTimeout(connectDeadline)
+      connectDeadline = null
+    }
+
+    const admissionTarget = JSON.stringify([paneId, terminalId])
+    if (admissionTargetRef.current !== admissionTarget) {
+      admissionTargetRef.current = admissionTarget
+      admissionBlockedRef.current = false
+    }
 
     if (!paneId || !terminalId || paused || isBackgroundHidden) {
       setConnectionState('disconnected')
-      setLastError(null)
+      if (!admissionBlockedRef.current) setLastError(null)
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
         reconnectTimeoutRef.current = null
@@ -310,6 +319,7 @@ export const useTerminalStream = ({
       if (isManuallyClosedRef.current) return
       if (paneGenerationRef.current !== currentGeneration) return
       admissionBlockedRef.current = false
+      clearConnectDeadline()
 
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
@@ -398,6 +408,9 @@ export const useTerminalStream = ({
               return
             }
 
+            // Socket-open alone is not proof that the native producer answered.
+            // A valid first frame (including an empty idle frame) ends startup.
+            clearConnectDeadline()
             const applied = onFrameRef.current
               ? onFrameRef.current(frameValidation.frame, decodedBytes)
               : decodedBytes.length > 0
@@ -477,8 +490,15 @@ export const useTerminalStream = ({
         setLastError('Terminal stream socket error')
       }
 
-      ws.onclose = (event) => {
-        if (ws !== socketRef.current) return
+      const handleClose = (event: { code: number; reason: string }) => {
+        if (
+          ws !== socketRef.current ||
+          paneGenerationRef.current !== currentGeneration
+        )
+          return
+        clearConnectDeadline()
+        socketRef.current = null
+        closeTerminalSocketSafely(ws)
         if (isManuallyClosedRef.current) {
           setConnectionState('disconnected')
           return
@@ -518,12 +538,19 @@ export const useTerminalStream = ({
           connect()
         }, decision.nextDelayMs)
       }
+      ws.onclose = handleClose
+      connectDeadline = setTimeout(() => {
+        handleClose({ code: 1006, reason: 'connect_timeout' })
+      }, 10000)
     }
 
     connectRef.current = connect
-    connect()
+    // Visibility recovery must not turn a manual admission denial into a retry.
+    if (admissionBlockedRef.current) setConnectionState('error')
+    else connect()
 
     return () => {
+      clearConnectDeadline()
       isManuallyClosedRef.current = true
       connectRef.current = null
       if (reconnectTimeoutRef.current) {

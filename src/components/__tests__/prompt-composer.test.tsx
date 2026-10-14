@@ -3,6 +3,23 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import PromptComposer from '../prompt-composer.tsx'
 
 describe('PromptComposer: static rendering and controls', () => {
+  it('shows UTF-8 bytes and blocks both actions for an oversized controlled draft', () => {
+    const html = renderToStaticMarkup(
+      <PromptComposer
+        paneId="ws1:p1"
+        terminalId="term-1"
+        hasValidTarget
+        isBusy={false}
+        draftText={'ก'.repeat(1366)}
+        onSubmitText={async () => {}}
+        onQueueText={async () => {}}
+      />
+    )
+    expect(html).toContain('4098 / 4096 UTF-8 bytes')
+    expect(html).toContain('aria-describedby="herdr-prompt-byte-limit"')
+    expect(html).not.toContain('maxLength=')
+    expect(html.match(/<button[^>]*disabled=""/g)?.length).toBe(2)
+  })
   it('keeps contextual controls inside the form without a second form or submit trigger', () => {
     const html = renderToStaticMarkup(
       <PromptComposer

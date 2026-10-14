@@ -47,10 +47,15 @@ describe('drift-guards: retired absolute claims verification', () => {
   it('ensures retired "snapshot polling as primary" claims are absent in hook and docs', () => {
     const hookPath = path.join(REPO_ROOT, 'src/hooks/use-snapshot.ts')
     const hookContent = fs.readFileSync(hookPath, 'utf8')
-    // Hook must check backend bridge health, not browser socket-open state, before polling.
-    expect(hookContent).toContain('isEventStreamHealthyRef.current')
-    expect(hookContent).toContain('bridgeStatusIsHealthy(message.status)')
-    expect(hookContent).toContain('/api/events')
+    const readerContent = fs.readFileSync(
+      path.join(REPO_ROOT, 'src/services/snapshot-reader.ts'),
+      'utf8'
+    )
+    // The hook delegates read recovery; behavioral health/fallback coverage
+    // belongs to snapshot-reader.test.ts, not a retired React ref name.
+    expect(hookContent).toContain('createSnapshotReader')
+    expect(readerContent).toContain('bridgeStatusIsHealthy(message.status)')
+    expect(readerContent).toContain('/api/events')
   })
 
   it('ensures socket-first protocol 22 and snapshot bridge contracts are documented', () => {

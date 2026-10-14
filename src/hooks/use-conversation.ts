@@ -144,6 +144,144 @@ export const reconcileConversation = (
   }
 }
 
+/** Exact-pane read lifetime. Browser recovery invalidates tickets, not history. */
+export const createConversationReader = ({
+  paneId,
+  getState,
+  publish,
+  onLoading,
+  onError,
+  pollIntervalMs = 2000,
+  read = fetchPaneConversation,
+  page = document,
+  browser = window
+}: {
+  paneId: string
+  getState: () => IConversationState
+  publish: (state: IConversationState) => void
+  onLoading: (loading: boolean, older: boolean) => void
+  onError: (error: string | null, code: string | null) => void
+  pollIntervalMs?: number
+  read?: typeof fetchPaneConversation
+  page?: Document
+  browser?: Window
+}) => {
+  let stopped = false
+  let suspended = page.visibilityState === 'hidden'
+  let pending: { controller: AbortController } | null = null
+  const retire = () => {
+    const old = pending
+    pending = null
+    old?.controller.abort()
+    onLoading(false, false)
+  }
+  const request = async (
+    older = false,
+    signal?: AbortSignal
+  ): Promise<boolean> => {
+    if (stopped || suspended || pending || signal?.aborted) return false
+    const before = older ? getState().before : null
+    if (older && !before) return false
+    const ticket = { controller: new AbortController() }
+    pending = ticket
+    onLoading(true, older)
+    const cancel = () => {
+      // Cancelling Find retires only its own read, never a newer recovery read.
+      if (pending === ticket) retire()
+    }
+    signal?.addEventListener('abort', cancel, { once: true })
+    const current = () => !stopped && pending === ticket
+    try {
+      let result: IConversationRead
+      try {
+        result = await read(paneId, {
+          before,
+          signal: ticket.controller.signal
+        })
+      } catch (error) {
+        if (!current()) return false
+        if (!(error instanceof ConversationError) || error.status !== 409)
+          throw error
+        publish(emptyConversation())
+        // Preserve the existing single stale-history retry within this gate.
+        result = await read(paneId, { signal: ticket.controller.signal })
+      }
+      if (!current()) return false
+      if (
+        older &&
+        getState().sessionKey &&
+        getState().sessionKey !== result.sessionKey
+      ) {
+        publish(emptyConversation())
+        result = await read(paneId, { signal: ticket.controller.signal })
+        if (!current()) return false
+      }
+      publish(reconcileConversation(getState(), result, older))
+      onError(null, null)
+      return true
+    } catch (error) {
+      if (!current()) return false
+      if (error instanceof ConversationError && error.status === 409)
+        publish(emptyConversation())
+      onError(
+        error instanceof Error ? error.message : 'Conversation unavailable',
+        error instanceof ConversationError ? (error.code ?? null) : null
+      )
+      return false
+    } finally {
+      signal?.removeEventListener('abort', cancel)
+      if (current()) {
+        pending = null
+        onLoading(false, false)
+      }
+    }
+  }
+  const suspend = () => {
+    if (stopped || suspended) return
+    suspended = true
+    retire()
+  }
+  const recover = () => {
+    if (stopped || !suspended || page.visibilityState === 'hidden') return
+    suspended = false
+    // Suspend already retired the old ticket. Preserve this resume read when
+    // visible/pageshow/online overlap, even if a later notification is delayed.
+    void request()
+  }
+  const visibility = () => {
+    if (page.visibilityState === 'hidden') suspend()
+    else recover()
+  }
+  page.addEventListener('visibilitychange', visibility)
+  browser.addEventListener('pagehide', suspend)
+  browser.addEventListener('pageshow', recover)
+  browser.addEventListener('online', recover)
+  browser.addEventListener('offline', suspend)
+  const timer =
+    pollIntervalMs > 0
+      ? setInterval(() => {
+          void request()
+        }, pollIntervalMs)
+      : null
+  void request()
+  return {
+    request,
+    stop: () => {
+      stopped = true
+      // Cleanup must not publish loading state into an unmounted owner.
+      const old = pending
+      pending = null
+      old?.controller.abort()
+      if (timer) clearInterval(timer)
+      page.removeEventListener('visibilitychange', visibility)
+      browser.removeEventListener('pagehide', suspend)
+      browser.removeEventListener('pageshow', recover)
+      browser.removeEventListener('online', recover)
+      browser.removeEventListener('offline', suspend)
+    }
+  }
+}
+
 export const useConversation = ({
   paneId,
   isEnabled = true,
@@ -155,124 +293,55 @@ export const useConversation = ({
   const [isLoadingOlder, setIsLoadingOlder] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [errorCode, setErrorCode] = useState<string | null>(null)
-  const generationRef = useRef(0)
-  const requestRef = useRef<{
-    controller: AbortController
-    generation: number
-  } | null>(null)
+  const readerRef = useRef<ReturnType<typeof createConversationReader> | null>(
+    null
+  )
   const publish = useCallback((next: IConversationState) => {
     stateRef.current = next
     setState(next)
   }, [])
 
-  const request = useCallback(
-    async (older: boolean, generation: number) => {
-      if (
-        !paneId ||
-        !isEnabled ||
-        generation !== generationRef.current ||
-        requestRef.current
-      )
-        return
-      const before = older ? stateRef.current.before : null
-      if (older && !before) return
-      const ticket = { controller: new AbortController(), generation }
-      requestRef.current = ticket
-      if (older) setIsLoadingOlder(true)
-      else setIsLoading(true)
-      const current = () =>
-        generation === generationRef.current && requestRef.current === ticket
-      try {
-        let page: IConversationRead
-        try {
-          page = await fetchPaneConversation(paneId, {
-            before,
-            signal: ticket.controller.signal
-          })
-        } catch (err) {
-          if (!current()) return
-          if (!(err instanceof ConversationError) || err.status !== 409)
-            throw err
-          publish(emptyConversation())
-          // Retry once without stale paging/session state, within the same gate.
-          page = await fetchPaneConversation(paneId, {
-            signal: ticket.controller.signal
-          })
-        }
-        if (!current()) return
-        if (
-          older &&
-          stateRef.current.sessionKey &&
-          stateRef.current.sessionKey !== page.sessionKey
-        ) {
-          publish(emptyConversation())
-          page = await fetchPaneConversation(paneId, {
-            signal: ticket.controller.signal
-          })
-          if (!current()) return
-        }
-        publish(reconcileConversation(stateRef.current, page, older))
-        setError(null)
-        setErrorCode(null)
-      } catch (err) {
-        if (!current()) return
-        if (err instanceof ConversationError && err.status === 409)
-          publish(emptyConversation())
-        setError(
-          err instanceof Error ? err.message : 'Conversation unavailable'
-        )
-        setErrorCode(
-          err instanceof ConversationError ? (err.code ?? null) : null
-        )
-      } finally {
-        if (current()) {
-          requestRef.current = null
-          setIsLoading(false)
-          setIsLoadingOlder(false)
-        }
-      }
-    },
-    [paneId, isEnabled, publish]
-  )
-
   useEffect(() => {
-    requestRef.current?.controller.abort()
-    requestRef.current = null
-    const generation = ++generationRef.current
     publish(emptyConversation())
     setError(null)
     setErrorCode(null)
     setIsLoading(false)
     setIsLoadingOlder(false)
-    if (paneId && isEnabled) void request(false, generation)
-    return () => {
-      ++generationRef.current
-      requestRef.current?.controller.abort()
-      requestRef.current = null
-    }
-  }, [paneId, isEnabled, publish, request])
+  }, [paneId, isEnabled, publish])
 
   useEffect(() => {
-    if (!paneId || !isEnabled || pollIntervalMs <= 0) return
-    const refreshVisible = () => {
-      if (document.visibilityState !== 'hidden')
-        void request(false, generationRef.current)
-    }
-    const timer = setInterval(refreshVisible, pollIntervalMs)
-    document.addEventListener('visibilitychange', refreshVisible)
+    if (!paneId || !isEnabled || typeof window === 'undefined') return
+    setIsLoading(false)
+    setIsLoadingOlder(false)
+    const reader = createConversationReader({
+      paneId,
+      pollIntervalMs,
+      getState: () => stateRef.current,
+      publish,
+      onLoading: (loading, older) => {
+        setIsLoading(loading && !older)
+        setIsLoadingOlder(loading && older)
+      },
+      onError: (message, code) => {
+        setError(message)
+        setErrorCode(code)
+      }
+    })
+    readerRef.current = reader
     return () => {
-      clearInterval(timer)
-      document.removeEventListener('visibilitychange', refreshVisible)
+      readerRef.current = null
+      reader.stop()
     }
-  }, [paneId, isEnabled, pollIntervalMs, request])
+  }, [paneId, isEnabled, pollIntervalMs, publish])
 
   const loadOlder = useCallback(
-    () => request(true, generationRef.current),
-    [request]
+    (signal?: AbortSignal) =>
+      readerRef.current?.request(true, signal) ?? Promise.resolve(false),
+    []
   )
   const refetch = useCallback(
-    () => request(false, generationRef.current),
-    [request]
+    () => readerRef.current?.request() ?? Promise.resolve(),
+    []
   )
   return {
     ...state,

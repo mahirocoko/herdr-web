@@ -18,6 +18,7 @@ export class ConversationError extends Error {
 export interface IFetchPaneConversationOptions {
   before?: string | null
   signal?: AbortSignal
+  timeoutMs?: number
 }
 
 /** Owner-only recorded output, never a filesystem path or provider URL. */
@@ -141,36 +142,78 @@ export const fetchConversationImage = async (
   }
 }
 
+export const CONVERSATION_READ_TIMEOUT_MS = 10000
+
 export const fetchPaneConversation = async (
   paneId: string,
   options?: IFetchPaneConversationOptions
 ): Promise<IConversationRead> => {
-  const params = new URLSearchParams({ pane_id: paneId })
-  if (options?.before) {
-    params.set('before', options.before)
-  }
-  const res = await fetch(`/api/conversation?${params.toString()}`, {
-    method: 'GET',
-    headers: {
-      Accept: 'application/json'
-    },
-    signal: options?.signal
+  const controller = new AbortController()
+  const abort = () => controller.abort()
+  const signal = options?.signal
+  let timedOut = false
+  let rejectAbort!: () => void
+  const cancelled = new Promise<never>((_, reject) => {
+    rejectAbort = () =>
+      reject(
+        timedOut
+          ? new ConversationError(
+              'Conversation read timed out',
+              0,
+              'read_timeout'
+            )
+          : new DOMException('Conversation read aborted', 'AbortError')
+      )
+    controller.signal.addEventListener('abort', rejectAbort, { once: true })
   })
+  signal?.addEventListener('abort', abort, { once: true })
+  if (signal?.aborted) abort()
+  const timer = setTimeout(() => {
+    timedOut = true
+    abort()
+  }, options?.timeoutMs ?? CONVERSATION_READ_TIMEOUT_MS)
+  try {
+    return await Promise.race([
+      cancelled,
+      (async () => {
+        const params = new URLSearchParams({ pane_id: paneId })
+        if (options?.before) {
+          params.set('before', options.before)
+        }
+        const res = await fetch(`/api/conversation?${params.toString()}`, {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json'
+          },
+          signal: controller.signal,
+          cache: 'no-store'
+        })
 
-  if (!res.ok) {
-    const errorData = await res
-      .json()
-      .catch(() => ({ error: `HTTP ${res.status}` }))
-    throw new ConversationError(
-      errorData.error || `Failed to fetch conversation (status ${res.status})`,
-      res.status,
-      errorData.code
-    )
-  }
+        if (!res.ok) {
+          const errorData = await res
+            .json()
+            .catch(() => ({ error: `HTTP ${res.status}` }))
+          throw new ConversationError(
+            errorData.error ||
+              `Failed to fetch conversation (status ${res.status})`,
+            res.status,
+            errorData.code
+          )
+        }
 
-  const data = (await res.json()) as IConversationRead
-  if (!data || !data.ok || !Array.isArray(data.turns)) {
-    throw new ConversationError('Invalid conversation payload from server', 500)
+        const data = (await res.json()) as IConversationRead
+        if (!data || !data.ok || !Array.isArray(data.turns)) {
+          throw new ConversationError(
+            'Invalid conversation payload from server',
+            500
+          )
+        }
+        return data
+      })()
+    ])
+  } finally {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', abort)
+    controller.signal.removeEventListener('abort', rejectAbort)
   }
-  return data
 }
