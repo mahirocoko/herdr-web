@@ -1,0 +1,31 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  deterministic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+      - run: bun install --frozen-lockfile
+      - run: bun test
+      - run: bun run typecheck
+      - run: bun run typecheck:browser
+      - run: bun run build
+      # Only this CI job downloads its lock-pinned browser; never a local HOME install.
+      - run: bunx --no-install playwright install --with-deps chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/herdr-smoke-browsers
+      - run: bun run test:browser
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/herdr-smoke-browsers
+      # schema:check and live/native tests require the installed Herdr host.

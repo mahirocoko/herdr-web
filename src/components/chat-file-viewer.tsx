@@ -2,6 +2,7 @@
 // FileViewer anatomy from dc2f11d; Base UI retains local modal/focus ownership.
 import {
   useEffect,
+  useContext,
   useMemo,
   useRef,
   useState,
@@ -40,6 +41,11 @@ import {
   sourcePreviewPage
 } from '@/utils/file-viewer-text.ts'
 import './chat-file-viewer.css'
+import { ReviewDraftContext } from './review-draft-context.ts'
+import {
+  formatReviewQuote,
+  ownedDisplayedExcerpt
+} from '@/utils/terminal-quote.ts'
 import { ChatPatchContext } from './turn-changed-files.tsx'
 import { RepoPatchViewer } from './repo-changes.tsx'
 import { fetchRepoDiffFiles } from '@/services/repo-diff-api.ts'
@@ -55,6 +61,7 @@ interface IFileTextPreviewProps {
   text: string
   onOpen: (path: string) => void
   actionsHost?: HTMLElement | null
+  onAddToDraft?: ((block: string) => string | null) | null
   downloadAction?: ReactNode
 }
 export const FileTextPreview = ({
@@ -63,8 +70,34 @@ export const FileTextPreview = ({
   text,
   onOpen,
   actionsHost,
-  downloadAction
+  downloadAction,
+  onAddToDraft
 }: IFileTextPreviewProps) => {
+  const textOwner = useRef<HTMLDivElement>(null)
+  const [draftStatus, setDraftStatus] = useState('')
+  const addAction = onAddToDraft ? (
+    <Button
+      variant="ghost"
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={() => {
+        const excerpt = ownedDisplayedExcerpt(
+          textOwner.current,
+          window.getSelection()
+        )
+        setDraftStatus(
+          onAddToDraft(
+            formatReviewQuote(
+              path,
+              'Current disk content (preview read)',
+              excerpt
+            )
+          ) ?? 'Added to draft — not sent'
+        )
+      }}
+    >
+      Add to draft
+    </Button>
+  ) : null
   const markdown = /\.(md|markdown)$/i.test(path)
   const readable = useMemo(() => canReadMarkdownPreview(text), [text])
   const [mode, setMode] = useState<'reader' | 'source'>(
@@ -106,6 +139,7 @@ export const FileTextPreview = ({
         </div>
       )}
       <div className="file-viewer-group">
+        {addAction}
         {downloadAction}
         <Button
           variant="ghost"
@@ -190,6 +224,7 @@ export const FileTextPreview = ({
           />
         </div>
       )}
+      {draftStatus && <p role="status">{draftStatus}</p>}
       {text === '' ? (
         <p>Empty file</p>
       ) : mode === 'reader' && readable ? (
@@ -199,7 +234,9 @@ export const FileTextPreview = ({
             if (resolved) onOpen(resolved)
           }}
         >
-          <Markdown className="file-markdown">{text}</Markdown>
+          <div ref={textOwner}>
+            <Markdown className="file-markdown">{text}</Markdown>
+          </div>
         </OpenChatToolFileContext.Provider>
       ) : (
         <>
@@ -223,19 +260,21 @@ export const FileTextPreview = ({
               Next lines
             </Button>
           </div>
-          <pre
-            className="file-text"
-            aria-label="File source"
-            style={{ '--file-line-start': source.start } as CSSProperties}
-          >
-            <code>
-              {source.lines.map((line, index) => (
-                <span className="file-source-line" key={source.start + index}>
-                  {line}
-                </span>
-              ))}
-            </code>
-          </pre>
+          <div ref={textOwner}>
+            <pre
+              className="file-text"
+              aria-label="File source"
+              style={{ '--file-line-start': source.start } as CSSProperties}
+            >
+              <code>
+                {source.lines.map((line, index) => (
+                  <span className="file-source-line" key={source.start + index}>
+                    {line}
+                  </span>
+                ))}
+              </code>
+            </pre>
+          </div>
         </>
       )}
     </>
@@ -308,6 +347,16 @@ interface IChatFilesProps {
   children: ReactNode
 }
 const ChatFiles = ({ paneId, cwd = null, children }: IChatFilesProps) => {
+  const draftDispatch = useContext(ReviewDraftContext)
+  const capturedDispatch = useRef(draftDispatch)
+  const returnTrigger = useRef<HTMLElement | null>(null)
+  const captureOpening = () => {
+    capturedDispatch.current = draftDispatch
+    returnTrigger.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null
+  }
   const [patchPath, setPatchPath] = useState<string | null>(null)
   const [patchTarget, setPatchTarget] = useState<IRepoDiffTarget | null>(null)
   const [patchError, setPatchError] = useState('')
@@ -504,6 +553,7 @@ const ChatFiles = ({ paneId, cwd = null, children }: IChatFilesProps) => {
           onOpen={open}
           actionsHost={actionsHost}
           downloadAction={downloadAction}
+          onAddToDraft={draftDispatch ? capturedDispatch.current : null}
         />
       )
     if (info.kind === 'image')
@@ -564,6 +614,7 @@ const ChatFiles = ({ paneId, cwd = null, children }: IChatFilesProps) => {
   return (
     <OpenChatToolFileContext.Provider
       value={(path) => {
+        if (!target && !patchPath) captureOpening()
         patchRead.current?.abort()
         setPatchPath(null)
         setPatchTarget(null)
@@ -572,6 +623,7 @@ const ChatFiles = ({ paneId, cwd = null, children }: IChatFilesProps) => {
     >
       <ChatPatchContext.Provider
         value={(path) => {
+          if (!target && !patchPath) captureOpening()
           patchRead.current?.abort()
           setTarget(null)
           setPatchTarget(null)
@@ -594,7 +646,14 @@ const ChatFiles = ({ paneId, cwd = null, children }: IChatFilesProps) => {
       >
         <Dialog.Portal>
           <Dialog.Backdrop className="file-viewer-backdrop" />
-          <Dialog.Popup className="file-viewer-popup">
+          <Dialog.Popup
+            className="file-viewer-popup"
+            finalFocus={() => {
+              if (returnTrigger.current?.isConnected)
+                (returnTrigger.current.focus({ preventScroll: true }), false)
+              return false
+            }}
+          >
             <header className="file-viewer-header">
               <FileViewerHeading
                 name={
@@ -656,14 +715,18 @@ const ChatFiles = ({ paneId, cwd = null, children }: IChatFilesProps) => {
                   {patchError ? (
                     <p role="status">{patchError}</p>
                   ) : patchTarget ? (
-                    <RepoPatchViewer
-                      target={patchTarget}
-                      backLabel="Close current changes"
-                      onBack={() => {
-                        setPatchPath(null)
-                        setPatchTarget(null)
-                      }}
-                    />
+                    <ReviewDraftContext.Provider
+                      value={capturedDispatch.current}
+                    >
+                      <RepoPatchViewer
+                        target={patchTarget}
+                        backLabel="Close current changes"
+                        onBack={() => {
+                          setPatchPath(null)
+                          setPatchTarget(null)
+                        }}
+                      />
+                    </ReviewDraftContext.Provider>
                   ) : (
                     <p role="status">Reading current authorized changes…</p>
                   )}

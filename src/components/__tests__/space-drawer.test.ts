@@ -32,6 +32,67 @@ describe('source-led Space and Tab sheet contracts', () => {
   const cssPath = path.resolve(import.meta.dir, '../../app.css')
   const cssContent = fs.readFileSync(cssPath, 'utf8')
 
+  it('keeps keyboard subview focus out of the removed-control popup restoration race', () => {
+    // Source ownership guard, not rendered keyboard/browser proof: transfer to
+    // the stable popup BEFORE removing the focused keyboard-activated control,
+    // then resolve mounted destination/return refs synchronously at commit.
+    const start = paneDrawerContent.indexOf("setLifecycleView('start-agent')")
+    const transfer = paneDrawerContent.lastIndexOf(
+      'popupRef.current?.focus({ preventScroll: true })',
+      start
+    )
+    expect(start).toBeGreaterThan(-1)
+    expect(transfer).toBeGreaterThan(-1)
+    expect(start).toBeGreaterThan(transfer)
+    expect(paneDrawerContent).toContain('useLayoutEffect(() => {')
+    expect(paneDrawerContent).toContain(
+      'returnLaunchFocusRef.current = launchPaneId'
+    )
+    expect(paneDrawerContent).toMatch(
+      /launchTriggerRefs\.current\.get\(\s*returnLaunchFocusRef\.current\s*\)/
+    )
+    expect(spaceDrawerContent).toContain("if (view !== 'worktrees')")
+    expect(spaceDrawerContent).toContain('useLayoutEffect(() => {')
+    expect(spaceDrawerContent).toContain(
+      'returnWorktreeFocusRef.current = true'
+    )
+    expect(spaceDrawerContent).toContain(
+      'const trigger = worktreeTriggerRef.current'
+    )
+    for (const source of [paneDrawerContent, spaceDrawerContent])
+      expect(source).toContain('ref={popupRef}')
+  })
+
+  it('bounds long native checkout labels locally and names current-Space reuse explicitly', () => {
+    expect(spaceDrawerContent).toContain('worktree-checkout-action__label')
+    expect(spaceDrawerContent).toContain('worktree-checkout-action__facts')
+    expect(spaceDrawerContent).toContain('Open current Space')
+    expect(cssContent).toContain('.worktree-checkout-action__label')
+    expect(cssContent).toContain('overflow-wrap: anywhere;')
+    expect(cssContent).toContain('flex: 1 1 0;')
+    expect(cssContent).toContain('flex: 0 0 auto;')
+  })
+
+  it('owns intrinsic checkout height in a scoped canonical recipe, not only child wrapping', () => {
+    const recipes = fs.readFileSync(
+      path.resolve(import.meta.dir, '../ui/recipes.css'),
+      'utf8'
+    )
+    const scoped = recipes.match(
+      /\.ui-button\.worktree-checkout-action,\s*\.ui-button--default-size\.worktree-checkout-action\s*\{([^}]+)\}/
+    )?.[1]
+    expect(scoped).toBeDefined()
+    expect(scoped).toContain('height: auto;')
+    expect(scoped).toContain('min-height: 44px;')
+    expect(scoped).toContain('padding: 8px 10px;')
+    expect(scoped).toContain('align-items: flex-start;')
+    expect(scoped).toContain('line-height: normal;')
+    // Retain shared fixed-height controls: only multiline native checkout rows opt out.
+    expect(recipes).toMatch(
+      /\.ui-button--default-size\s*\{\s*height: var\(--control-h, 34px\);/
+    )
+  })
+
   it('guards opening intent before snapshot polling can refreeze a close confirmation', () => {
     const guard = spaceDrawerContent.indexOf(
       'if (initializedIntentRef.current === intentKey) return'
@@ -56,8 +117,15 @@ describe('source-led Space and Tab sheet contracts', () => {
     expect(spaceDrawerContent).not.toContain('New Shell Tab')
     expect(spaceDrawerContent).not.toContain('Close Tab')
 
-    // Strict boundary: do not invent unavailable Herdr metadata.
-    expect(spaceDrawerContent).not.toContain('branch')
+    // Native worktree branch facts are now explicitly supported; never invent
+    // branch metadata on generic Space rows or accept arbitrary filesystem paths.
+    expect(spaceDrawerContent).not.toContain('workspace.branch')
+    expect(spaceDrawerContent).toContain("type: 'worktree-list'")
+    expect(spaceDrawerContent).toContain('worktreeListing?.entries.map')
+    expect(spaceDrawerContent).toContain(
+      'repositoryIdentity: worktreeListing.repositoryIdentity'
+    )
+    expect(spaceDrawerContent).not.toContain('entry.path')
     expect(spaceDrawerContent).not.toContain('git status')
     expect(spaceDrawerContent).not.toContain('transport')
     expect(spaceDrawerContent).not.toContain('ownerLogin')

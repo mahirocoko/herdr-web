@@ -4,7 +4,9 @@ import {
   executePing,
   sendRawSocketRequest
 } from './herdr-socket.ts'
-import { CONSERVATIVE_TOKEN_REGEX } from './security.ts'
+import { CONSERVATIVE_TOKEN_REGEX, isAgentPane } from './security.ts'
+import { preflightShellPane } from './terminal-control.ts'
+import type { IAgentStartAction, IAgentStartExecutionResult } from './types.ts'
 import * as cli from './herdr-cli.ts'
 import { resolveNativeTerminalGeometry } from './terminal-geometry.ts'
 import type {
@@ -699,6 +701,187 @@ const isPaneInfoShape = (value: unknown): value is Record<string, unknown> => {
     AGENT_STATUSES.has(pane.agent_status) &&
     isUnsignedInteger(pane.revision)
   )
+}
+
+const LETTA_NEW_CONVERSATION_ARGS = ['--new'] as const
+
+// Called under the route's exclusive topology + exact pane claim, after fit retirement.
+export const executeAgentStart = async (
+  action: IAgentStartAction,
+  options: {
+    deps?: {
+      fetchSnapshot?: (timeoutMs?: number) => Promise<ISnapshotResult>
+      fetchProcessInfo?: (paneId: string, timeoutMs: number) => Promise<any>
+      sendSocketRequest?: RawSocketRequester
+    }
+  } = {}
+): Promise<IAgentStartExecutionResult> => {
+  const rejected = (
+    error: string,
+    status = 409
+  ): IAgentStartExecutionResult => ({
+    ok: false,
+    status,
+    outcome: 'rejected',
+    error
+  })
+  if (getTransportMode() !== 'socket')
+    return rejected('Native agent start requires socket transport')
+  if (action.kind !== 'letta') return rejected('Unsupported native agent kind')
+  const fetchSnapshot = options.deps?.fetchSnapshot ?? getHerdrSnapshot
+  const sendRequest = options.deps?.sendSocketRequest ?? sendRawSocketRequest
+  let before: ISnapshotResult
+  try {
+    before = await fetchSnapshot(3000)
+  } catch {
+    return rejected(
+      'Native launch snapshot preflight unavailable; no dispatch',
+      502
+    )
+  }
+  const exact = before.panes.filter(
+    (pane) => pane.pane_id === action.target.paneId
+  )
+  if (
+    exact.length !== 1 ||
+    exact[0].terminal_id !== action.target.terminalId ||
+    isAgentPane(exact[0], before.agents)
+  )
+    return rejected(
+      'Native launch target replaced, ambiguous or already an agent'
+    )
+  if (
+    before.agents?.some(
+      (agent) => agent.name === action.name || agent.target === action.name
+    )
+  )
+    return rejected('Agent name is already in use')
+  const idle = await preflightShellPane(action.target.paneId, {
+    fetchSnapshot: async () => before,
+    fetchProcessInfo: options.deps?.fetchProcessInfo
+  })
+  if (!idle.ok)
+    return rejected(
+      'Native launch requires a verified idle shell',
+      idle.status ?? 409
+    )
+  // Recheck identity after asynchronous process verification. Native start is not a CAS.
+  let fresh: ISnapshotResult
+  try {
+    fresh = await fetchSnapshot(3000)
+  } catch {
+    return rejected('Native launch fresh target unavailable; no dispatch', 502)
+  }
+  if (
+    fresh.agents?.some(
+      (agent) => agent.name === action.name || agent.target === action.name
+    )
+  )
+    return rejected('Agent name is already in use')
+  const matching = fresh.panes.filter(
+    (pane) => pane.pane_id === action.target.paneId
+  )
+  if (
+    matching.length !== 1 ||
+    matching[0].terminal_id !== action.target.terminalId ||
+    isAgentPane(matching[0], fresh.agents)
+  )
+    return rejected('Native launch target changed during preflight')
+  const unknown = (
+    diagnostic: NonNullable<IAgentStartExecutionResult['diagnostic']>
+  ): IAgentStartExecutionResult => ({
+    ok: false,
+    status: 504,
+    outcome: 'unknown',
+    error:
+      'Native launch outcome unknown; inspect the exact pane before any new explicit attempt',
+    diagnostic
+  })
+  let response: any
+  try {
+    response = await sendRequest(
+      'agent.start',
+      {
+        name: action.name,
+        kind: action.kind,
+        pane_id: action.target.paneId,
+        // Trusted server-owned CLI argument: never resume an unrelated conversation.
+        args: [...LETTA_NEW_CONVERSATION_ARGS]
+      },
+      { timeoutMs: 35000 }
+    )
+  } catch (error) {
+    // Fixed phase codes only: never return native messages, argv, paths or tokens.
+    if (error instanceof HerdrSocketError)
+      return unknown(
+        error.code === 'timeout' ? 'native_timeout' : 'native_rejection'
+      )
+    return unknown(
+      error instanceof Error &&
+        error.message ===
+          'Herdr socket request timed out after 35000ms (method: agent.start)'
+        ? 'transport_timeout'
+        : 'transport_error'
+    )
+  }
+  if (response?.type !== 'agent_started') return unknown('malformed_reply')
+  if (
+    !Array.isArray(response.argv) ||
+    response.argv.length !== 2 ||
+    response.argv[0] !== 'letta' ||
+    response.argv[1] !== '--new'
+  )
+    return unknown('argv_mismatch')
+  const agent = response.agent
+  // AgentInfo requires pane/terminal identity, but kind/name are nullable and
+  // session is optional. Request-correlated ACK is not session/readiness proof.
+  if (
+    typeof agent?.pane_id !== 'string' ||
+    !agent.pane_id ||
+    typeof agent?.terminal_id !== 'string' ||
+    !agent.terminal_id
+  )
+    return unknown('missing_identity')
+  if (
+    agent.pane_id !== action.target.paneId ||
+    agent.terminal_id !== action.target.terminalId ||
+    (agent.agent != null && agent.agent !== action.kind) ||
+    (agent.name != null && agent.name !== action.name)
+  )
+    return unknown('identity_mismatch')
+  const session = agent.agent_session?.value ?? agent.agent_session?.id
+  const result: NonNullable<IAgentStartExecutionResult['result']> = {
+    paneId: action.target.paneId,
+    terminalId: action.target.terminalId,
+    ready: false
+  }
+  try {
+    const after = await fetchSnapshot(3000)
+    const panes = after.panes.filter(
+      (pane) => pane.pane_id === action.target.paneId
+    )
+    const current = panes[0]
+    const currentSession =
+      current?.agent_session?.value ?? current?.agent_session?.id
+    if (
+      panes.length === 1 &&
+      current.terminal_id === action.target.terminalId &&
+      current.agent === action.kind &&
+      typeof session === 'string' &&
+      session.length > 0 &&
+      currentSession === session
+    ) {
+      result.agentSessionId = session
+      result.agentStatus = current.agent_status
+      result.ready =
+        agent.interactive_ready === true &&
+        agent.launch_pending === false &&
+        ['idle', 'done'].includes(current.agent_status)
+    }
+  } catch {
+    /* A correlated ACK survives a failed read, but readiness does not. */
+  }
+  return { ok: true, status: 200, outcome: 'acknowledged', result }
 }
 
 export const executeTabCreate = async (

@@ -34,7 +34,8 @@ export const deriveActionTarget = (
   if (!terminalId) {
     return {
       target: null,
-      error: 'Terminal identity missing for this pane. Refresh snapshot to retry.'
+      error:
+        'Terminal identity missing for this pane. Refresh snapshot to retry.'
     }
   }
 
@@ -90,7 +91,9 @@ export const deriveTabCreateSourcePanes = (
   preferredPaneId?: string | null
 ): ITabCreateSourceChoice[] => {
   const spacePanes = panes.filter(
-    (p) => p.workspace_id === workspaceId && Boolean(p.terminal_id && p.terminal_id.trim())
+    (p) =>
+      p.workspace_id === workspaceId &&
+      Boolean(p.terminal_id && p.terminal_id.trim())
   )
 
   if (spacePanes.length === 0) {
@@ -106,7 +109,10 @@ export const deriveTabCreateSourcePanes = (
     : undefined
 
   const orderedPanes: IPane[] = preferredPane
-    ? [preferredPane, ...spacePanes.filter((p) => p.pane_id !== preferredPane.pane_id)]
+    ? [
+        preferredPane,
+        ...spacePanes.filter((p) => p.pane_id !== preferredPane.pane_id)
+      ]
     : spacePanes
 
   for (const p of orderedPanes) {
@@ -176,6 +182,13 @@ export const formatActionErrorMessage = (err: unknown): string => {
   if (err && typeof err === 'object') {
     if ('outcome' in err && (err as any).outcome === 'unknown') {
       return 'Outcome unknown — inspect the pane before sending again.'
+    }
+    if ('status' in err && (err as any).status === 403) {
+      const reason =
+        'message' in err && typeof err.message === 'string'
+          ? ` ${err.message}`
+          : ''
+      return `Action not authorized.${reason} Ask the host owner to check request origin and configured owner identity for remote actions. Push enrollment is not required.`
     }
     if ('message' in err && typeof (err as any).message === 'string') {
       return (err as any).message

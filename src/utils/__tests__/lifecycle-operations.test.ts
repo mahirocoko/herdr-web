@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import type { IPane, ISnapshotResult, ITab, IWorkspace } from '@/types/herdr.ts'
 import {
+  nativeLaunchStatusCopy,
   LIFECYCLE_CLOSE_UNKNOWN_COPY,
   LIFECYCLE_CREATE_UNKNOWN_COPY,
   deriveWorkspaceSourceChoices,
@@ -16,6 +17,71 @@ import {
   workspaceConfirmationChanged
 } from '../lifecycle-operations.ts'
 import { reconcileSnapshotSelection } from '../workspace-helpers.ts'
+
+it('escaped native name pattern compiles under v semantics and matches server ASCII contract', () => {
+  const htmlPattern = new RegExp('^(?:[a-zA-Z][a-zA-Z0-9_\\-]{0,63})$', 'v')
+  const serverPattern = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/
+  for (const value of [
+    'agent_name-1',
+    'a'.repeat(64),
+    'a'.repeat(65),
+    'ไทย',
+    '-agent',
+    'a;sh',
+    ''
+  ])
+    expect(htmlPattern.test(value)).toBe(serverPattern.test(value))
+})
+
+it('keeps native launch ACK distinct, gates duplicate intent and clears only explicit inspection', () => {
+  const ticket = {
+    requestIdentity: 'start',
+    operationId: 'op',
+    type: 'agent-start' as const,
+    target: Object.freeze({
+      paneId: 'ws:pane',
+      terminalId: 'term',
+      name: 'agent',
+      kind: 'letta'
+    }),
+    phase: 'pending' as const,
+    reconciliationAttempt: 0,
+    error: null,
+    result: null
+  }
+  const pending = lifecycleReducer(initialLifecycleState, {
+    type: 'BEGIN',
+    ticket
+  })
+  expect(
+    lifecycleReducer(pending, {
+      type: 'BEGIN',
+      ticket: { ...ticket, requestIdentity: 'duplicate' }
+    })
+  ).toBe(pending)
+  const ack = lifecycleReducer(pending, {
+    type: 'SETTLE',
+    requestIdentity: 'start',
+    phase: 'acknowledged',
+    result: { paneId: 'ws:pane', terminalId: 'term', ready: false }
+  })
+  expect(nativeLaunchStatusCopy(ack.ticket!)).toContain(
+    'readiness was not corroborated'
+  )
+  expect(
+    lifecycleReducer(ack, { type: 'CLEAR_OBSERVED', requestIdentity: 'start' })
+  ).toBe(ack)
+  expect(lifecycleReducer(ack, { type: 'BEGIN', ticket })).toBe(ack)
+  expect(
+    lifecycleReducer(ack, { type: 'CLEAR_UNKNOWN_AFTER_REFRESH' }).ticket
+  ).toBeNull()
+  expect(
+    nativeLaunchStatusCopy({
+      ...ack.ticket!,
+      result: { ready: true, agentSessionId: 'same', agentStatus: 'idle' }
+    })
+  ).toContain('at the server snapshot')
+})
 
 const workspace = (id: string): IWorkspace => ({
   workspace_id: id,
@@ -50,7 +116,11 @@ const makeSnapshot = (): ISnapshotResult => ({
   version: '0.9.1',
   workspaces: [workspace('ws-1'), workspace('ws-2')],
   tabs: [tab('tab-1', 'ws-1'), tab('tab-2', 'ws-1'), tab('tab-3', 'ws-2')],
-  panes: [pane('ws-1:p1', 'ws-1', 'tab-1'), pane('ws-1:p2', 'ws-1', 'tab-2'), pane('ws-2:p1', 'ws-2', 'tab-3')]
+  panes: [
+    pane('ws-1:p1', 'ws-1', 'tab-1'),
+    pane('ws-1:p2', 'ws-1', 'tab-2'),
+    pane('ws-2:p1', 'ws-2', 'tab-3')
+  ]
 })
 
 describe('lifecycle operation contracts', () => {
@@ -65,7 +135,10 @@ describe('lifecycle operation contracts', () => {
       error: null,
       result: null
     }
-    const pending = lifecycleReducer(initialLifecycleState, { type: 'BEGIN', ticket })
+    const pending = lifecycleReducer(initialLifecycleState, {
+      type: 'BEGIN',
+      ticket
+    })
     const stale = lifecycleReducer(pending, {
       type: 'SETTLE',
       requestIdentity: 'request-old',
@@ -81,41 +154,96 @@ describe('lifecycle operation contracts', () => {
       error: LIFECYCLE_CLOSE_UNKNOWN_COPY
     })
     expect(unknown.ticket?.phase).toBe('unknown')
-    expect(lifecycleReducer(unknown, { type: 'BEGIN', ticket })).toEqual(unknown)
-    expect(lifecycleReducer(unknown, { type: 'CLEAR_UNKNOWN_AFTER_REFRESH' }).ticket).toBeNull()
+    expect(lifecycleReducer(unknown, { type: 'BEGIN', ticket })).toEqual(
+      unknown
+    )
+    expect(
+      lifecycleReducer(unknown, { type: 'CLEAR_UNKNOWN_AFTER_REFRESH' }).ticket
+    ).toBeNull()
   })
 
   it('detects workspace and tab membership changes before dispatch', () => {
     const snapshot = makeSnapshot()
-    const frozenWorkspace = freezeWorkspaceCloseConfirmation(snapshot.workspaces[0], snapshot.tabs, snapshot.panes)
-    const frozenTab = freezeTabCloseConfirmation(snapshot.tabs[0], snapshot.panes)
+    const frozenWorkspace = freezeWorkspaceCloseConfirmation(
+      snapshot.workspaces[0],
+      snapshot.tabs,
+      snapshot.panes
+    )
+    const frozenTab = freezeTabCloseConfirmation(
+      snapshot.tabs[0],
+      snapshot.panes
+    )
     expect(frozenWorkspace.expected).toEqual({
       tabIds: ['tab-1', 'tab-2'],
       paneIds: ['ws-1:p1', 'ws-1:p2']
     })
     expect(frozenTab.expected).toEqual({ paneIds: ['ws-1:p1'] })
-    expect(workspaceConfirmationChanged(frozenWorkspace, snapshot.tabs, snapshot.panes)).toBe(false)
+    expect(
+      workspaceConfirmationChanged(
+        frozenWorkspace,
+        snapshot.tabs,
+        snapshot.panes
+      )
+    ).toBe(false)
     expect(tabConfirmationChanged(frozenTab, snapshot.panes)).toBe(false)
-    expect(workspaceConfirmationChanged(frozenWorkspace, snapshot.tabs, [...snapshot.panes, pane('ws-1:p3', 'ws-1', 'tab-1')])).toBe(true)
-    expect(tabConfirmationChanged(frozenTab, [...snapshot.panes, pane('ws-1:p3', 'ws-1', 'tab-1')])).toBe(true)
+    expect(
+      workspaceConfirmationChanged(frozenWorkspace, snapshot.tabs, [
+        ...snapshot.panes,
+        pane('ws-1:p3', 'ws-1', 'tab-1')
+      ])
+    ).toBe(true)
+    expect(
+      tabConfirmationChanged(frozenTab, [
+        ...snapshot.panes,
+        pane('ws-1:p3', 'ws-1', 'tab-1')
+      ])
+    ).toBe(true)
   })
 
   it('offers only Herdr default or terminal-backed panes as workspace sources', () => {
     const snapshot = makeSnapshot()
-    snapshot.panes.push({ ...pane('ws-2:p-no-terminal', 'ws-2', 'tab-3'), terminal_id: undefined })
-    const choices = deriveWorkspaceSourceChoices(snapshot.workspaces, snapshot.panes)
-    expect(choices[0]).toEqual({ key: 'herdr-default', label: 'Herdr default directory' })
-    expect(choices.some((choice) => choice.key === 'ws-2:p-no-terminal')).toBe(false)
-    expect(choices.slice(1).every((choice) => Boolean(choice.source?.terminalId))).toBe(true)
-    expect(resolveWorkspaceSourceSelection(choices, 'herdr-default')).toEqual({ kind: 'default' })
-    expect(resolveWorkspaceSourceSelection(choices, 'ws-1:p1')).toMatchObject({ kind: 'source' })
-    expect(resolveWorkspaceSourceSelection(choices.filter((choice) => choice.key !== 'ws-1:p1'), 'ws-1:p1')).toEqual({ kind: 'missing' })
+    snapshot.panes.push({
+      ...pane('ws-2:p-no-terminal', 'ws-2', 'tab-3'),
+      terminal_id: undefined
+    })
+    const choices = deriveWorkspaceSourceChoices(
+      snapshot.workspaces,
+      snapshot.panes
+    )
+    expect(choices[0]).toEqual({
+      key: 'herdr-default',
+      label: 'Herdr default directory'
+    })
+    expect(choices.some((choice) => choice.key === 'ws-2:p-no-terminal')).toBe(
+      false
+    )
+    expect(
+      choices.slice(1).every((choice) => Boolean(choice.source?.terminalId))
+    ).toBe(true)
+    expect(resolveWorkspaceSourceSelection(choices, 'herdr-default')).toEqual({
+      kind: 'default'
+    })
+    expect(resolveWorkspaceSourceSelection(choices, 'ws-1:p1')).toMatchObject({
+      kind: 'source'
+    })
+    expect(
+      resolveWorkspaceSourceSelection(
+        choices.filter((choice) => choice.key !== 'ws-1:p1'),
+        'ws-1:p1'
+      )
+    ).toEqual({ kind: 'missing' })
   })
 
   it('uses operation-specific unknown copy', () => {
-    expect(getLifecycleUnknownCopy('workspace-create')).toBe(LIFECYCLE_CREATE_UNKNOWN_COPY)
-    expect(getLifecycleUnknownCopy('workspace-close')).toBe(LIFECYCLE_CLOSE_UNKNOWN_COPY)
-    expect(getLifecycleUnknownCopy('tab-close')).toBe(LIFECYCLE_CLOSE_UNKNOWN_COPY)
+    expect(getLifecycleUnknownCopy('workspace-create')).toBe(
+      LIFECYCLE_CREATE_UNKNOWN_COPY
+    )
+    expect(getLifecycleUnknownCopy('workspace-close')).toBe(
+      LIFECYCLE_CLOSE_UNKNOWN_COPY
+    )
+    expect(getLifecycleUnknownCopy('tab-close')).toBe(
+      LIFECYCLE_CLOSE_UNKNOWN_COPY
+    )
   })
 
   it('gates reconciliation failure and retries without replaying the mutation', () => {
@@ -164,72 +292,104 @@ describe('lifecycle operation contracts', () => {
       workspaceId: 'ws-old',
       paneId: 'pane-old'
     }
-    expect(shouldApplyCreateResultNavigation({
-      origin,
-      requestIdentity: ticket.requestIdentity,
-      attempt: 0,
-      currentTicket: ticket,
-      currentPathname: '/spaces/ws-old',
-      currentWorkspaceId: 'ws-old',
-      currentPaneId: 'pane-old'
-    })).toBe(true)
-    expect(shouldApplyCreateResultNavigation({
-      origin,
-      requestIdentity: ticket.requestIdentity,
-      attempt: 0,
-      currentTicket: ticket,
-      currentPathname: '/spaces/ws-user-selected',
-      currentWorkspaceId: 'ws-user-selected',
-      currentPaneId: 'pane-user-selected'
-    })).toBe(false)
-    expect(shouldApplyCreateResultNavigation({
-      origin,
-      requestIdentity: ticket.requestIdentity,
-      attempt: 0,
-      currentTicket: { ...ticket, requestIdentity: 'newer-request' },
-      currentPathname: origin.pathname,
-      currentWorkspaceId: origin.workspaceId,
-      currentPaneId: origin.paneId
-    })).toBe(false)
-    expect(shouldApplyCreateResultNavigation({
-      origin,
-      requestIdentity: ticket.requestIdentity,
-      attempt: 0,
-      currentTicket: { ...ticket, reconciliationAttempt: 1 },
-      currentPathname: origin.pathname,
-      currentWorkspaceId: origin.workspaceId,
-      currentPaneId: origin.paneId
-    })).toBe(false)
+    expect(
+      shouldApplyCreateResultNavigation({
+        origin,
+        requestIdentity: ticket.requestIdentity,
+        attempt: 0,
+        currentTicket: ticket,
+        currentPathname: '/spaces/ws-old',
+        currentWorkspaceId: 'ws-old',
+        currentPaneId: 'pane-old'
+      })
+    ).toBe(true)
+    expect(
+      shouldApplyCreateResultNavigation({
+        origin,
+        requestIdentity: ticket.requestIdentity,
+        attempt: 0,
+        currentTicket: ticket,
+        currentPathname: '/spaces/ws-user-selected',
+        currentWorkspaceId: 'ws-user-selected',
+        currentPaneId: 'pane-user-selected'
+      })
+    ).toBe(false)
+    expect(
+      shouldApplyCreateResultNavigation({
+        origin,
+        requestIdentity: ticket.requestIdentity,
+        attempt: 0,
+        currentTicket: { ...ticket, requestIdentity: 'newer-request' },
+        currentPathname: origin.pathname,
+        currentWorkspaceId: origin.workspaceId,
+        currentPaneId: origin.paneId
+      })
+    ).toBe(false)
+    expect(
+      shouldApplyCreateResultNavigation({
+        origin,
+        requestIdentity: ticket.requestIdentity,
+        attempt: 0,
+        currentTicket: { ...ticket, reconciliationAttempt: 1 },
+        currentPathname: origin.pathname,
+        currentWorkspaceId: origin.workspaceId,
+        currentPaneId: origin.paneId
+      })
+    ).toBe(false)
   })
 
   it('confirms observed create identity only when workspace, tab, and pane relationships exist', () => {
     const snapshot = makeSnapshot()
-    expect(snapshotConfirmsCreatedTarget(snapshot, {
-      workspaceId: 'ws-1', tabId: 'tab-1', paneId: 'ws-1:p1'
-    })).toBe(true)
-    expect(snapshotConfirmsCreatedTarget(snapshot, {
-      workspaceId: 'ws-2', tabId: 'tab-1', paneId: 'ws-1:p1'
-    })).toBe(false)
+    expect(
+      snapshotConfirmsCreatedTarget(snapshot, {
+        workspaceId: 'ws-1',
+        tabId: 'tab-1',
+        paneId: 'ws-1:p1'
+      })
+    ).toBe(true)
+    expect(
+      snapshotConfirmsCreatedTarget(snapshot, {
+        workspaceId: 'ws-2',
+        tabId: 'tab-1',
+        paneId: 'ws-1:p1'
+      })
+    ).toBe(false)
   })
 
   it('preserves selection, falls back within a Space after Tab removal, then globally and finally clears', () => {
     const snapshot = makeSnapshot()
-    expect(reconcileSnapshotSelection(snapshot, 'ws-1', 'ws-1:p1')).toEqual({ workspaceId: 'ws-1', paneId: 'ws-1:p1' })
+    expect(reconcileSnapshotSelection(snapshot, 'ws-1', 'ws-1:p1')).toEqual({
+      workspaceId: 'ws-1',
+      paneId: 'ws-1:p1'
+    })
 
     const withoutSelectedTab = {
       ...snapshot,
       tabs: snapshot.tabs.filter((item) => item.tab_id !== 'tab-1'),
       panes: snapshot.panes.filter((item) => item.tab_id !== 'tab-1')
     }
-    expect(reconcileSnapshotSelection(withoutSelectedTab, 'ws-1', 'ws-1:p1')).toEqual({ workspaceId: 'ws-1', paneId: 'ws-1:p2' })
+    expect(
+      reconcileSnapshotSelection(withoutSelectedTab, 'ws-1', 'ws-1:p1')
+    ).toEqual({ workspaceId: 'ws-1', paneId: 'ws-1:p2' })
 
     const onlySecond = {
       ...snapshot,
-      workspaces: snapshot.workspaces.filter((item) => item.workspace_id === 'ws-2'),
+      workspaces: snapshot.workspaces.filter(
+        (item) => item.workspace_id === 'ws-2'
+      ),
       tabs: snapshot.tabs.filter((item) => item.workspace_id === 'ws-2'),
       panes: snapshot.panes.filter((item) => item.workspace_id === 'ws-2')
     }
-    expect(reconcileSnapshotSelection(onlySecond, 'ws-1', 'ws-1:p1')).toEqual({ workspaceId: 'ws-2', paneId: 'ws-2:p1' })
-    expect(reconcileSnapshotSelection({ ...snapshot, workspaces: [], tabs: [], panes: [] }, 'ws-1', 'ws-1:p1')).toEqual({ workspaceId: null, paneId: null })
+    expect(reconcileSnapshotSelection(onlySecond, 'ws-1', 'ws-1:p1')).toEqual({
+      workspaceId: 'ws-2',
+      paneId: 'ws-2:p1'
+    })
+    expect(
+      reconcileSnapshotSelection(
+        { ...snapshot, workspaces: [], tabs: [], panes: [] },
+        'ws-1',
+        'ws-1:p1'
+      )
+    ).toEqual({ workspaceId: null, paneId: null })
   })
 })

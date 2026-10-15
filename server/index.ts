@@ -11,6 +11,7 @@ import {
   verifyTargetAgainstSnapshot
 } from './security.ts'
 import {
+  executeAgentStart,
   executeKeys,
   executePaneScroll,
   executePrompt,
@@ -28,6 +29,7 @@ import {
 } from './herdr-adapter.ts'
 import { HerdrSocketError } from './herdr-socket.ts'
 import { HeldQueue, HELD_CAPABILITY_HEADER } from './held-queue.ts'
+import { executeWorktreeAction } from './worktree.ts'
 import {
   InteractivePromptService,
   type IPromptDeps
@@ -61,6 +63,8 @@ import {
 import { resolveNearestRepoCatalog } from './catalog.ts'
 import { projectBrowserSnapshot } from './snapshot-projection.ts'
 import { handleImagePreviewRequest } from './image-preview.ts'
+import { ImageUploadStore } from './image-upload.ts'
+import { ImageUploadService } from './image-upload-service.ts'
 
 import {
   MAX_LEASE_DURATION_MS,
@@ -127,6 +131,7 @@ const HOST = '127.0.0.1'
 export interface ICreateServerOptions {
   startPushBridge?: boolean
   deps?: {
+    imageUploadDirectory?: string
     coordinator?: OperationCoordinator
     promptDeps?: IPromptDeps
     leaseManager?: TerminalControlLeaseManager
@@ -136,6 +141,8 @@ export interface ICreateServerOptions {
     executePrompt?: (paneId: string, text: string) => Promise<any>
     executeTerminalInput?: (paneId: string, text: string) => Promise<any>
     executeKeys?: (paneId: string, keys: string[]) => Promise<any>
+    executeWorktreeAction?: typeof executeWorktreeAction
+    executeAgentStart?: typeof executeAgentStart
     executeTabCreate?: typeof executeTabCreate
     executeWorkspaceCreate?: typeof executeWorkspaceCreate
     executeWorkspaceClose?: typeof executeWorkspaceClose
@@ -262,6 +269,17 @@ export const createServer = (
   const coordinator =
     options.deps?.coordinator ?? getSharedOperationCoordinator()
   const heldQueue = new HeldQueue()
+  const imageUploads = new ImageUploadStore(
+    options.deps?.imageUploadDirectory ??
+      decodeURIComponent(
+        new URL('../.agent-state/image-uploads', import.meta.url).pathname
+      )
+  )
+  if (import.meta.main || options.deps?.imageUploadDirectory) {
+    void imageUploads
+      .startup()
+      .catch(() => console.error('Image upload store unavailable'))
+  }
   const interactivePrompts = new InteractivePromptService({
     fetchSnapshot: options.deps?.fetchSnapshot,
     ...options.deps?.promptDeps
@@ -355,6 +373,23 @@ export const createServer = (
         return (
           pushService.getConfig()?.ownerLogin ?? loadPushConfig()?.ownerLogin
         )
+      }
+
+      const imageService = new ImageUploadService(imageUploads, {
+        snapshot: () => (options.deps?.fetchSnapshot ?? getHerdrSnapshot)(3000),
+        ready: (target) => interactivePrompts.heldReadiness(target),
+        owner: getConfiguredOwnerLogin
+      })
+      if (
+        pathname === '/api/media/uploads' ||
+        pathname.startsWith('/api/media/uploads/')
+      ) {
+        const id =
+          pathname === '/api/media/uploads'
+            ? undefined
+            : pathname.slice('/api/media/uploads/'.length)
+        if (id === '') return new Response('Not found', { status: 404 })
+        return imageService.handle(req, id)
       }
 
       if (
@@ -639,7 +674,23 @@ export const createServer = (
 
         // 1. Synchronous token-fenced admission arbiter BEFORE ANY await
         let beginOptions: IBeginActionOptions
-        if (action.type === 'workspace-create') {
+        if (
+          action.type === 'worktree-list' ||
+          action.type === 'worktree-open' ||
+          action.type === 'worktree-create'
+        ) {
+          beginOptions = {
+            topology: action.type === 'worktree-list' ? 'shared' : 'exclusive',
+            targetKey: action.source.workspaceId,
+            paneId: action.source.paneId
+          }
+        } else if (action.type === 'agent-start') {
+          beginOptions = {
+            topology: 'exclusive',
+            targetKey: action.target.paneId,
+            paneId: action.target.paneId
+          }
+        } else if (action.type === 'workspace-create') {
           beginOptions = {
             topology: 'exclusive',
             targetKey: 'workspace-create'
@@ -738,6 +789,26 @@ export const createServer = (
             })
           }
 
+          if (action.type === 'agent-start') {
+            const preflight = verifyTargetAgainstSnapshot(snapshot, {
+              ...action.target,
+              expectedMode: 'shell'
+            })
+            if (!preflight.ok) {
+              const status = preflight.status ?? 409
+              const body = {
+                ok: false,
+                outcome: 'rejected',
+                error: preflight.error
+              }
+              safeComplete(status, body)
+              return new Response(JSON.stringify(body), {
+                status,
+                headers: { 'content-type': 'application/json' }
+              })
+            }
+          }
+
           if (
             action.type === 'prompt' ||
             action.type === 'prompt-answer' ||
@@ -771,7 +842,49 @@ export const createServer = (
             let responseBody: any
             let responseStatus = 200
 
-            if (action.type === 'prompt-answer') {
+            if (
+              action.type === 'worktree-list' ||
+              action.type === 'worktree-open' ||
+              action.type === 'worktree-create'
+            ) {
+              const res = await (
+                options.deps?.executeWorktreeAction ?? executeWorktreeAction
+              )(action, {
+                deps: { fetchSnapshot: options.deps?.fetchSnapshot }
+              })
+              responseStatus = res.status
+              responseBody = res
+            } else if (action.type === 'agent-start') {
+              const fitManager = getSharedTerminalFitManager()
+              const terminalId = action.target.terminalId
+              fitManager.blockFitAdmission(terminalId, attemptToken)
+              try {
+                const retirement =
+                  await fitManager.retireFitProducer(terminalId)
+                if (!retirement.confirmed) {
+                  const body = {
+                    ok: false,
+                    outcome: 'rejected',
+                    error:
+                      'Terminal fit retirement is unconfirmed; native launch was not dispatched'
+                  }
+                  safeComplete(409, body)
+                  return new Response(JSON.stringify(body), {
+                    status: 409,
+                    headers: { 'content-type': 'application/json' }
+                  })
+                }
+                const startFn =
+                  options.deps?.executeAgentStart ?? executeAgentStart
+                const res = await startFn(action, {
+                  deps: { fetchSnapshot: options.deps?.fetchSnapshot }
+                })
+                responseStatus = res.status
+                responseBody = res
+              } finally {
+                fitManager.unblockFitAdmission(terminalId, attemptToken)
+              }
+            } else if (action.type === 'prompt-answer') {
               // The admitted claim stays held across every write and permitted queue cleanup.
               const result = await interactivePrompts.answer(
                 action.target,
@@ -782,8 +895,35 @@ export const createServer = (
               responseStatus = result.status
             } else if (action.type === 'prompt') {
               const promptFn = options.deps?.executePrompt ?? executePrompt
-              const res = await promptFn(action.target.paneId, action.text)
-              responseBody = { ok: true, outcome: 'acknowledged', result: res }
+              let text = action.text
+              if (action.imageId) {
+                try {
+                  text = await imageService.prepareSend(
+                    req,
+                    action.target,
+                    action.imageId,
+                    action.text
+                  )
+                } catch {
+                  const body = {
+                    ok: false,
+                    outcome: 'rejected',
+                    error:
+                      'Image context unavailable, changed, already submitted, or combined text exceeds 4096 UTF-8 bytes; inspect the image and target before a new explicit Send'
+                  }
+                  safeComplete(409, body)
+                  return new Response(JSON.stringify(body), {
+                    status: 409,
+                    headers: { 'content-type': 'application/json' }
+                  })
+                }
+              }
+              const res = await promptFn(action.target.paneId, text)
+              responseBody = {
+                ok: true,
+                outcome: 'acknowledged',
+                ...(action.imageId ? {} : { result: res })
+              }
               responseStatus = 200
             } else if (action.type === 'terminal-input') {
               const inputFn =
@@ -870,7 +1010,10 @@ export const createServer = (
             const errorBody = {
               ok: false,
               outcome,
-              error: errorMsg
+              error:
+                action.type === 'prompt' && action.imageId
+                  ? 'Image Send outcome is unconfirmed; inspect Terminal before a new explicit Send'
+                  : errorMsg
             }
 
             safeComplete(status, errorBody)

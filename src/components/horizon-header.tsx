@@ -41,6 +41,7 @@ export interface IHorizonHeaderProps {
   onOpenTabs: () => void
   sidebarCollapsed?: boolean
   onToggleSidebar?: () => void
+  searchTriggerRef?: RefObject<HTMLButtonElement | null>
   onOpenSearch?: () => void
   onOpenPalette?: () => void
   viewMode?: ISurfaceMode
@@ -89,6 +90,7 @@ const HorizonHeader: FC<IHorizonHeaderProps> = ({
   sidebarCollapsed = false,
   onToggleSidebar,
   onOpenSearch,
+  searchTriggerRef,
   onOpenPalette,
   viewMode,
   onSelectMode,
@@ -159,6 +161,7 @@ const HorizonHeader: FC<IHorizonHeaderProps> = ({
             type="button"
             variant="ghost"
             size="icon"
+            ref={searchTriggerRef}
             className="icon-button palette-button"
             onClick={onOpenSearch || onOpenPalette}
             aria-label="Search navigation"

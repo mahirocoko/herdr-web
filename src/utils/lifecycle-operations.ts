@@ -8,14 +8,40 @@ import type {
   ILifecycleActionRequest
 } from '@/types/herdr.ts'
 
-export const LIFECYCLE_CLOSE_UNKNOWN_COPY = 'Outcome unknown. This may already have closed. Refresh and inspect before another action.'
-export const LIFECYCLE_CREATE_UNKNOWN_COPY = 'Outcome unknown. This Space may already have been created. Refresh and inspect before another action.'
+export const LIFECYCLE_CLOSE_UNKNOWN_COPY =
+  'Outcome unknown. This may already have closed. Refresh and inspect before another action.'
+export const LIFECYCLE_CREATE_UNKNOWN_COPY =
+  'Outcome unknown. This Space may already have been created. Refresh and inspect before another action.'
+export const nativeLaunchStatusCopy = (ticket: ILifecycleTicket): string => {
+  if (ticket.phase === 'pending')
+    return 'Starting Letta in the exact shell pane. Dismissing this sheet does not cancel launch.'
+  if (ticket.phase === 'acknowledged')
+    return ticket.result?.ready === true
+      ? 'Launch acknowledged. Native idle readiness was corroborated for the returned terminal and session at the server snapshot; inspect current state before input.'
+      : 'Launch acknowledged; readiness was not corroborated. Refresh and inspect the exact pane. Do not launch again automatically.'
+  return ticket.error || getLifecycleUnknownCopy('agent-start')
+}
+
 export const MAX_LIFECYCLE_MESSAGE_LENGTH = 300
 
-export const getLifecycleUnknownCopy = (type: ILifecycleActionRequest['type']): string =>
-  type === 'workspace-create' ? LIFECYCLE_CREATE_UNKNOWN_COPY : LIFECYCLE_CLOSE_UNKNOWN_COPY
+export const getLifecycleUnknownCopy = (
+  type: ILifecycleActionRequest['type']
+): string =>
+  type === 'worktree-open' || type === 'worktree-create'
+    ? 'Worktree outcome unknown. The checkout/Space may already exist. Refresh and inspect before another action; no automatic retry.'
+    : type === 'agent-start'
+      ? 'Launch outcome unknown. Letta may already have started. Refresh and inspect the exact pane before another action; do not retry automatically.'
+      : type === 'workspace-create'
+        ? LIFECYCLE_CREATE_UNKNOWN_COPY
+        : LIFECYCLE_CLOSE_UNKNOWN_COPY
 
-export type LifecyclePhase = 'pending' | 'observed' | 'reconciliation-failed' | 'rejected' | 'unknown'
+export type LifecyclePhase =
+  | 'pending'
+  | 'observed'
+  | 'acknowledged'
+  | 'reconciliation-failed'
+  | 'rejected'
+  | 'unknown'
 
 export interface ILifecycleTicket {
   requestIdentity: string
@@ -35,8 +61,19 @@ export interface ILifecycleState {
 
 export type LifecycleReducerAction =
   | { type: 'BEGIN'; ticket: ILifecycleTicket }
-  | { type: 'SETTLE'; requestIdentity: string; phase: 'observed' | 'rejected' | 'unknown'; error?: string | null; result?: IActionResponse['result'] }
-  | { type: 'RECONCILE_FAILED'; requestIdentity: string; attempt: number; error: string }
+  | {
+      type: 'SETTLE'
+      requestIdentity: string
+      phase: 'observed' | 'acknowledged' | 'rejected' | 'unknown'
+      error?: string | null
+      result?: IActionResponse['result']
+    }
+  | {
+      type: 'RECONCILE_FAILED'
+      requestIdentity: string
+      attempt: number
+      error: string
+    }
   | { type: 'RETRY_RECONCILIATION'; requestIdentity: string }
   | { type: 'CLEAR_UNKNOWN_AFTER_REFRESH' }
   | { type: 'CLEAR_OBSERVED'; requestIdentity: string }
@@ -46,8 +83,12 @@ export const initialLifecycleState: ILifecycleState = {
   latestRequestIdentity: null
 }
 
-export const boundLifecycleMessage = (value: unknown, fallback: string): string => {
-  const message = typeof value === 'string' && value.trim() ? value.trim() : fallback
+export const boundLifecycleMessage = (
+  value: unknown,
+  fallback: string
+): string => {
+  const message =
+    typeof value === 'string' && value.trim() ? value.trim() : fallback
   return message.slice(0, MAX_LIFECYCLE_MESSAGE_LENGTH)
 }
 
@@ -66,13 +107,16 @@ export const lifecycleReducer = (
       if (
         state.latestRequestIdentity !== action.requestIdentity ||
         state.ticket?.requestIdentity !== action.requestIdentity
-      ) return state
+      )
+        return state
       return {
         ...state,
         ticket: {
           ...state.ticket,
           phase: action.phase,
-          error: action.error ? boundLifecycleMessage(action.error, 'Lifecycle action failed') : null,
+          error: action.error
+            ? boundLifecycleMessage(action.error, 'Lifecycle action failed')
+            : null,
           result: action.result ?? null
         }
       }
@@ -80,20 +124,25 @@ export const lifecycleReducer = (
       if (
         state.ticket?.requestIdentity !== action.requestIdentity ||
         state.ticket.reconciliationAttempt !== action.attempt
-      ) return state
+      )
+        return state
       return {
         ...state,
         ticket: {
           ...state.ticket,
           phase: 'reconciliation-failed',
-          error: boundLifecycleMessage(action.error, 'Refresh and inspect the active session.')
+          error: boundLifecycleMessage(
+            action.error,
+            'Refresh and inspect the active session.'
+          )
         }
       }
     case 'RETRY_RECONCILIATION':
       if (
         state.ticket?.requestIdentity !== action.requestIdentity ||
         state.ticket.phase !== 'reconciliation-failed'
-      ) return state
+      )
+        return state
       return {
         ...state,
         ticket: {
@@ -104,10 +153,18 @@ export const lifecycleReducer = (
         }
       }
     case 'CLEAR_UNKNOWN_AFTER_REFRESH':
-      if (state.ticket?.phase !== 'unknown') return state
+      if (
+        state.ticket?.phase !== 'unknown' &&
+        state.ticket?.phase !== 'acknowledged'
+      )
+        return state
       return { ...state, ticket: null }
     case 'CLEAR_OBSERVED':
-      if (state.ticket?.requestIdentity !== action.requestIdentity || state.ticket.phase !== 'observed') return state
+      if (
+        state.ticket?.requestIdentity !== action.requestIdentity ||
+        state.ticket.phase !== 'observed'
+      )
+        return state
       return { ...state, ticket: null }
     default:
       return state
@@ -120,21 +177,37 @@ export const workspaceMembershipFingerprint = (
   workspaceId: string,
   tabs: ITab[],
   panes: IPane[]
-): string => JSON.stringify({
-  workspaceId,
-  tabIds: canonicalIds(tabs.filter((tab) => tab.workspace_id === workspaceId).map((tab) => tab.tab_id)),
-  paneIds: canonicalIds(panes.filter((pane) => pane.workspace_id === workspaceId).map((pane) => pane.pane_id))
-})
+): string =>
+  JSON.stringify({
+    workspaceId,
+    tabIds: canonicalIds(
+      tabs
+        .filter((tab) => tab.workspace_id === workspaceId)
+        .map((tab) => tab.tab_id)
+    ),
+    paneIds: canonicalIds(
+      panes
+        .filter((pane) => pane.workspace_id === workspaceId)
+        .map((pane) => pane.pane_id)
+    )
+  })
 
 export const tabMembershipFingerprint = (
   workspaceId: string,
   tabId: string,
   panes: IPane[]
-): string => JSON.stringify({
-  workspaceId,
-  tabId,
-  paneIds: canonicalIds(panes.filter((pane) => pane.workspace_id === workspaceId && pane.tab_id === tabId).map((pane) => pane.pane_id))
-})
+): string =>
+  JSON.stringify({
+    workspaceId,
+    tabId,
+    paneIds: canonicalIds(
+      panes
+        .filter(
+          (pane) => pane.workspace_id === workspaceId && pane.tab_id === tabId
+        )
+        .map((pane) => pane.pane_id)
+    )
+  })
 
 export interface IWorkspaceCloseConfirmation {
   workspaceId: string
@@ -164,15 +237,27 @@ export const freezeWorkspaceCloseConfirmation = (
   tabs: ITab[],
   panes: IPane[]
 ): IWorkspaceCloseConfirmation => {
-  const tabIds = canonicalIds(tabs.filter((tab) => tab.workspace_id === workspace.workspace_id).map((tab) => tab.tab_id))
-  const paneIds = canonicalIds(panes.filter((pane) => pane.workspace_id === workspace.workspace_id).map((pane) => pane.pane_id))
+  const tabIds = canonicalIds(
+    tabs
+      .filter((tab) => tab.workspace_id === workspace.workspace_id)
+      .map((tab) => tab.tab_id)
+  )
+  const paneIds = canonicalIds(
+    panes
+      .filter((pane) => pane.workspace_id === workspace.workspace_id)
+      .map((pane) => pane.pane_id)
+  )
   return {
     workspaceId: workspace.workspace_id,
     label: boundLifecycleMessage(workspace.label, workspace.workspace_id),
     tabCount: tabIds.length,
     paneCount: paneIds.length,
     expected: { tabIds, paneIds },
-    fingerprint: JSON.stringify({ workspaceId: workspace.workspace_id, tabIds, paneIds })
+    fingerprint: JSON.stringify({
+      workspaceId: workspace.workspace_id,
+      tabIds,
+      paneIds
+    })
   }
 }
 
@@ -180,14 +265,25 @@ export const freezeTabCloseConfirmation = (
   tab: ITab,
   panes: IPane[]
 ): ITabCloseConfirmation => {
-  const paneIds = canonicalIds(panes.filter((pane) => pane.workspace_id === tab.workspace_id && pane.tab_id === tab.tab_id).map((pane) => pane.pane_id))
+  const paneIds = canonicalIds(
+    panes
+      .filter(
+        (pane) =>
+          pane.workspace_id === tab.workspace_id && pane.tab_id === tab.tab_id
+      )
+      .map((pane) => pane.pane_id)
+  )
   return {
     workspaceId: tab.workspace_id,
     tabId: tab.tab_id,
     label: boundLifecycleMessage(tab.label, tab.tab_id),
     paneCount: paneIds.length,
     expected: { paneIds },
-    fingerprint: JSON.stringify({ workspaceId: tab.workspace_id, tabId: tab.tab_id, paneIds })
+    fingerprint: JSON.stringify({
+      workspaceId: tab.workspace_id,
+      tabId: tab.tab_id,
+      paneIds
+    })
   }
 }
 
@@ -195,12 +291,16 @@ export const workspaceConfirmationChanged = (
   confirmation: IWorkspaceCloseConfirmation,
   tabs: ITab[],
   panes: IPane[]
-): boolean => confirmation.fingerprint !== workspaceMembershipFingerprint(confirmation.workspaceId, tabs, panes)
+): boolean =>
+  confirmation.fingerprint !==
+  workspaceMembershipFingerprint(confirmation.workspaceId, tabs, panes)
 
 export const tabConfirmationChanged = (
   confirmation: ITabCloseConfirmation,
   panes: IPane[]
-): boolean => confirmation.fingerprint !== tabMembershipFingerprint(confirmation.workspaceId, confirmation.tabId, panes)
+): boolean =>
+  confirmation.fingerprint !==
+  tabMembershipFingerprint(confirmation.workspaceId, confirmation.tabId, panes)
 
 export interface IWorkspaceSourceChoice {
   key: string
@@ -212,18 +312,29 @@ export const deriveWorkspaceSourceChoices = (
   workspaces: IWorkspace[],
   panes: IPane[]
 ): IWorkspaceSourceChoice[] => {
-  const workspaceLabels = new Map(workspaces.map((workspace) => [workspace.workspace_id, workspace.label || workspace.workspace_id]))
+  const workspaceLabels = new Map(
+    workspaces.map((workspace) => [
+      workspace.workspace_id,
+      workspace.label || workspace.workspace_id
+    ])
+  )
   const terminalChoices = panes
-    .filter((pane) =>
-      typeof pane.terminal_id === 'string' &&
-      pane.terminal_id.trim().length > 0 &&
-      typeof (pane.foreground_cwd || pane.cwd) === 'string' &&
-      (pane.foreground_cwd || pane.cwd || '').trim().length > 0
+    .filter(
+      (pane) =>
+        typeof pane.terminal_id === 'string' &&
+        pane.terminal_id.trim().length > 0 &&
+        typeof (pane.foreground_cwd || pane.cwd) === 'string' &&
+        (pane.foreground_cwd || pane.cwd || '').trim().length > 0
     )
-    .sort((a, b) => a.workspace_id.localeCompare(b.workspace_id) || a.pane_id.localeCompare(b.pane_id))
+    .sort(
+      (a, b) =>
+        a.workspace_id.localeCompare(b.workspace_id) ||
+        a.pane_id.localeCompare(b.pane_id)
+    )
     .map((pane) => {
       const cwd = (pane.foreground_cwd || pane.cwd || '').trim()
-      const workspaceLabel = workspaceLabels.get(pane.workspace_id) || pane.workspace_id
+      const workspaceLabel =
+        workspaceLabels.get(pane.workspace_id) || pane.workspace_id
       return {
         key: pane.pane_id,
         label: `${workspaceLabel} · ${cwd || pane.pane_id}`,
@@ -244,10 +355,15 @@ export const deriveWorkspaceSourceChoices = (
 export const resolveWorkspaceSourceSelection = (
   choices: IWorkspaceSourceChoice[],
   selectedKey: string
-): { kind: 'default' } | { kind: 'source'; source: IWorkspaceCreateSource } | { kind: 'missing' } => {
+):
+  | { kind: 'default' }
+  | { kind: 'source'; source: IWorkspaceCreateSource }
+  | { kind: 'missing' } => {
   if (selectedKey === 'herdr-default') return { kind: 'default' }
   const choice = choices.find((item) => item.key === selectedKey)
-  return choice?.source ? { kind: 'source', source: choice.source } : { kind: 'missing' }
+  return choice?.source
+    ? { kind: 'source', source: choice.source }
+    : { kind: 'missing' }
 }
 
 export interface ILifecycleNavigationOrigin {
@@ -265,28 +381,35 @@ export const shouldApplyCreateResultNavigation = (input: {
   currentPathname: string
   currentWorkspaceId: string | null
   currentPaneId: string | null
-}): boolean => Boolean(
-  input.origin &&
-  input.origin.requestIdentity === input.requestIdentity &&
-  input.currentTicket?.requestIdentity === input.requestIdentity &&
-  input.currentTicket.phase === 'observed' &&
-  input.currentTicket.reconciliationAttempt === input.attempt &&
-  input.origin.pathname === input.currentPathname &&
-  input.origin.workspaceId === input.currentWorkspaceId &&
-  input.origin.paneId === input.currentPaneId
-)
+}): boolean =>
+  Boolean(
+    input.origin &&
+    input.origin.requestIdentity === input.requestIdentity &&
+    input.currentTicket?.requestIdentity === input.requestIdentity &&
+    input.currentTicket.phase === 'observed' &&
+    input.currentTicket.reconciliationAttempt === input.attempt &&
+    input.origin.pathname === input.currentPathname &&
+    input.origin.workspaceId === input.currentWorkspaceId &&
+    input.origin.paneId === input.currentPaneId
+  )
 
 export const snapshotConfirmsCreatedTarget = (
   snapshot: ISnapshotResult | null,
   result: IActionResponse['result']
 ): result is { workspaceId: string; tabId: string; paneId: string } => {
   if (!snapshot || !result) return false
-  const workspace = snapshot.workspaces.find((item) => item.workspace_id === result.workspaceId)
-  const tab = snapshot.tabs.find((item) => item.tab_id === result.tabId && item.workspace_id === result.workspaceId)
-  const pane = snapshot.panes.find((item) =>
-    item.pane_id === result.paneId &&
-    item.workspace_id === result.workspaceId &&
-    item.tab_id === result.tabId
+  const workspace = snapshot.workspaces.find(
+    (item) => item.workspace_id === result.workspaceId
+  )
+  const tab = snapshot.tabs.find(
+    (item) =>
+      item.tab_id === result.tabId && item.workspace_id === result.workspaceId
+  )
+  const pane = snapshot.panes.find(
+    (item) =>
+      item.pane_id === result.paneId &&
+      item.workspace_id === result.workspaceId &&
+      item.tab_id === result.tabId
   )
   return Boolean(workspace && tab && pane)
 }

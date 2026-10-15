@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { FC, FormEvent } from 'react'
 import {
   AlertTriangle,
@@ -8,7 +8,7 @@ import {
   Loader2,
   Plus,
   Trash2,
-  X,
+  X
 } from 'lucide-react'
 import Button from '@/components/ui/button.tsx'
 import Input from '@/components/ui/input.tsx'
@@ -17,35 +17,39 @@ import {
   Sheet,
   SheetContent,
   SheetHeader,
-  SheetTitle,
+  SheetTitle
 } from '@/components/ui/sheet.tsx'
+import { sendAction } from '@/services/api-client.ts'
+import { formatActionErrorMessage } from '@/utils/action-target.ts'
+import type { IWorktreeListing, IWorkspaceCreateSource } from '@/types/herdr.ts'
 import type { ILifecycleOperations } from '@/hooks/use-lifecycle-operations.ts'
 import type {
   ILifecycleActionRequest,
   IPane,
   ISnapshotStatus,
   ITab,
-  IWorkspace,
+  IWorkspace
 } from '@/types/herdr.ts'
 import {
+  nativeLaunchStatusCopy,
   deriveWorkspaceSourceChoices,
   freezeWorkspaceCloseConfirmation,
   resolveWorkspaceSourceSelection,
   workspaceConfirmationChanged,
-  type IWorkspaceCloseConfirmation,
+  type IWorkspaceCloseConfirmation
 } from '@/utils/lifecycle-operations.ts'
 import {
   formatWorkspaceAriaLabel,
-  formatWorkspaceSourceLine,
+  formatWorkspaceSourceLine
 } from '@/utils/workspace-helpers.ts'
 import {
   ACTIVITY_LABEL,
   deriveSpaceActivity,
-  getActivityStatusDotClass,
+  getActivityStatusDotClass
 } from '@/utils/activity-status.ts'
 import {
   getConnectionStatusLabel,
-  getStatusDotClass,
+  getStatusDotClass
 } from '@/utils/connection-status.ts'
 
 export interface ISpaceDrawerProps {
@@ -65,7 +69,8 @@ export interface ISpaceDrawerProps {
   initialTargetWorkspaceId?: string | null
 }
 
-type SpaceDrawerView = 'list' | 'new-space' | 'close-space' | 'status'
+type SpaceDrawerView =
+  'list' | 'new-space' | 'close-space' | 'worktrees' | 'status'
 
 export const getWorkspaceStatusDotClass = (status?: string): string => {
   switch (status) {
@@ -99,12 +104,15 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
   onRefreshSnapshot,
   lifecycle,
   initialView = 'list',
-  initialTargetWorkspaceId,
+  initialTargetWorkspaceId
 }) => {
   const closeButtonRef = useRef<HTMLButtonElement | null>(null)
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const activeWorkspaceRef = useRef<HTMLButtonElement | null>(null)
   const initiatingControlRef = useRef<HTMLElement | null>(null)
+  const worktreeTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const popupRef = useRef<HTMLDivElement | null>(null)
+  const returnWorktreeFocusRef = useRef(false)
   const initializedIntentRef = useRef<string | null>(null)
 
   const [view, setView] = useState<SpaceDrawerView>(initialView)
@@ -116,12 +124,63 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
   const [workspaceConfirmation, setWorkspaceConfirmation] =
     useState<IWorkspaceCloseConfirmation | null>(null)
   const [confirmationError, setConfirmationError] = useState<string | null>(
-    null,
+    null
   )
+
+  const [worktreeSource, setWorktreeSource] =
+    useState<IWorkspaceCreateSource | null>(null)
+  const [worktreeListing, setWorktreeListing] =
+    useState<IWorktreeListing | null>(null)
+  const [worktreeLoading, setWorktreeLoading] = useState(false)
+  const [worktreeBranch, setWorktreeBranch] = useState('')
+  const worktreeReadGeneration = useRef(0)
+  const sourceStillCurrent = Boolean(
+    worktreeSource &&
+    workspaces.some(
+      (workspace) => workspace.workspace_id === worktreeSource.workspaceId
+    ) &&
+    panes.some(
+      (pane) =>
+        pane.pane_id === worktreeSource.paneId &&
+        pane.workspace_id === worktreeSource.workspaceId &&
+        pane.terminal_id === worktreeSource.terminalId
+    )
+  )
+  const loadWorktrees = async (source: IWorkspaceCreateSource) => {
+    const generation = ++worktreeReadGeneration.current
+    setWorktreeSource(Object.freeze({ ...source }))
+    setWorktreeListing(null)
+    setWorktreeLoading(true)
+    setConfirmationError(null)
+    if (view !== 'worktrees') popupRef.current?.focus({ preventScroll: true })
+    setView('worktrees')
+    try {
+      const response = await sendAction({
+        type: 'worktree-list',
+        operationId: crypto.randomUUID(),
+        source
+      })
+      if (generation === worktreeReadGeneration.current)
+        setWorktreeListing(response.result?.worktreeListing ?? null)
+    } catch (error) {
+      if (generation === worktreeReadGeneration.current)
+        setConfirmationError(formatActionErrorMessage(error))
+    } finally {
+      if (generation === worktreeReadGeneration.current)
+        setWorktreeLoading(false)
+    }
+  }
+  useEffect(() => {
+    if (!isOpen) {
+      worktreeReadGeneration.current++
+      setWorktreeListing(null)
+      setWorktreeLoading(false)
+    }
+  }, [isOpen])
 
   const workspaceSourceChoices = deriveWorkspaceSourceChoices(workspaces, panes)
   const hasLifecycleGate = Boolean(
-    lifecycle.ticket && lifecycle.ticket.phase !== 'rejected',
+    lifecycle.ticket && lifecycle.ticket.phase !== 'rejected'
   )
 
   useEffect(() => {
@@ -145,7 +204,7 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
       const target = workspaces.find((w) => w.workspace_id === targetWsId)
       if (target) {
         setWorkspaceConfirmation(
-          freezeWorkspaceCloseConfirmation(target, tabs, panes),
+          freezeWorkspaceCloseConfirmation(target, tabs, panes)
         )
         setView('close-space')
       } else {
@@ -162,7 +221,7 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
     panes,
     selectedWorkspaceId,
     tabs,
-    workspaces,
+    workspaces
   ])
 
   useEffect(() => {
@@ -180,11 +239,11 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
     }
     if (
       !workspaceSourceChoices.some(
-        (choice) => choice.key === workspaceSourceKey,
+        (choice) => choice.key === workspaceSourceKey
       )
     ) {
       setWorkspaceSourceError(
-        'The selected directory source is no longer available. Choose a current source before creating the Space.',
+        'The selected directory source is no longer available. Choose a current source before creating the Space.'
       )
     }
   }, [workspaceSourceChoices, workspaceSourceKey])
@@ -196,16 +255,40 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
     onClose()
   }
 
+  useLayoutEffect(() => {
+    if (!isOpen) return
+    if (view === 'worktrees')
+      cancelButtonRef.current?.focus({ preventScroll: true })
+    else if (view === 'list' && returnWorktreeFocusRef.current) {
+      returnWorktreeFocusRef.current = false
+      const trigger = worktreeTriggerRef.current
+      if (trigger?.isConnected) trigger.focus({ preventScroll: true })
+      else closeButtonRef.current?.focus({ preventScroll: true })
+    }
+  }, [isOpen, view])
+
   const returnToList = () => {
+    const fromWorktrees = view === 'worktrees'
+    worktreeReadGeneration.current++
+    setWorktreeLoading(false)
+    if (fromWorktrees) {
+      popupRef.current?.focus({ preventScroll: true })
+      returnWorktreeFocusRef.current = true
+    }
     setView('list')
     setConfirmationError(null)
     setWorkspaceConfirmation(null)
-    requestAnimationFrame(() => initiatingControlRef.current?.focus())
+    if (fromWorktrees) return
+    requestAnimationFrame(() => {
+      const trigger = initiatingControlRef.current
+      if (trigger?.isConnected) trigger.focus({ preventScroll: true })
+      else closeButtonRef.current?.focus({ preventScroll: true })
+    })
   }
 
   const beginView = (
     nextView: 'new-space' | 'close-space',
-    initiator: HTMLElement | null,
+    initiator: HTMLElement | null
   ) => {
     initiatingControlRef.current = initiator
     setConfirmationError(null)
@@ -217,11 +300,11 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
     if (hasLifecycleGate) return
     const sourceSelection = resolveWorkspaceSourceSelection(
       workspaceSourceChoices,
-      workspaceSourceKey,
+      workspaceSourceKey
     )
     if (sourceSelection.kind === 'missing') {
       setWorkspaceSourceError(
-        'The selected directory source is no longer available. Choose a current source before creating the Space.',
+        'The selected directory source is no longer available. Choose a current source before creating the Space.'
       )
       return
     }
@@ -232,7 +315,7 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
       ...(workspaceLabel.trim() ? { label: workspaceLabel.trim() } : {}),
       ...(sourceSelection.kind === 'source'
         ? { source: sourceSelection.source }
-        : {}),
+        : {})
     }
     const started = await lifecycle.dispatchLifecycle(request)
     if (started.accepted) setView('status')
@@ -243,15 +326,15 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
     if (workspaceConfirmationChanged(workspaceConfirmation, tabs, panes)) {
       const currentWorkspace = workspaces.find(
         (workspace) =>
-          workspace.workspace_id === workspaceConfirmation.workspaceId,
+          workspace.workspace_id === workspaceConfirmation.workspaceId
       )
       setConfirmationError(
-        'Space membership changed. Review the updated counts, then confirm again.',
+        'Space membership changed. Review the updated counts, then confirm again.'
       )
       setWorkspaceConfirmation(
         currentWorkspace
           ? freezeWorkspaceCloseConfirmation(currentWorkspace, tabs, panes)
-          : null,
+          : null
       )
       return
     }
@@ -260,22 +343,26 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
       operationId: crypto.randomUUID(),
       target: {
         workspaceId: workspaceConfirmation.workspaceId,
-        expected: workspaceConfirmation.expected,
-      },
+        expected: workspaceConfirmation.expected
+      }
     })
     if (started.accepted) setView('status')
   }
 
   const handleInspectLifecycle = async () => {
     const refreshed = await onRefreshSnapshot?.()
-    if (refreshed === true && lifecycle.ticket?.phase === 'unknown') {
+    if (
+      refreshed === true &&
+      (lifecycle.ticket?.phase === 'unknown' ||
+        lifecycle.ticket?.phase === 'acknowledged')
+    ) {
       lifecycle.clearUnknownAfterRefresh()
       setView('list')
       return
     }
     if (refreshed !== true) {
       setConfirmationError(
-        'Snapshot refresh failed. The operation remains gated until inspection succeeds.',
+        'Snapshot refresh failed. The operation remains gated until inspection succeeds.'
       )
     }
   }
@@ -291,6 +378,7 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
       }}
     >
       <SheetContent
+        ref={popupRef}
         id="space-drawer"
         side="left"
         className="space-drawer-sheet"
@@ -348,19 +436,21 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
                         <AlertTriangle size={16} aria-hidden="true" />
                       )}
                     <span>
-                      {lifecycle.ticket.phase === 'pending'
-                        ? 'Operation pending. You can close this sheet; it continues checking.'
-                        : lifecycle.ticket.phase === 'unknown'
-                          ? lifecycle.ticket.error ||
-                            'Outcome unknown. Refresh and inspect before another action.'
-                          : lifecycle.ticket.phase === 'reconciliation-failed'
+                      {lifecycle.ticket.type === 'agent-start'
+                        ? nativeLaunchStatusCopy(lifecycle.ticket)
+                        : lifecycle.ticket.phase === 'pending'
+                          ? 'Operation pending. You can close this sheet; it continues checking.'
+                          : lifecycle.ticket.phase === 'unknown'
                             ? lifecycle.ticket.error ||
-                              'The server observed the action, but browser reconciliation was not confirmed.'
-                            : lifecycle.ticket.phase === 'rejected'
+                              'Outcome unknown. Refresh and inspect before another action.'
+                            : lifecycle.ticket.phase === 'reconciliation-failed'
                               ? lifecycle.ticket.error ||
-                                'The action was rejected.'
-                              : lifecycle.ticket.error ||
-                                'Action observed. Refreshing and reconciling the active session.'}
+                                'The server observed the action, but browser reconciliation was not confirmed.'
+                              : lifecycle.ticket.phase === 'rejected'
+                                ? lifecycle.ticket.error ||
+                                  'The action was rejected.'
+                                : lifecycle.ticket.error ||
+                                  'Action observed. Refreshing and reconciling the active session.'}
                     </span>
                   </div>
                 </div>
@@ -378,7 +468,8 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
                 )}
               </div>
               <div className="new-tab-form__footer lifecycle-form__actions">
-                {lifecycle.ticket.phase === 'unknown' && (
+                {(lifecycle.ticket.phase === 'unknown' ||
+                  lifecycle.ticket.phase === 'acknowledged') && (
                   <Button
                     type="button"
                     variant="default"
@@ -395,7 +486,7 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
                     className="new-tab-submit-btn"
                     onClick={() =>
                       lifecycle.retryReconciliation(
-                        lifecycle.ticket!.requestIdentity,
+                        lifecycle.ticket!.requestIdentity
                       )
                     }
                   >
@@ -420,6 +511,163 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
                     onClick={handleClose}
                   >
                     Dismiss — operation continues
+                  </Button>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
+        {view === 'worktrees' && (
+          <>
+            <SheetHeader className="space-drawer-header">
+              <SheetTitle className="space-drawer-title">Worktrees</SheetTitle>
+            </SheetHeader>
+            <div className="new-tab-form">
+              <div className="new-tab-form__body">
+                <p>
+                  Source Space <code>{worktreeSource?.workspaceId}</code> · pane{' '}
+                  <code>{worktreeSource?.paneId}</code> · terminal{' '}
+                  <code>{worktreeSource?.terminalId}</code>
+                </p>
+                <p>
+                  Native Herdr resolves this Space's repository. Open associates
+                  an existing checkout with a Space; Create makes a checkout in
+                  Herdr's default worktree folder. Neither starts an agent or
+                  changes focus.
+                </p>
+                {worktreeLoading && (
+                  <p role="status">Reading native checkouts…</p>
+                )}
+                {confirmationError && <p role="alert">{confirmationError}</p>}
+                {!sourceStillCurrent && (
+                  <p role="alert">
+                    Source changed. Return and inspect the current Space.
+                  </p>
+                )}
+                {worktreeListing?.entries.map((entry) => (
+                  <Button
+                    key={entry.checkoutKey}
+                    type="button"
+                    variant="outline"
+                    className="space-drawer-action worktree-checkout-action"
+                    disabled={
+                      !entry.available ||
+                      !sourceStillCurrent ||
+                      hasLifecycleGate
+                    }
+                    onClick={async () => {
+                      if (
+                        !worktreeSource ||
+                        !worktreeListing ||
+                        !sourceStillCurrent ||
+                        hasLifecycleGate
+                      )
+                        return
+                      const started = await lifecycle.dispatchLifecycle({
+                        type: 'worktree-open',
+                        operationId: crypto.randomUUID(),
+                        source: { ...worktreeSource },
+                        repositoryIdentity: worktreeListing.repositoryIdentity,
+                        checkoutKey: entry.checkoutKey
+                      })
+                      if (started.accepted) setView('status')
+                    }}
+                  >
+                    <span className="worktree-checkout-action__label">
+                      {entry.branch || 'Detached / unnamed checkout'}
+                    </span>
+                    <span className="worktree-checkout-action__facts">
+                      {entry.linked ? 'linked' : 'main'} ·{' '}
+                      {entry.available
+                        ? entry.openWorkspaceId === worktreeSource?.workspaceId
+                          ? 'Open current Space'
+                          : entry.openWorkspaceId
+                            ? 'Open associated Space'
+                            : 'Open checkout as Space'
+                        : 'Unavailable (bare/prunable)'}
+                    </span>
+                  </Button>
+                ))}
+                {worktreeListing && worktreeListing.entries.length === 0 && (
+                  <p>No native checkouts listed.</p>
+                )}
+                {worktreeListing && (
+                  <form
+                    method="post"
+                    action="/api/action"
+                    onSubmit={async (event) => {
+                      event.preventDefault()
+                      if (
+                        !worktreeSource ||
+                        !worktreeListing ||
+                        !sourceStillCurrent ||
+                        hasLifecycleGate
+                      )
+                        return
+                      const started = await lifecycle.dispatchLifecycle({
+                        type: 'worktree-create',
+                        operationId: crypto.randomUUID(),
+                        source: { ...worktreeSource },
+                        repositoryIdentity: worktreeListing.repositoryIdentity,
+                        branch: worktreeBranch
+                      })
+                      if (started.accepted) setView('status')
+                    }}
+                  >
+                    <label htmlFor="worktree-branch">
+                      Create checkout for branch (required)
+                    </label>
+                    <Input
+                      id="worktree-branch"
+                      name="branch"
+                      required
+                      pattern={'[a-zA-Z][a-zA-Z0-9_\\-]{0,63}'}
+                      maxLength={64}
+                      value={worktreeBranch}
+                      onChange={(event) =>
+                        setWorktreeBranch(event.target.value)
+                      }
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      aria-describedby="worktree-defaults"
+                    />
+                    <p id="worktree-defaults">
+                      Simple branch names only. Native default base and path;
+                      native Herdr decides whether the branch exists. This
+                      creates files, but does not start an agent.
+                    </p>
+                    <Button
+                      type="submit"
+                      className="new-tab-submit-btn"
+                      disabled={!sourceStillCurrent || hasLifecycleGate}
+                    >
+                      Create worktree and Space
+                    </Button>
+                  </form>
+                )}
+              </div>
+              <div className="new-tab-form__footer lifecycle-form__actions">
+                <Button
+                  ref={cancelButtonRef}
+                  type="button"
+                  variant="outline"
+                  onClick={returnToList}
+                >
+                  Cancel / Back
+                </Button>
+                {worktreeSource && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={
+                      worktreeLoading || hasLifecycleGate || !sourceStillCurrent
+                    }
+                    onClick={() => void loadWorktrees(worktreeSource)}
+                  >
+                    Refresh native list
                   </Button>
                 )}
               </div>
@@ -495,7 +743,7 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
                     }}
                     items={workspaceSourceChoices.map((choice) => ({
                       value: choice.key,
-                      label: choice.label,
+                      label: choice.label
                     }))}
                     placeholder="Select directory source..."
                     disabled={lifecycle.isBusy}
@@ -646,13 +894,13 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
                 const spaceActivity = deriveSpaceActivity(
                   panes,
                   workspace.workspace_id,
-                  tabs,
+                  tabs
                 )
                 const ariaLabel = formatWorkspaceAriaLabel(
                   workspace,
                   label,
                   metadata,
-                  spaceActivity,
+                  spaceActivity
                 )
                 return (
                   <li
@@ -720,8 +968,39 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
                 <span>New Space</span>
               </Button>
               {selectedWorkspaceId &&
+                panes.some(
+                  (pane) =>
+                    pane.workspace_id === selectedWorkspaceId &&
+                    pane.terminal_id
+                ) && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="space-drawer-action"
+                    ref={worktreeTriggerRef}
+                    disabled={hasLifecycleGate || worktreeLoading}
+                    onClick={(event) => {
+                      const pane = panes.find(
+                        (item) =>
+                          item.workspace_id === selectedWorkspaceId &&
+                          item.terminal_id
+                      )
+                      if (!pane?.terminal_id) return
+                      initiatingControlRef.current = event.currentTarget
+                      setWorktreeBranch('')
+                      void loadWorktrees({
+                        workspaceId: selectedWorkspaceId,
+                        paneId: pane.pane_id,
+                        terminalId: pane.terminal_id
+                      })
+                    }}
+                  >
+                    Worktrees in current Space repository
+                  </Button>
+                )}
+              {selectedWorkspaceId &&
                 workspaces.some(
-                  (workspace) => workspace.workspace_id === selectedWorkspaceId,
+                  (workspace) => workspace.workspace_id === selectedWorkspaceId
                 ) && (
                   <Button
                     type="button"
@@ -729,15 +1008,11 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
                     className="space-drawer-action space-drawer-action--danger"
                     onClick={(event) => {
                       const workspace = workspaces.find(
-                        (item) => item.workspace_id === selectedWorkspaceId,
+                        (item) => item.workspace_id === selectedWorkspaceId
                       )
                       if (!workspace) return
                       setWorkspaceConfirmation(
-                        freezeWorkspaceCloseConfirmation(
-                          workspace,
-                          tabs,
-                          panes,
-                        ),
+                        freezeWorkspaceCloseConfirmation(workspace, tabs, panes)
                       )
                       beginView('close-space', event.currentTarget)
                     }}

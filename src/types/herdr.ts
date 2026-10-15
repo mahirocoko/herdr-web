@@ -133,7 +133,47 @@ export interface ITabCloseTargetIdentity {
   }
 }
 
+export interface IWorktreeEntry {
+  checkoutKey: string
+  branch: string | null
+  linked: boolean
+  openWorkspaceId: string | null
+  available: boolean
+}
+export interface IWorktreeListing {
+  repositoryIdentity: string
+  entries: IWorktreeEntry[]
+}
+export type IWorktreeAction =
+  | {
+      type: 'worktree-list'
+      operationId: string
+      source: IWorkspaceCreateSource
+    }
+  | {
+      type: 'worktree-open'
+      operationId: string
+      source: IWorkspaceCreateSource
+      repositoryIdentity: string
+      checkoutKey: string
+    }
+  | {
+      type: 'worktree-create'
+      operationId: string
+      source: IWorkspaceCreateSource
+      repositoryIdentity: string
+      branch: string
+    }
+
 export type IStrictActionRequest =
+  | IWorktreeAction
+  | {
+      type: 'agent-start'
+      operationId: string
+      target: { paneId: string; terminalId: string }
+      kind: 'letta'
+      name: string
+    }
   | {
       type: 'prompt-answer'
       operationId: string
@@ -146,6 +186,7 @@ export type IStrictActionRequest =
       operationId: string
       target: IActionTargetIdentity
       text: string
+      imageId?: string
     }
   | {
       type: 'keys'
@@ -185,7 +226,15 @@ export type IStrictActionRequest =
 
 export type ILifecycleActionRequest = Extract<
   IStrictActionRequest,
-  { type: 'workspace-create' | 'workspace-close' | 'tab-close' }
+  {
+    type:
+      | 'workspace-create'
+      | 'workspace-close'
+      | 'tab-close'
+      | 'agent-start'
+      | 'worktree-open'
+      | 'worktree-create'
+  }
 >
 
 export type IHeldActionRequest =
@@ -246,6 +295,12 @@ export type IActionOutcome =
   'acknowledged' | 'observed' | 'rejected' | 'unknown'
 
 export interface IActionResult {
+  worktreeListing?: IWorktreeListing
+  alreadyOpen?: boolean
+  terminalId?: string
+  agentSessionId?: string
+  ready?: boolean
+  agentStatus?: string
   workspaceId?: string
   tabId?: string
   paneId?: string

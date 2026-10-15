@@ -52,7 +52,10 @@ export const computePayloadFingerprint = (action: IActionRequest): string => {
         expectedMode: action.target.expectedMode,
         agentSessionId: action.target.agentSessionId ?? null
       },
-      text: action.text
+      text: action.text,
+      ...(action.type === 'prompt' && action.imageId !== undefined
+        ? { imageId: action.imageId }
+        : {})
     })
   }
 

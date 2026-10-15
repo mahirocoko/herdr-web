@@ -6,6 +6,9 @@ import {
   FolderGit2,
   GitBranch,
   Loader2,
+  ImagePlus,
+  X,
+  RotateCcw,
   SquareTerminal
 } from 'lucide-react'
 import {
@@ -25,8 +28,22 @@ import InteractionPickerSheet, {
 import Button from '@/components/ui/button.tsx'
 import Textarea from '@/components/ui/textarea.tsx'
 import { MAX_DRAFT_BYTES, utf8Bytes } from '@/utils/composer-draft.ts'
+import {
+  canSendComposerImage,
+  type IComposerImage
+} from '@/utils/composer-image.ts'
+import { imagePromptBytes } from '@/types/image-upload.ts'
 
 export interface IPromptComposerProps {
+  imageAttachment?: {
+    image: IComposerImage | null
+    allowed: boolean
+    notice: string | null
+    onChoose: (file: File) => void
+    onRemove: () => void
+    onRetry: () => void
+    onInspect?: () => void
+  }
   paneId: string | null
   terminalId?: string | null
   workspaceId?: string | null
@@ -65,6 +82,7 @@ export interface IPromptComposerProps {
 }
 
 const PromptComposer: FC<IPromptComposerProps> = ({
+  imageAttachment,
   paneId,
   terminalId,
   workspaceId,
@@ -105,6 +123,14 @@ const PromptComposer: FC<IPromptComposerProps> = ({
   const isControlled = draftText !== undefined
   const text = isControlled ? draftText : internalText
   const isComposingRef = useRef(false)
+  const imageInput = useRef<HTMLInputElement | null>(null)
+  const image = imageAttachment?.image ?? null
+  const combinedBytes = imagePromptBytes(
+    text,
+    image?.uploaded?.imageContextBytes ?? 0
+  )
+  const imageReady = canSendComposerImage(image, text)
+  const hasSendContent = !!text.trim() || !!image?.uploaded
 
   const setText = (updater: string | ((prev: string) => string)) => {
     const nextVal = typeof updater === 'function' ? updater(text) : updater
@@ -207,8 +233,10 @@ const PromptComposer: FC<IPromptComposerProps> = ({
     const trimmed = text.trim()
     // Prevent duplicate submission while already sending or empty or disabled target
     if (
-      !trimmed ||
-      utf8Bytes(text) > MAX_DRAFT_BYTES ||
+      !hasSendContent ||
+      !imageReady ||
+      (queue && !!image) ||
+      combinedBytes > MAX_DRAFT_BYTES ||
       !paneId ||
       !hasValidTarget ||
       (!queue && !isPromptEvidenceReady) ||
@@ -225,7 +253,9 @@ const PromptComposer: FC<IPromptComposerProps> = ({
     if (queue && !onQueueText) return
     submittingRef.current = true
     try {
-      const status = await (queue ? onQueueText! : onSubmitText)(trimmed)
+      const status = await (queue ? onQueueText! : onSubmitText)(
+        image ? text : trimmed
+      )
       // Clear only when status is acknowledged and exact draft/pane/generation remain unchanged
       if (status === 'acknowledged' && mountedRef.current) {
         const currentPaneId = prevPaneIdRef.current
@@ -270,9 +300,13 @@ const PromptComposer: FC<IPromptComposerProps> = ({
       e.key,
       e.shiftKey,
       isComposing,
-      trimmed.length,
+      hasSendContent ? Math.max(1, trimmed.length) : 0,
       isBusy,
-      !paneId || !hasValidTarget || !isPromptEvidenceReady || isControlActive,
+      !paneId ||
+        !hasValidTarget ||
+        !isPromptEvidenceReady ||
+        isControlActive ||
+        !imageReady,
       e.keyCode
     )
 
@@ -332,8 +366,9 @@ const PromptComposer: FC<IPromptComposerProps> = ({
   const isSubmitDisabled =
     isInputDisabled ||
     isBusy ||
-    text.trim().length === 0 ||
-    utf8Bytes(text) > MAX_DRAFT_BYTES
+    !hasSendContent ||
+    !imageReady ||
+    combinedBytes > MAX_DRAFT_BYTES
   const isQuickDisabled =
     !paneId ||
     !terminalId ||
@@ -358,6 +393,72 @@ const PromptComposer: FC<IPromptComposerProps> = ({
       )}
 
       <form className="prompt-composer__form" onSubmit={handleSubmit}>
+        {image && (
+          <div
+            className="prompt-composer__image"
+            aria-label="Image context attachment"
+          >
+            {image.preview && (
+              <img src={image.preview} alt="Selected image preview" />
+            )}
+            <div className="prompt-composer__image-copy">
+              <strong>{image.file.name}</strong>
+              <span>
+                {Math.ceil(image.file.size / 1024)} KiB ·{' '}
+                {image.phase === 'ready'
+                  ? 'Ready'
+                  : image.phase === 'decoding'
+                    ? 'Checking image…'
+                    : image.phase === 'uploading'
+                      ? 'Uploading…'
+                      : image.phase === 'sending'
+                        ? 'Sending context…'
+                        : 'Not ready'}
+              </span>
+              <span role="status">
+                {image.error ??
+                  (image.uploaded && image.uploaded.expiresAt <= Date.now()
+                    ? 'Image expired. Remove it and upload again.'
+                    : '24-hour local-file context. Send ACK is not image-read proof.')}
+              </span>
+              {image.phase === 'error' && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={imageAttachment?.onRetry}
+                  disabled={!imageAttachment?.allowed}
+                >
+                  <RotateCcw size={16} aria-hidden="true" /> Retry image
+                </Button>
+              )}
+              {image.phase === 'handled' && imageAttachment?.onInspect && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={imageAttachment.onInspect}
+                >
+                  <SquareTerminal size={16} aria-hidden="true" /> Inspect
+                  Terminal
+                </Button>
+              )}
+            </div>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              onClick={imageAttachment?.onRemove}
+              aria-label={
+                ['uploading', 'decoding'].includes(image.phase)
+                  ? 'Cancel image upload'
+                  : 'Remove image from draft'
+              }
+            >
+              <X size={18} aria-hidden="true" />
+            </Button>
+          </div>
+        )}
         <div className="prompt-composer__input-wrapper">
           <Textarea
             ref={textareaRef}
@@ -421,6 +522,34 @@ const PromptComposer: FC<IPromptComposerProps> = ({
             </div>
           )}
           <div className="prompt-composer__controls-left">
+            {imageAttachment && (
+              <>
+                <input
+                  ref={imageInput}
+                  className="prompt-composer__image-input"
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  aria-label="Choose PNG or JPEG image context"
+                  disabled={!imageAttachment.allowed || isControlActive}
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0]
+                    event.currentTarget.value = ''
+                    if (file) imageAttachment.onChoose(file)
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  disabled={!imageAttachment.allowed || isControlActive}
+                  onClick={() => imageInput.current?.click()}
+                  aria-label="Attach image context"
+                  title="One PNG/JPEG, up to 8 MiB; local file expires in 24 hours"
+                >
+                  <ImagePlus size={18} aria-hidden="true" />
+                </Button>
+              </>
+            )}
             <Button
               ref={quickTriggerRef}
               type="button"
@@ -447,8 +576,9 @@ const PromptComposer: FC<IPromptComposerProps> = ({
                 type="button"
                 variant="ghost"
                 disabled={
+                  !!image ||
                   !text.trim() ||
-                  utf8Bytes(text) > MAX_DRAFT_BYTES ||
+                  combinedBytes > MAX_DRAFT_BYTES ||
                   !paneId ||
                   !hasValidTarget ||
                   isBusy ||
@@ -533,8 +663,18 @@ const PromptComposer: FC<IPromptComposerProps> = ({
         role="status"
       >
         {draftInputError ??
-          `${utf8Bytes(text)} / ${MAX_DRAFT_BYTES} UTF-8 bytes`}
+          `${combinedBytes} / ${MAX_DRAFT_BYTES} UTF-8 bytes${image?.uploaded ? ' including image context' : image ? ' (text only; image context not ready)' : ''}`}
       </p>
+      {image && onQueueText && (
+        <p className="prompt-composer__byte-limit">
+          Images cannot be held in Web. Use Send or remove the image.
+        </p>
+      )}
+      {imageAttachment?.notice && (
+        <p className="prompt-composer__byte-limit" role="status">
+          {imageAttachment.notice}
+        </p>
+      )}
       {draftNotice && <p role="status">{draftNotice}</p>}
       {/* Quick Commands Interaction Picker Sheet */}
       {effectivePickerOpen && (

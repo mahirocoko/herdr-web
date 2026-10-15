@@ -300,7 +300,11 @@ const Root = () => {
         return
       }
 
-      if (ticket.type === 'workspace-create') {
+      if (
+        ticket.type === 'workspace-create' ||
+        ticket.type === 'worktree-open' ||
+        ticket.type === 'worktree-create'
+      ) {
         if (
           !snapshotConfirmsCreatedTarget(
             authoritative,

@@ -23,17 +23,19 @@ export const TabActionsMenu: FC<ITabActionsMenuProps> = ({
   onNewShellTab,
   onCloseCurrentTab,
   onReviewOperation,
-  disabled = false,
+  disabled = false
 }) => {
   const isFocusHandoffRef = useRef(false)
   const hasLifecycleGate = Boolean(
-    lifecycleTicket && lifecycleTicket.phase !== 'rejected',
+    lifecycleTicket && lifecycleTicket.phase !== 'rejected'
   )
 
   const getLifecycleGateReason = (): string | null => {
     if (!lifecycleTicket || lifecycleTicket.phase === 'rejected') return null
     if (lifecycleTicket.phase === 'pending') return 'Operation pending'
     if (lifecycleTicket.phase === 'observed') return 'Operation in progress'
+    if (lifecycleTicket.phase === 'acknowledged')
+      return 'Launch acknowledged — inspect pane'
     if (lifecycleTicket.phase === 'unknown') return 'Outcome unknown'
     if (lifecycleTicket.phase === 'reconciliation-failed')
       return 'Reconciliation failed'

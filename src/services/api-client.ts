@@ -132,7 +132,44 @@ const hasValidObservedResult = (
   action: IActionRequest,
   response: IActionResponse
 ): boolean => {
-  if (action.type === 'workspace-create') {
+  if (action.type === 'agent-start') {
+    return (
+      response.outcome === 'acknowledged' &&
+      response.result?.paneId === action.target.paneId &&
+      response.result?.terminalId === action.target.terminalId &&
+      typeof response.result?.ready === 'boolean' &&
+      (response.result.ready === false ||
+        (typeof response.result.agentSessionId === 'string' &&
+          response.result.agentSessionId.length > 0 &&
+          ['idle', 'done'].includes(response.result.agentStatus ?? '')))
+    )
+  }
+  if (action.type === 'worktree-list') {
+    const listing = response.result?.worktreeListing
+    return (
+      response.outcome === 'acknowledged' &&
+      Boolean(
+        listing &&
+        /^[a-f0-9]{64}$/.test(listing.repositoryIdentity) &&
+        Array.isArray(listing.entries) &&
+        listing.entries.length <= 128 &&
+        listing.entries.every(
+          (entry) =>
+            /^[a-f0-9]{64}$/.test(entry.checkoutKey) &&
+            typeof entry.available === 'boolean' &&
+            typeof entry.linked === 'boolean' &&
+            (entry.branch === null || typeof entry.branch === 'string') &&
+            (entry.openWorkspaceId === null ||
+              typeof entry.openWorkspaceId === 'string')
+        )
+      )
+    )
+  }
+  if (
+    action.type === 'workspace-create' ||
+    action.type === 'worktree-open' ||
+    action.type === 'worktree-create'
+  ) {
     return (
       response.outcome === 'observed' &&
       hasStringField(response.result, 'workspaceId') &&

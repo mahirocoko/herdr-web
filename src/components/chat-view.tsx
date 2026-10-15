@@ -31,6 +31,8 @@ import {
 } from '@/utils/chat-search.ts'
 import {
   captureChatPosition,
+  restoreChatPosition,
+  chatPositionStorageError,
   chatPositionScope,
   chatRestoreIndex,
   readChatPosition,
@@ -737,8 +739,7 @@ const ChatView: FC<IChatViewProps> = ({
   const strictReadingRef = useRef(false)
   const lastScrollTopRef = useRef(0)
   const prependRef = useRef<{
-    height: number
-    top: number
+    position: IChatPosition
     first: string | undefined
   } | null>(null)
   const [away, setAway] = useState(false)
@@ -792,7 +793,11 @@ const ChatView: FC<IChatViewProps> = ({
   ])
 
   const scope =
-    paneId && sessionKey
+    paneId &&
+    sessionKey &&
+    source &&
+    actionTarget?.paneId === paneId &&
+    actionTarget.terminalId
       ? chatPositionScope(
           paneId,
           actionTarget?.terminalId,
@@ -828,6 +833,17 @@ const ChatView: FC<IChatViewProps> = ({
   }, [])
   const wasFinding = useRef(false)
   useLayoutEffect(() => {
+    // Explicit Find owns reading while an older saved anchor is still pending.
+    if (findOpen && restoring.current) {
+      restoring.current = null
+      stickToBottomRef.current = false
+      strictReadingRef.current = true
+      setAway(true)
+    }
+    // Find's toolbar changes height independently of the incoming history page.
+    const node = scrollerRef.current
+    if (node && prependRef.current)
+      prependRef.current.position = captureChatPosition(node, false)
     if (wasFinding.current && !findOpen)
       findButton.current?.focus({ preventScroll: true })
     wasFinding.current = findOpen
@@ -867,6 +883,7 @@ const ChatView: FC<IChatViewProps> = ({
   const showMatch = useCallback((next: IChatSearchMatch | null) => {
     setMatch(next)
     if (next) {
+      restoring.current = null
       stickToBottomRef.current = false
       strictReadingRef.current = true
       setAway(true)
@@ -944,8 +961,7 @@ const ChatView: FC<IChatViewProps> = ({
       )
         return false
       prependRef.current = {
-        height: node.scrollHeight,
-        top: node.scrollTop,
+        position: captureChatPosition(node, false),
         first: turns[0]?.id
       }
       const loaded = await loadOlder(signal)
@@ -966,7 +982,8 @@ const ChatView: FC<IChatViewProps> = ({
     stickToBottomRef.current = isAtBottom
     setAway(!isAtBottom)
     if (isAtBottom) setNewMessages(false)
-    if (prependRef.current) prependRef.current.top = node.scrollTop
+    if (prependRef.current)
+      prependRef.current.position = captureChatPosition(node, false)
     rememberPlace()
     if (node.scrollTop < 80 && !findOpen && !restoring.current)
       void fetchOlder()
@@ -1059,7 +1076,10 @@ const ChatView: FC<IChatViewProps> = ({
       setNewMessages(true)
     latestRef.current = revision
     if (anchor && anchor.first !== turns[0]?.id) {
-      node.scrollTop = anchor.top + node.scrollHeight - anchor.height
+      // Preserve the reader's current row, not total height (Find, loading and
+      // retention can independently alter that height during the pending read).
+      restoreChatPosition(node, anchor.position)
+      lastScrollTopRef.current = node.scrollTop
       prependRef.current = null
     } else if (stickToBottomRef.current) node.scrollTop = node.scrollHeight
     if (!isLoadingOlder) prependRef.current = null
@@ -1151,8 +1171,9 @@ const ChatView: FC<IChatViewProps> = ({
       <div className="chat-view" role="region" aria-label="Agent Conversation">
         <div className="chat-empty">
           <p>
-            Chat is available for supported agent panes. This shell pane does
-            not have an agent conversation.
+            No native agent conversation is available for this pane. Open an
+            agent in Herdr, then select its pane here, or use Terminal for this
+            pane.
           </p>
           <Button variant="secondary" onClick={onSwitchToStream}>
             Switch to Terminal
@@ -1200,6 +1221,12 @@ const ChatView: FC<IChatViewProps> = ({
               >
                 <Search aria-hidden="true" /> Find in Chat
               </Button>
+            )}
+            {chatPositionStorageError() && (
+              <p className="chat-inline-state" role="status">
+                Reading positions are memory-only; browser storage is
+                unavailable.
+              </p>
             )}
             {restoreNotice && (
               <p className="chat-inline-state" role="status">

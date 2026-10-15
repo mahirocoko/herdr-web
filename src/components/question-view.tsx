@@ -8,6 +8,7 @@ export interface IQuestionViewProps {
   isLoading: boolean
   error: string | null
   onRefresh?: () => void
+  onSwitchToStream?: () => void
 }
 
 const QuestionView: FC<IQuestionViewProps> = ({
@@ -16,6 +17,7 @@ const QuestionView: FC<IQuestionViewProps> = ({
   isLoading,
   error,
   onRefresh,
+  onSwitchToStream
 }) => {
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const activePaneRef = useRef(paneId)
@@ -60,6 +62,22 @@ const QuestionView: FC<IQuestionViewProps> = ({
         tabIndex={0}
         aria-label="Complete question and choices"
       >
+        {error && content && (
+          <div
+            className="question-view__state question-view__state--error"
+            role="status"
+          >
+            <span>
+              Question refresh failed: {error}. Showing the last read, not
+              current question evidence.
+            </span>
+            {onRefresh && (
+              <Button variant="secondary" size="sm" onClick={onRefresh}>
+                Re-read question
+              </Button>
+            )}
+          </div>
+        )}
         {error && !content ? (
           <div
             className="question-view__state question-view__state--error"
@@ -84,10 +102,31 @@ const QuestionView: FC<IQuestionViewProps> = ({
           </div>
         ) : !content || content.trim().length === 0 ? (
           <div className="question-view__state question-view__state--empty">
-            <span>No question text detected.</span>
+            <span>
+              No question text was returned. This does not confirm that the
+              agent is ready for input; inspect Terminal or re-read.
+            </span>
+            {onRefresh && (
+              <Button variant="secondary" size="sm" onClick={onRefresh}>
+                Re-read question
+              </Button>
+            )}
           </div>
         ) : (
           <pre className="question-view__content">{content}</pre>
+        )}
+        {(!content || error) && (
+          <div className="question-view__state">
+            <span>
+              Read-only detection snapshot. Answer recognized questions in Chat
+              or use native Herdr.
+            </span>
+            {onSwitchToStream && (
+              <Button variant="secondary" size="sm" onClick={onSwitchToStream}>
+                Inspect Terminal
+              </Button>
+            )}
+          </div>
         )}
       </div>
     </div>

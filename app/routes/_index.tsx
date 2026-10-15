@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router'
 import type { IAppOutletContext } from '../root.tsx'
 import SpaceDrawer from '@/components/space-drawer.tsx'
+import Button from '@/components/ui/button.tsx'
+import { snapshotReadNotice } from '@/utils/readiness-copy.ts'
 import { selectFocusedPaneFromSnapshot } from '@/utils/workspace-helpers.ts'
 
 export const resolveAuthoritativeWorkspaceId = (
@@ -14,21 +16,27 @@ export const resolveAuthoritativeWorkspaceId = (
 
   // 1. Existing selection if still present
   if (selectedWorkspaceId) {
-    const exists = snapshot.workspaces.some((w) => w.workspace_id === selectedWorkspaceId)
+    const exists = snapshot.workspaces.some(
+      (w) => w.workspace_id === selectedWorkspaceId
+    )
     if (exists) return selectedWorkspaceId
   }
 
   // 2. Focused pane's workspace
   const focused = selectFocusedPaneFromSnapshot(snapshot)
   if (focused && focused.workspace_id) {
-    const exists = snapshot.workspaces.some((w) => w.workspace_id === focused.workspace_id)
+    const exists = snapshot.workspaces.some(
+      (w) => w.workspace_id === focused.workspace_id
+    )
     if (exists) return focused.workspace_id
   }
 
   // 3. Blocked pane's workspace
   const blocked = snapshot.panes?.find((p) => p.agent_status === 'blocked')
   if (blocked && blocked.workspace_id) {
-    const exists = snapshot.workspaces.some((w) => w.workspace_id === blocked.workspace_id)
+    const exists = snapshot.workspaces.some(
+      (w) => w.workspace_id === blocked.workspace_id
+    )
     if (exists) return blocked.workspace_id
   }
 
@@ -53,7 +61,10 @@ const IndexRoute = () => {
 
   useEffect(() => {
     if (status !== 'connected' || !snapshot) return
-    const targetWsId = resolveAuthoritativeWorkspaceId(snapshot, selectedWorkspaceId)
+    const targetWsId = resolveAuthoritativeWorkspaceId(
+      snapshot,
+      selectedWorkspaceId
+    )
     if (targetWsId) {
       navigate('/spaces/' + encodeURIComponent(targetWsId), { replace: true })
     }
@@ -77,36 +88,42 @@ const IndexRoute = () => {
     >
       {status === 'loading' && (
         <div className="herdr-empty-canvas">
-          <span>Loading Herdr session...</span>
+          <span role="status">
+            Reading Herdr snapshot… Spaces will appear when available.
+          </span>
         </div>
       )}
 
-      {status === 'error' && snapshotError && (
-        <div className="system-banner system-banner--error" role="alert">
-          <span>Failed to connect to Herdr daemon: {snapshotError}</span>
-          <button
+      {(status === 'error' || status === 'reconnecting') && (
+        <div className="system-banner system-banner--error" role="status">
+          <span>{snapshotReadNotice(status, snapshotError)}</span>
+          <Button
             type="button"
+            variant="outline"
             className="system-banner__retry"
             onClick={() => refreshSnapshot()}
           >
-            Retry
-          </button>
+            Refresh snapshot
+          </Button>
         </div>
       )}
 
       {status === 'empty' && (
         <div className="herdr-empty-canvas herdr-empty-canvas--actions">
           <div className="system-banner system-banner--empty">
-            <span>No active Herdr workspaces or panes discovered.</span>
+            <span>{snapshotReadNotice(status, snapshotError)}</span>
           </div>
-          <button
+          <Button
             ref={menuTriggerRef}
             type="button"
             className="system-banner__retry"
             onClick={() => setIsNewSpaceOpen(true)}
           >
             New Space
-          </button>
+          </Button>
+          <Button variant="outline" onClick={() => refreshSnapshot()}>
+            Refresh snapshot
+          </Button>
         </div>
       )}
 
@@ -119,8 +136,12 @@ const IndexRoute = () => {
         tabs={snapshot?.tabs || []}
         panes={snapshot?.panes || []}
         selectedWorkspaceId={selectedWorkspaceId}
-        onSelectWorkspace={(workspaceId) => navigate('/spaces/' + encodeURIComponent(workspaceId))}
-        onOpenSettings={() => navigate('/settings', { state: { appOwned: true } })}
+        onSelectWorkspace={(workspaceId) =>
+          navigate('/spaces/' + encodeURIComponent(workspaceId))
+        }
+        onOpenSettings={() =>
+          navigate('/settings', { state: { appOwned: true } })
+        }
         onClose={() => {
           setIsNewSpaceOpen(false)
           requestAnimationFrame(() => menuTriggerRef.current?.focus())

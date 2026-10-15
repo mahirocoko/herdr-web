@@ -182,6 +182,18 @@
   line-height: normal;
 }
 
+/* Native checkout rows retain their full label; fixed control height must not
+   constrain wrapped content. Keep the existing 44px worktree action hit area. */
+.ui-button.worktree-checkout-action,
+.ui-button--default-size.worktree-checkout-action {
+  height: auto;
+  min-height: 44px;
+  padding: 8px 10px;
+  align-items: flex-start;
+  white-space: normal;
+  line-height: normal;
+}
+
 /* Multi-line content button override: navigation search item */
 .ui-button.navigation-search-item,
 .ui-button--default-size.navigation-search-item {

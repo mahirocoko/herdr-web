@@ -6,6 +6,7 @@ import {
   useState,
   useSyncExternalStore
 } from 'react'
+import { ReviewDraftContext } from '@/components/review-draft-context.ts'
 import { composerDrafts, composerDraftScope } from '@/utils/composer-draft.ts'
 import { composerStrip } from '@/utils/composer-strip.ts'
 import {
@@ -47,6 +48,8 @@ import {
 } from '@/components/ui/sheet.tsx'
 import ThumbDeck from '@/components/thumb-deck.tsx'
 import PromptComposer from '@/components/prompt-composer.tsx'
+import { useComposerImage } from '@/hooks/use-composer-image.ts'
+import { canSendComposerImage } from '@/utils/composer-image.ts'
 import HeldQueueStack from '@/components/held-queue-stack.tsx'
 import Button from '@/components/ui/button.tsx'
 import TabRail from '@/components/tab-rail.tsx'
@@ -66,6 +69,7 @@ import {
   formatActionErrorMessage
 } from '@/utils/action-target.ts'
 import { isAgentPane } from '@/utils/workspace-helpers.ts'
+import { promptReadNotice, snapshotReadNotice } from '@/utils/readiness-copy.ts'
 import {
   type ITerminalControlOwnership,
   evaluateControlStatusResponse,
@@ -353,8 +357,13 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
 
   useEffect(() => {
     if (shouldRestoreMenuFocusRef.current) {
-      shouldRestoreMenuFocusRef.current = false
-      requestAnimationFrame(() => menuTriggerRef.current?.focus())
+      const target = menuTriggerRef.current?.getClientRects().length
+        ? menuTriggerRef.current
+        : searchTriggerRef.current
+      if (target) {
+        target.focus({ preventScroll: true })
+        shouldRestoreMenuFocusRef.current = false
+      }
     }
   }, [shouldRestoreMenuFocusRef, menuTriggerRef])
 
@@ -465,6 +474,17 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
       generation: draftSelectionRef.current.generation + 1
     }
   const draftGeneration = draftSelectionRef.current.generation
+  const nativeImageKind =
+    selectedPane?.agent ?? selectedPane?.agent_session?.agent
+  const imageEligible =
+    nativeImageKind?.toLowerCase() === 'letta' &&
+    targetResult.target?.expectedMode === 'agent' &&
+    viewMode === 'chat' &&
+    controlOwnership === 'idle' &&
+    !interactive.prompt
+  const imageScope =
+    imageEligible && draftScope ? `${draftScope}:${draftGeneration}` : null
+  const composerImage = useComposerImage(imageScope, targetResult.target)
   const [quoteFocus, setQuoteFocus] = useState<{
     scope: string | null
     generation: number
@@ -478,6 +498,26 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
     composerDrafts.set(draftScope, text)
   }
   const contextStrip = composerStrip(selectedPane, activeWorkspace)
+  const appendReviewDraft = (block: string): string | null => {
+    if (
+      !targetResult.target ||
+      currentActionTargetRef.current?.expectedMode !==
+        targetResult.target.expectedMode ||
+      currentActionTargetRef.current?.paneId !== targetResult.target.paneId ||
+      !quoteMatchesTarget(
+        draftScope,
+        draftGeneration,
+        draftSelectionRef.current.scope,
+        draftSelectionRef.current.generation
+      )
+    )
+      return 'Target changed. Reopen the viewer for the current pane.'
+    const next = appendQuote(composerDrafts.read(draftScope).text, block)
+    if (next === null)
+      return 'Quote exceeds the 4096 UTF-8 byte draft limit. Select less text.'
+    if (!composerDrafts.set(draftScope, next)) return 'Draft unavailable.'
+    return null
+  }
   const quoteSelection = (text: string) => {
     if (
       !isAgentPaneForControl ||
@@ -495,14 +535,11 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
       text
     })
     if (!block) return
-    const next = appendQuote(composerDrafts.read(draftScope).text, block)
-    if (next === null) {
-      setActionError(
-        'Quote exceeds the 4096 UTF-8 byte draft limit. Select less text.'
-      )
+    const error = appendReviewDraft(block)
+    if (error) {
+      setActionError(error)
       return
     }
-    composerDrafts.set(draftScope, next)
     setQuoteFocus((previous) => ({
       scope: draftScope,
       generation: draftGeneration,
@@ -564,6 +601,16 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
   const handleSubmitText = async (
     text: string
   ): Promise<ActionResultStatus> => {
+    const selectedImage = composerImage.get()
+    if (
+      selectedImage &&
+      (!imageEligible || !canSendComposerImage(selectedImage, text))
+    ) {
+      setActionError(
+        'Image is not ready or the combined prompt exceeds 4096 UTF-8 bytes. Remove or retry the image.'
+      )
+      return 'skipped_busy'
+    }
     if (!selectedPaneId || !targetResult.target) {
       if (targetResult.error) {
         setActionError(targetResult.error)
@@ -625,21 +672,35 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
       action: async () => {
         markChatSend()
         const target = { ...targetResult.target! }
-        const projectSubmission = canonicalHasAgent
+        const imageTicket = selectedImage
+          ? composerImage.beginSend(selectedImage)
+          : null
+        // Server-owned image instructions are private; ordinary text-only transcript
+        // corroboration must not mistake the visible text for the combined payload.
+        const projectSubmission = canonicalHasAgent && !imageTicket
         if (projectSubmission) submissions.begin(operationId, text, target)
         try {
           const result = await sendAction({
             type: actionType,
             operationId,
             target,
-            text
+            text,
+            ...(imageTicket?.uploaded
+              ? { imageId: imageTicket.uploaded.imageId }
+              : {})
           })
+          if (imageTicket) composerImage.settle(imageTicket, true)
           if (projectSubmission)
             submissions.settle(operationId, 'submitted-awaiting-transcript')
           return result
         } catch (error) {
+          if (imageTicket) composerImage.settle(imageTicket, false)
           if (projectSubmission)
-            submissions.settle(operationId, submissionFailurePhase(error))
+            submissions.settle(
+              operationId,
+              submissionFailurePhase(error),
+              error
+            )
           throw error
         }
       },
@@ -797,11 +858,20 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur()
     }
+    if (
+      lifecycle.ticket?.type === 'worktree-open' ||
+      lifecycle.ticket?.type === 'worktree-create'
+    ) {
+      setIsSpaceDrawerOpen(false)
+      setSpaceDrawerInitialView('list')
+      setIsSpaceDrawerModalOpen(true)
+      return
+    }
     setIsSpaceDrawerOpen(false)
     setTabDrawerInitialView('status')
     setTabDrawerTargetTabId(null)
     setIsTabDrawerOpen(true)
-  }, [])
+  }, [lifecycle.ticket?.type])
 
   const handleOpenNewSpace = useCallback(() => {
     setIsSpaceDrawerOpen(false)
@@ -868,8 +938,14 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
       }
     : undefined
 
-  // Fail-closed view when Space is not found in an authoritative snapshot
-  if (status !== 'loading' && snapshot && !activeWorkspace) {
+  const snapshotNotice = snapshotReadNotice(status, snapshotError)
+
+  // Only a successful current read can establish that this Space is absent.
+  if (
+    (status === 'connected' || status === 'empty') &&
+    snapshot &&
+    !activeWorkspace
+  ) {
     return (
       <div
         className="app herdr-app"
@@ -894,7 +970,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
     )
   }
 
-  return (
+  const dashboard = (
     <div
       className={`app herdr-app${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}
       style={appStyle}
@@ -914,6 +990,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
         onOpenTabs={handleOpenTabDrawer}
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
+        searchTriggerRef={searchTriggerRef}
         onOpenSearch={() => setIsSearchOpen(true)}
         onNewShellTab={handleOpenNewTab}
         onCloseCurrentTab={() => {
@@ -969,23 +1046,17 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
           />
 
           {/* Connection / Snapshot Error Banner */}
-          {status === 'error' && snapshotError && (
-            <div className="system-banner system-banner--error" role="alert">
-              <span>Failed to connect to Herdr daemon: {snapshotError}</span>
+          {snapshotNotice && (
+            <div className="system-banner system-banner--error" role="status">
+              <span>{snapshotNotice}</span>
               <Button
                 variant="outline"
                 size="sm"
                 className="system-banner__retry"
                 onClick={() => refreshSnapshot()}
               >
-                Retry
+                Refresh snapshot
               </Button>
-            </div>
-          )}
-
-          {status === 'empty' && (
-            <div className="system-banner system-banner--empty">
-              <span>No active Herdr workspaces or panes discovered.</span>
             </div>
           )}
 
@@ -995,8 +1066,8 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
               <div className="herdr-empty-canvas">
                 <span>
                   {status === 'loading'
-                    ? 'Loading Herdr session...'
-                    : 'No pane selected'}
+                    ? 'Reading Herdr snapshot… Pane selection will appear when available.'
+                    : 'No pane selected. Choose a pane in Tabs & Panes or open one in Herdr.'}
                 </span>
               </div>
             ) : (
@@ -1009,6 +1080,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
                       isLoading={isQuestionLoading}
                       error={questionError}
                       onRefresh={refetchQuestion}
+                      onSwitchToStream={() => setViewMode('stream')}
                     />
                   )}
 
@@ -1094,9 +1166,6 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
               </div>
             ) : (
               <>
-                {viewMode === 'chat' && interactive.error && (
-                  <p role="status">{interactive.error}</p>
-                )}
                 <div className="prompt-dock" aria-live="polite">
                   {viewMode === 'chat' && interactive.prompt && (
                     <PromptCard
@@ -1147,9 +1216,10 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
                   !interactive.prompt && (
                     <div className="chat-inline-state" role="status">
                       <span>
-                        {interactive.unknown
-                          ? 'Answer outcome unknown. Inspect Terminal before re-reading.'
-                          : (interactive.error ?? 'Reading current prompt…')}
+                        {promptReadNotice(
+                          interactive.unknown,
+                          interactive.error
+                        )}
                       </span>
                       <Button
                         variant="ghost"
@@ -1158,6 +1228,12 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
                         }}
                       >
                         Re-read prompt
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => setViewMode('stream')}
+                      >
+                        Inspect Terminal
                       </Button>
                     </div>
                   )}
@@ -1171,6 +1247,22 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
                   />
                 )}
                 <PromptComposer
+                  imageAttachment={
+                    imageScope
+                      ? {
+                          image: composerImage.image,
+                          allowed:
+                            interactive.ready &&
+                            !interactive.unknown &&
+                            !interactive.error,
+                          notice: composerImage.notice,
+                          onChoose: composerImage.choose,
+                          onRemove: composerImage.discard,
+                          onRetry: composerImage.retry,
+                          onInspect: () => setViewMode('stream')
+                        }
+                      : undefined
+                  }
                   contextControls={
                     viewMode === 'chat' ? (
                       <ChatControls
@@ -1256,10 +1348,16 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
                   onQueueText={
                     canonicalExpectedMode === 'agent'
                       ? async (text) => {
+                          if (composerImage.get())
+                            throw new Error(
+                              'Images cannot be held in Web. Remove the image or use Send.'
+                            )
                           if (!targetResult.target)
                             throw new Error('Target unavailable')
                           try {
-                            await held.enqueue(text, { ...targetResult.target })
+                            await held.enqueue(text, {
+                              ...targetResult.target
+                            })
                           } catch (error) {
                             setActionError(
                               error instanceof Error
@@ -1385,6 +1483,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
 
       {/* Navigation Search Sheet (Search Spaces, Tabs, Panes across snapshot) */}
       <NavigationSearchSheet
+        agents={snapshot?.agents}
         isOpen={isSearchOpen}
         workspaces={workspaces}
         tabs={tabs}
@@ -1402,6 +1501,13 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
         triggerRef={searchTriggerRef}
       />
     </div>
+  )
+  return (
+    <ReviewDraftContext.Provider
+      value={targetResult.target ? appendReviewDraft : null}
+    >
+      {dashboard}
+    </ReviewDraftContext.Provider>
   )
 }
 

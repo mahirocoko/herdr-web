@@ -260,7 +260,8 @@ describe('ChatView component', () => {
         onSwitchToStream: () => {}
       })
     )
-    expect(html).toContain('Chat is available for supported agent panes')
+    expect(html).toContain('No native agent conversation is available')
+    expect(html).toContain('Open an agent in Herdr')
     expect(html).toContain('Switch to Terminal')
   })
 

@@ -16,6 +16,7 @@ const submit = (
     'dispatch',
     `
 const selectedPaneId='p', targetResult={target:{paneId:'p',expectedMode:'terminal'}}, viewMode='chat', canonicalHasAgent=true;
+const composerImage={get:()=>null}, imageEligible=false;
 const submissions={begin:()=>{},settle:()=>{}}, submissionFailurePhase=()=> 'uncertain';
 const markChatSend=()=>{}, setActionError=()=>{}, refreshSnapshot=async()=>{}, refetchActiveSurface=async()=>{}, isBusyRef={current:false}, setIsBusy=()=>{}, formatActionErrorMessage=String;
 const sendAction=async()=>{dispatch();return 'acknowledged'}, executeGuardedAction=async opts=>opts.action();
