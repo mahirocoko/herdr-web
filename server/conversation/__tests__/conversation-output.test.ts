@@ -267,8 +267,10 @@ describe('owner-bound whole recorded output', () => {
     await expect(read()).rejects.toThrow('Session replaced')
     identity = outputIdentity(await read())
     const copy = fs.readFileSync(file)
-    fs.unlinkSync(file)
-    fs.writeFileSync(file, copy)
+    const oldInode = fs.statSync(file).ino
+    fs.writeFileSync(`${file}.replacement`, copy)
+    fs.renameSync(`${file}.replacement`, file)
+    expect(fs.statSync(file).ino).not.toBe(oldInode)
     await expect(
       readPaneToolOutput('w:p', identity.history, identity.ref, {
         deps: deps()

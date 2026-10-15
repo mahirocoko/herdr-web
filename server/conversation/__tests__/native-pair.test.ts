@@ -240,6 +240,7 @@ for (const provider of ['codex', 'claude'] as const)
       readPaneConversation('pane-fixture', { deps, before })
     beforeEach(() => {
       const parent = path.resolve('.agent-state/tmp')
+      fs.mkdirSync(parent, { recursive: true })
       root = fs.mkdtempSync(path.join(parent, 'pair-fixture-'))
       processStart = '100:1'
       rpcCalls = 0
@@ -607,8 +608,10 @@ for (const provider of ['codex', 'claude'] as const)
       write([user('one'), call(), output('output '.repeat(4000))])
       let ref = result(await read())
       const bytes = fs.readFileSync(file)
-      fs.unlinkSync(file)
-      fs.writeFileSync(file, bytes)
+      const oldInode = fs.statSync(file).ino
+      fs.writeFileSync(`${file}.replacement`, bytes)
+      fs.renameSync(`${file}.replacement`, file)
+      expect(fs.statSync(file).ino).not.toBe(oldInode)
       await expect(
         readPaneToolOutput('pane-fixture', ref.history, ref.ref, { deps })
       ).rejects.toThrow('Session replaced')

@@ -28,6 +28,7 @@ const meta = async (name: string) => {
   return response.json()
 }
 beforeEach(() => {
+  fs.mkdirSync(path.resolve('.agent-state/tmp'), { recursive: true })
   root = fs.mkdtempSync(path.resolve('.agent-state/tmp/file-viewer-fixture-'))
 })
 afterEach(() => fs.rmSync(root, { recursive: true, force: true }))

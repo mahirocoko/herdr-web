@@ -116,7 +116,7 @@ export const sendRawSocketRequest = async <T = any>(
     }, timeoutMs)
 
     try {
-      client = net.createConnection({ path: socketPath })
+      client = new net.Socket()
     } catch (err) {
       finishError(err instanceof Error ? err : new Error(String(err)))
       return
@@ -187,6 +187,13 @@ export const sendRawSocketRequest = async <T = any>(
         finishError(new Error(`Herdr socket connection closed unexpectedly for method: ${method}`))
       }
     })
+
+    // Observe immediate connection failures before starting any socket IO.
+    try {
+      client.connect({ path: socketPath })
+    } catch (err) {
+      finishError(err instanceof Error ? err : new Error(String(err)))
+    }
   })
 }
 

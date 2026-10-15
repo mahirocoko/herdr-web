@@ -2441,6 +2441,13 @@ describe('Core Pack Backend Foundation', () => {
         startPushBridge: false,
         deps: {
           coordinator,
+          fetchSnapshot: async () => ({
+            protocol: 22,
+            version: 'fixture',
+            workspaces: [],
+            tabs: [],
+            panes: []
+          }),
           verifyTarget: () => {
             throw new Error('Simulated pre-dispatch verification throw')
           }

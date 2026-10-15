@@ -34,7 +34,7 @@ describe('exact installed Pierre license text is retained', () => {
       'regex-recursion',
       'regex-utilities'
     ]) {
-      const shipped = ['LICENSE', 'LICENSE.md', 'LICENSE.txt']
+      const shipped = ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'license']
         .map(
           (file) =>
             new URL(`../../../node_modules/${name}/${file}`, import.meta.url)
