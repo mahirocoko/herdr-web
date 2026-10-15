@@ -17,6 +17,33 @@ export const formatTerminalQuote = (quote: {
   // xterm selection coordinates are viewport-local, not native history line numbers.
   return `${label}:\n${fence}\n${text}\n${fence}`
 }
+// Only selections wholly contained by the viewer-owned text surface qualify.
+export const ownedDisplayedExcerpt = (
+  owner: Pick<Node, 'contains'> | null,
+  selection: Pick<Selection, 'anchorNode' | 'focusNode' | 'toString'> | null
+): string | null =>
+  owner &&
+  selection?.anchorNode &&
+  selection.focusNode &&
+  owner.contains(selection.anchorNode) &&
+  owner.contains(selection.focusNode)
+    ? quotedText(selection.toString())
+    : null
+
+export const formatReviewQuote = (
+  path: string,
+  scope: string,
+  excerpt?: string | null
+) => {
+  const label = `${JSON.stringify(path)} — ${scope}`
+  return excerpt
+    ? formatTerminalQuote({
+        label: `${label} (selected displayed excerpt)`,
+        text: excerpt
+      })!
+    : label
+}
+
 export const appendQuote = (
   draft: string,
   block: string,

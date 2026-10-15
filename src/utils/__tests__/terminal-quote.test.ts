@@ -3,9 +3,53 @@ import { expect, test } from 'bun:test'
 import {
   appendQuote,
   formatTerminalQuote,
+  formatReviewQuote,
+  ownedDisplayedExcerpt,
   quoteMatchesTarget,
   quotedText
 } from '../terminal-quote.ts'
+test('review path-only scope and displayed excerpt provenance are honest', () => {
+  expect(formatReviewQuote('a.md', 'Current disk content')).toBe(
+    '"a.md" — Current disk content'
+  )
+  expect(
+    formatReviewQuote('a.md', 'Current disk content', 'Rendered title')
+  ).toContain('(selected displayed excerpt)')
+  expect(formatReviewQuote('a\n.md', 'Current staged comparison')).toContain(
+    'a\\n.md'
+  )
+  expect(
+    appendQuote(
+      'newer draft',
+      formatReviewQuote('a.md', 'Current disk content')
+    )
+  ).toStartWith('newer draft\n\n')
+  expect(
+    appendQuote(
+      'ก'.repeat(1365),
+      formatReviewQuote('a', 'Current disk content')
+    )
+  ).toBeNull()
+})
+test('selection outside owned viewer or crossing its boundary is excluded', () => {
+  const inside = {} as Node
+  const outside = {} as Node
+  const owner = { contains: (node: Node | null) => node === inside }
+  const selection = {
+    anchorNode: inside,
+    focusNode: inside,
+    toString: () => 'shown text'
+  }
+  expect(ownedDisplayedExcerpt(owner, selection)).toBe('shown text')
+  expect(
+    ownedDisplayedExcerpt(owner, { ...selection, focusNode: outside })
+  ).toBeNull()
+  expect(
+    ownedDisplayedExcerpt(owner, { ...selection, anchorNode: outside })
+  ).toBeNull()
+  expect(ownedDisplayedExcerpt(owner, null)).toBeNull()
+  expect(ownedDisplayedExcerpt(null, selection)).toBeNull()
+})
 test('empty selection quotes nothing', () => {
   expect(quotedText('\n  \r\n')).toBeNull()
   expect(formatTerminalQuote({ label: 'a', text: '\n\n' })).toBeNull()

@@ -24,7 +24,11 @@ test('Settings Chat uses source group/row anatomy with canonical controls and tr
   )
   expect(html).toContain('>Chat</h2>')
   expect(html).toContain('chat-settings-card')
-  expect(html.match(/class="chat-settings-row(?: is-wide)?"/g)?.length).toBe(4)
+  // T172 adds the explicit browser-owned reading-position deletion row.
+  expect(html.match(/class="chat-settings-row(?: is-wide)?"/g)?.length).toBe(5)
+  expect(html).toContain('Reading positions')
+  expect(html).toContain('Delete saved reading positions')
+  expect(html).toContain('No transcript text or Send authority.')
   expect(html).toContain('ui-select')
   expect(html).toContain('ui-input')
   expect(html).toContain('ui-checkbox')
@@ -57,6 +61,15 @@ test('one Root preference instance is handed through existing outlet context to 
   expect(chat).toContain('onRecordedMetadata(')
   expect(chat).toContain('onRecordedMetadata(null)')
   expect(app).toContain('onRecordedMetadata={setRecordedMetadata}')
+})
+
+test('Settings Back transfers to a mounted visible header owner without a deferred composer focus', () => {
+  const app = source('../../app.tsx')
+  const settings = source('../../../app/routes/settings.tsx')
+  expect(settings).toContain('shouldRestoreMenuFocusRef.current = true')
+  expect(app).toContain('menuTriggerRef.current?.getClientRects().length')
+  expect(app).toContain(': searchTriggerRef.current')
+  expect(app).toContain('target.focus({ preventScroll: true })')
 })
 
 test('selected row remains identified and folded while the sole source passage belongs to Find', () => {

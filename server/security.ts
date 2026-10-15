@@ -301,6 +301,13 @@ export const validateActionRequest = (
 
   const raw = body as Record<string, unknown>
   const type = raw.type
+  if (type !== 'prompt' && raw.imageId !== undefined) {
+    return {
+      valid: false,
+      error:
+        'Image context is supported only by prompt Send, not Queue or terminal input'
+    }
+  }
 
   if (type === 'held-enqueue') {
     if (
@@ -340,6 +347,10 @@ export const validateActionRequest = (
     type !== 'prompt-answer' &&
     type !== 'keys' &&
     type !== 'terminal-input' &&
+    type !== 'worktree-list' &&
+    type !== 'worktree-open' &&
+    type !== 'worktree-create' &&
+    type !== 'agent-start' &&
     type !== 'tab-create' &&
     type !== 'workspace-create' &&
     type !== 'workspace-close' &&
@@ -364,6 +375,123 @@ export const validateActionRequest = (
       valid: false,
       error:
         'Invalid "operationId": must be a safe token (1-128 chars, alphanumeric, underscore, period, colon, hyphen)'
+    }
+  }
+
+  if (
+    type === 'worktree-list' ||
+    type === 'worktree-open' ||
+    type === 'worktree-create'
+  ) {
+    const source = raw.source as Record<string, unknown> | null
+    const allowed = [
+      'type',
+      'operationId',
+      'source',
+      ...(type === 'worktree-list'
+        ? []
+        : [
+            'repositoryIdentity',
+            type === 'worktree-open' ? 'checkoutKey' : 'branch'
+          ])
+    ]
+    if (
+      Object.keys(raw).some((key) => !allowed.includes(key)) ||
+      !source ||
+      typeof source !== 'object' ||
+      Array.isArray(source) ||
+      Object.keys(source).some(
+        (key) => !['workspaceId', 'paneId', 'terminalId'].includes(key)
+      ) ||
+      typeof source.workspaceId !== 'string' ||
+      !CONSERVATIVE_TOKEN_REGEX.test(source.workspaceId) ||
+      source.workspaceId.length > 128 ||
+      typeof source.paneId !== 'string' ||
+      !PANE_ID_REGEX.test(source.paneId) ||
+      typeof source.terminalId !== 'string' ||
+      !CONSERVATIVE_TOKEN_REGEX.test(source.terminalId) ||
+      source.terminalId.length > 128 ||
+      (type !== 'worktree-list' &&
+        (typeof raw.repositoryIdentity !== 'string' ||
+          !/^[a-f0-9]{64}$/.test(raw.repositoryIdentity))) ||
+      (type === 'worktree-open' &&
+        (typeof raw.checkoutKey !== 'string' ||
+          !/^[a-f0-9]{64}$/.test(raw.checkoutKey))) ||
+      (type === 'worktree-create' &&
+        (typeof raw.branch !== 'string' ||
+          !/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(raw.branch)))
+    )
+      return {
+        valid: false,
+        error:
+          'Invalid worktree source/selection or unsupported fields; paths, cwd, trust and argv are not accepted'
+      }
+    const boundSource = {
+      workspaceId: source.workspaceId,
+      paneId: source.paneId,
+      terminalId: source.terminalId
+    }
+    if (type === 'worktree-list')
+      return { valid: true, data: { type, operationId, source: boundSource } }
+    if (type === 'worktree-open')
+      return {
+        valid: true,
+        data: {
+          type,
+          operationId,
+          source: boundSource,
+          repositoryIdentity: raw.repositoryIdentity as string,
+          checkoutKey: raw.checkoutKey as string
+        }
+      }
+    return {
+      valid: true,
+      data: {
+        type,
+        operationId,
+        source: boundSource,
+        repositoryIdentity: raw.repositoryIdentity as string,
+        branch: raw.branch as string
+      }
+    }
+  }
+
+  if (type === 'agent-start') {
+    const target = raw.target as Record<string, unknown> | null
+    if (
+      Object.keys(raw).some(
+        (key) =>
+          !['type', 'operationId', 'target', 'kind', 'name'].includes(key)
+      ) ||
+      raw.kind !== 'letta' ||
+      typeof raw.name !== 'string' ||
+      !/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(raw.name) ||
+      !target ||
+      typeof target !== 'object' ||
+      Array.isArray(target) ||
+      Object.keys(target).some(
+        (key) => !['paneId', 'terminalId'].includes(key)
+      ) ||
+      typeof target.paneId !== 'string' ||
+      !PANE_ID_REGEX.test(target.paneId) ||
+      typeof target.terminalId !== 'string' ||
+      !CONSERVATIVE_TOKEN_REGEX.test(target.terminalId) ||
+      target.terminalId.length > 128
+    )
+      return {
+        valid: false,
+        error:
+          'Invalid native agent start: exact pane/terminal, safe name and Letta kind required; no launch overrides allowed'
+      }
+    return {
+      valid: true,
+      data: {
+        type,
+        operationId,
+        kind: 'letta',
+        name: raw.name,
+        target: { paneId: target.paneId, terminalId: target.terminalId }
+      }
     }
   }
 
@@ -865,19 +993,52 @@ export const validateActionRequest = (
   }
 
   if (type === 'prompt') {
+    if (
+      raw.imageId !== undefined &&
+      (Object.keys(raw).some(
+        (key) =>
+          !['type', 'operationId', 'target', 'text', 'imageId'].includes(key)
+      ) ||
+        Object.keys(rawTarget).some(
+          (key) =>
+            ![
+              'paneId',
+              'terminalId',
+              'expectedMode',
+              'agentSessionId'
+            ].includes(key)
+        ))
+    )
+      return {
+        valid: false,
+        error:
+          'Invalid image prompt fields; paths and filenames are not accepted'
+      }
+    if (
+      raw.imageId !== undefined &&
+      (typeof raw.imageId !== 'string' || !/^[a-f0-9]{64}$/.test(raw.imageId))
+    )
+      return { valid: false, error: 'Invalid image context identifier' }
     if (expectedMode !== 'agent') {
       return {
         valid: false,
         error: `Action type "prompt" requires target expectedMode "agent", received "${expectedMode}"`
       }
     }
-    if (typeof raw.text !== 'string' || raw.text.trim().length === 0) {
-      return { valid: false, error: 'Prompt text must be a non-empty string' }
-    }
-    if (raw.text.length > 4096) {
+    if (
+      typeof raw.text !== 'string' ||
+      (!raw.imageId && raw.text.trim().length === 0)
+    ) {
       return {
         valid: false,
-        error: 'Prompt text exceeds maximum length of 4096 characters'
+        error:
+          'Prompt text must be a non-empty string unless an image is supplied'
+      }
+    }
+    if (new TextEncoder().encode(raw.text).byteLength > 4096) {
+      return {
+        valid: false,
+        error: 'Prompt text exceeds maximum length of 4096 UTF-8 bytes'
       }
     }
     return {
@@ -886,7 +1047,8 @@ export const validateActionRequest = (
         type: 'prompt',
         operationId,
         target,
-        text: raw.text
+        text: raw.text,
+        ...(raw.imageId !== undefined ? { imageId: raw.imageId as string } : {})
       }
     }
   }

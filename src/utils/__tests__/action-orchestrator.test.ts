@@ -1,7 +1,31 @@
 import { describe, expect, it } from 'bun:test'
 import { executeGuardedAction } from '../action-orchestrator.ts'
+import { ActionError } from '../../services/api-client.ts'
 
 describe('executeGuardedAction', () => {
+  it('formats actual ActionError before flattening and keeps unknown outcome priority', async () => {
+    for (const outcome of ['rejected', 'unknown'] as const) {
+      const error = new ActionError('Invalid Origin', 403, outcome)
+      let displayed = ''
+      await expect(
+        executeGuardedAction({
+          action: async () => {
+            throw error
+          },
+          getIsBusy: () => false,
+          setIsBusy: () => {},
+          setError: (message) => {
+            displayed = message ?? ''
+          }
+        })
+      ).rejects.toBe(error)
+      expect(displayed).toContain(
+        outcome === 'unknown' ? 'Outcome unknown' : 'configured owner identity'
+      )
+      if (outcome === 'rejected') expect(displayed).toContain('Invalid Origin')
+      else expect(displayed).not.toContain('authorized')
+    }
+  })
   it('returns acknowledged, sets isBusy to true during action, and resets isBusy to false immediately upon action completion', async () => {
     let busyState = false
     let errorState: string | null = null

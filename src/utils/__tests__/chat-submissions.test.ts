@@ -6,6 +6,7 @@ import {
   restoreSubmissions,
   submissionBaseline,
   submissionFailurePhase,
+  submissionFailure,
   submissionLabel,
   type IChatSubmission
 } from '../chat-submissions.ts'
@@ -45,6 +46,37 @@ const match = (
 ) => corroboratedSubmission(record, records, selected, history, rows)
 
 describe('submission evidence, never delivery authority', () => {
+  test('rejected 403 persists allowlisted facts, legacy receipts invent no status, unknown stays uncertain', () => {
+    const error = Object.assign(new Error('Invalid Origin'), {
+      status: 403,
+      outcome: 'rejected',
+      result: { secret: 'never-store' }
+    })
+    const failure = submissionFailure(error)
+    expect(failure).toEqual({ status: 403, code: 'invalid-origin' })
+    const rejected = {
+      ...record,
+      phase: submissionFailurePhase(error),
+      failure
+    }
+    const restored = restoreSubmissions(
+      JSON.stringify([{ ...rejected, failure: { ...failure, secret: 'drop' } }])
+    )[0]
+    expect(restored.failure).toEqual(failure)
+    expect(submissionLabel(restored)).toContain('Invalid Origin')
+    expect(submissionLabel(restored)).toContain('configured owner identity')
+    expect(submissionLabel(restored)).toContain(
+      'Push enrollment is not required'
+    )
+    expect(
+      restoreSubmissions(JSON.stringify([{ ...record, phase: 'rejected' }]))[0]
+        .failure
+    ).toBeUndefined()
+    expect(submissionLabel({ ...rejected, phase: 'uncertain' })).not.toContain(
+      'authorized'
+    )
+    expect(JSON.stringify(failure)).not.toContain('never-store')
+  })
   test('mode flips and transient unread history are not proof of stale storage', () => {
     const blocked = { ...target, expectedMode: 'blocked-agent' as const }
     expect(sameSubmissionTarget(target, blocked)).toBe(false)

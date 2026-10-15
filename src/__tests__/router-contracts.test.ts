@@ -10,6 +10,7 @@ import {
   parseSpacePath,
   consumeWorkspaceDeepLink
 } from '@/utils/push-orchestration.ts'
+import { snapshotReadNotice } from '@/utils/readiness-copy.ts'
 import { resolveAuthoritativeWorkspaceId } from '../../app/routes/_index.tsx'
 import { resolveSpaceRouteParam } from '../../app/routes/spaces.$workspaceId.tsx'
 import {
@@ -23,7 +24,9 @@ describe('Router & Push Deep Link Contracts', () => {
     test('parses valid /spaces/:workspaceId paths and rejects invalid/nested/query formats', () => {
       expect(parseSpacePath('/spaces/ws-main')).toBe('ws-main')
       expect(parseSpacePath('/spaces/space_123')).toBe('space_123')
-      expect(parseSpacePath('/spaces/alpha-beta-gamma')).toBe('alpha-beta-gamma')
+      expect(parseSpacePath('/spaces/alpha-beta-gamma')).toBe(
+        'alpha-beta-gamma'
+      )
 
       // Rejects missing ID
       expect(parseSpacePath('/spaces/')).toBeNull()
@@ -63,7 +66,10 @@ describe('Router & Push Deep Link Contracts', () => {
   })
 
   describe('2. Root resolution contract', () => {
-    const mockWorkspace = (id: string, overrides: Partial<IWorkspace> = {}): IWorkspace => ({
+    const mockWorkspace = (
+      id: string,
+      overrides: Partial<IWorkspace> = {}
+    ): IWorkspace => ({
       workspace_id: id,
       label: id,
       number: 1,
@@ -74,7 +80,11 @@ describe('Router & Push Deep Link Contracts', () => {
       ...overrides
     })
 
-    const mockTab = (id: string, wsId: string, overrides: Partial<ITab> = {}): ITab => ({
+    const mockTab = (
+      id: string,
+      wsId: string,
+      overrides: Partial<ITab> = {}
+    ): ITab => ({
       tab_id: id,
       workspace_id: wsId,
       label: id,
@@ -85,7 +95,12 @@ describe('Router & Push Deep Link Contracts', () => {
       ...overrides
     })
 
-    const mockPane = (id: string, wsId: string, tabId: string, overrides: Partial<IPane> = {}): IPane => ({
+    const mockPane = (
+      id: string,
+      wsId: string,
+      tabId: string,
+      overrides: Partial<IPane> = {}
+    ): IPane => ({
       pane_id: id,
       workspace_id: wsId,
       tab_id: tabId,
@@ -95,7 +110,9 @@ describe('Router & Push Deep Link Contracts', () => {
       ...overrides
     })
 
-    const mockSnapshot = (overrides: Partial<ISnapshotResult> = {}): ISnapshotResult => ({
+    const mockSnapshot = (
+      overrides: Partial<ISnapshotResult> = {}
+    ): ISnapshotResult => ({
       protocol: 22,
       version: '0.9.1',
       focused_pane_id: 'p1',
@@ -104,7 +121,11 @@ describe('Router & Push Deep Link Contracts', () => {
         mockWorkspace('ws-2', { label: 'Beta Space' })
       ],
       tabs: [
-        mockTab('t1', 'ws-1', { number: 1, label: 'Tab 1', agent_status: 'idle' })
+        mockTab('t1', 'ws-1', {
+          number: 1,
+          label: 'Tab 1',
+          agent_status: 'idle'
+        })
       ],
       panes: [
         mockPane('p1', 'ws-1', 't1', {
@@ -126,7 +147,11 @@ describe('Router & Push Deep Link Contracts', () => {
         focused_pane_id: 'p2',
         panes: [
           mockPane('p1', 'ws-1', 't1', { agent_status: 'idle', cwd: '/' }),
-          mockPane('p2', 'ws-2', 't2', { agent_status: 'idle', cwd: '/', focused: true })
+          mockPane('p2', 'ws-2', 't2', {
+            agent_status: 'idle',
+            cwd: '/',
+            focused: true
+          })
         ]
       })
       expect(resolveAuthoritativeWorkspaceId(snap, null)).toBe('ws-2')
@@ -153,7 +178,9 @@ describe('Router & Push Deep Link Contracts', () => {
 
     test('returns null when snapshot is empty or workspaces array is missing', () => {
       expect(resolveAuthoritativeWorkspaceId(null, null)).toBeNull()
-      expect(resolveAuthoritativeWorkspaceId(mockSnapshot({ workspaces: [] }), null)).toBeNull()
+      expect(
+        resolveAuthoritativeWorkspaceId(mockSnapshot({ workspaces: [] }), null)
+      ).toBeNull()
     })
   })
 
@@ -163,7 +190,9 @@ describe('Router & Push Deep Link Contracts', () => {
       const result = consumeWorkspaceDeepLink({
         targetWorkspaceId: 'unknown-space-id',
         workspaces: [{ workspace_id: 'ws-1' }, { workspace_id: 'ws-2' }],
-        onSelectWorkspace: (id) => { selected = id }
+        onSelectWorkspace: (id) => {
+          selected = id
+        }
       })
 
       expect(result.matched).toBe(false)
@@ -188,23 +217,40 @@ describe('Router & Push Deep Link Contracts', () => {
         tabs: [],
         panes: []
       }
-      expect(resolveAuthoritativeWorkspaceId(snap, 'deleted-ws')).toBe('live-ws')
+      expect(resolveAuthoritativeWorkspaceId(snap, 'deleted-ws')).toBe(
+        'live-ws'
+      )
     })
   })
 
   describe('4. Zero-space and stale-route reconciliation source contracts', () => {
     test('index exposes the shared New Space drawer path when no spaces exist', () => {
-      const source = fs.readFileSync(path.resolve(import.meta.dir, '../../app/routes/_index.tsx'), 'utf8')
+      const source = fs.readFileSync(
+        path.resolve(import.meta.dir, '../../app/routes/_index.tsx'),
+        'utf8'
+      )
       expect(source).toContain('initialView="new-space"')
-      expect(source).toContain('No active Herdr workspaces or panes discovered.')
+      expect(source).toContain('snapshotReadNotice')
+      expect(snapshotReadNotice('empty', null)).toContain(
+        'No active Herdr Spaces or panes found.'
+      )
+      expect(snapshotReadNotice('empty', null)).toContain('New Space')
       expect(source).toContain('lifecycle={lifecycle}')
     })
 
     test('root replaces stale Space routes and dashboard cannot resurrect a missing workspace', () => {
-      const root = fs.readFileSync(path.resolve(import.meta.dir, '../../app/root.tsx'), 'utf8')
-      const dashboard = fs.readFileSync(path.resolve(import.meta.dir, '../app.tsx'), 'utf8')
+      const root = fs.readFileSync(
+        path.resolve(import.meta.dir, '../../app/root.tsx'),
+        'utf8'
+      )
+      const dashboard = fs.readFileSync(
+        path.resolve(import.meta.dir, '../app.tsx'),
+        'utf8'
+      )
       expect(root).toContain("navigate('/', { replace: true })")
-      expect(root).toContain('navigate(deriveSpacePath(fallbackId), { replace: true })')
+      expect(root).toContain(
+        'navigate(deriveSpacePath(fallbackId), { replace: true })'
+      )
       expect(dashboard).toContain("status === 'connected'")
       expect(dashboard).toContain('snapshot?.workspaces.some')
     })
@@ -238,7 +284,10 @@ describe('Router & Push Deep Link Contracts', () => {
 
   describe('5. Service Worker legacy compatibility & canonicalization', () => {
     const loadSwResolver = () => {
-      const swSource = fs.readFileSync(path.resolve(import.meta.dir, '../../public/sw.js'), 'utf8')
+      const swSource = fs.readFileSync(
+        path.resolve(import.meta.dir, '../../public/sw.js'),
+        'utf8'
+      )
       const self = {
         location: { origin: 'https://herdr.test' },
         clients: {},
@@ -246,10 +295,23 @@ describe('Router & Push Deep Link Contracts', () => {
         skipWaiting: () => undefined,
         addEventListener: () => undefined
       }
-      const context = { self, URL, Array, decodeURIComponent, encodeURIComponent }
+      const context = {
+        self,
+        URL,
+        Array,
+        decodeURIComponent,
+        encodeURIComponent
+      }
       vm.createContext(context)
-      vm.runInContext(swSource + '\n;globalThis.resolveTarget = resolveNotificationTarget;', context)
-      return (context as any).resolveTarget as (n: any) => { workspaceId: string | null; targetUrl: string; stage: string }
+      vm.runInContext(
+        swSource + '\n;globalThis.resolveTarget = resolveNotificationTarget;',
+        context
+      )
+      return (context as any).resolveTarget as (n: any) => {
+        workspaceId: string | null
+        targetUrl: string
+        stage: string
+      }
     }
 
     test('canonicalizes legacy /?workspace=<id> notification data to /spaces/:id', () => {
@@ -314,7 +376,9 @@ describe('Router & Push Deep Link Contracts', () => {
     test('service-worker message format uses herdr:open-workspace with workspaceId', () => {
       const message = { type: 'herdr:open-workspace', workspaceId: 'ws-test' }
       expect(parsePushWorkspaceMessage(message)).toBe('ws-test')
-      expect(parsePushWorkspaceMessage({ type: 'other', workspaceId: 'ws-test' })).toBeNull()
+      expect(
+        parsePushWorkspaceMessage({ type: 'other', workspaceId: 'ws-test' })
+      ).toBeNull()
     })
 
     test('ack is sent only when target space is present in authoritative snapshot', () => {
@@ -322,7 +386,9 @@ describe('Router & Push Deep Link Contracts', () => {
       let ackSent: unknown = null
 
       const fakePort = {
-        postMessage: (msg: unknown) => { ackSent = msg }
+        postMessage: (msg: unknown) => {
+          ackSent = msg
+        }
       }
 
       // Case 1: Known space -> matched = true, ack sent
@@ -332,9 +398,15 @@ describe('Router & Push Deep Link Contracts', () => {
         onSelectWorkspace: () => {}
       })
       if (matchedResult.matched) {
-        fakePort.postMessage({ type: 'herdr:workspace-opened', workspaceId: 'ws-real' })
+        fakePort.postMessage({
+          type: 'herdr:workspace-opened',
+          workspaceId: 'ws-real'
+        })
       }
-      expect(ackSent).toEqual({ type: 'herdr:workspace-opened', workspaceId: 'ws-real' })
+      expect(ackSent).toEqual({
+        type: 'herdr:workspace-opened',
+        workspaceId: 'ws-real'
+      })
 
       // Case 2: Unknown space -> matched = false, NO ack sent
       ackSent = null
@@ -344,7 +416,10 @@ describe('Router & Push Deep Link Contracts', () => {
         onSelectWorkspace: () => {}
       })
       if (unknownResult.matched) {
-        fakePort.postMessage({ type: 'herdr:workspace-opened', workspaceId: 'ws-nonexistent' })
+        fakePort.postMessage({
+          type: 'herdr:workspace-opened',
+          workspaceId: 'ws-nonexistent'
+        })
       }
       expect(ackSent).toBeNull()
     })
@@ -357,7 +432,10 @@ describe('Router & Push Deep Link Contracts', () => {
 
       // Race condition scenario: Message arrives for 'ws-target', but route is currently '/' (not committed)
       const uncommittedDecision = evaluatePendingWorkspaceAck({
-        pendingAck: { workspaceId: 'ws-target', port: fakePort as unknown as MessagePort },
+        pendingAck: {
+          workspaceId: 'ws-target',
+          port: fakePort as unknown as MessagePort
+        },
         currentPathname: '/',
         snapshot: snap,
         status: 'connected'
@@ -370,7 +448,10 @@ describe('Router & Push Deep Link Contracts', () => {
 
       // When route is '/settings' (different route), it still must wait
       const settingsDecision = evaluatePendingWorkspaceAck({
-        pendingAck: { workspaceId: 'ws-target', port: fakePort as unknown as MessagePort },
+        pendingAck: {
+          workspaceId: 'ws-target',
+          port: fakePort as unknown as MessagePort
+        },
         currentPathname: '/settings',
         snapshot: snap,
         status: 'connected'
@@ -379,7 +460,10 @@ describe('Router & Push Deep Link Contracts', () => {
 
       // Once route transitions to canonical '/spaces/ws-target', decision transitions to ack
       const committedDecision = evaluatePendingWorkspaceAck({
-        pendingAck: { workspaceId: 'ws-target', port: fakePort as unknown as MessagePort },
+        pendingAck: {
+          workspaceId: 'ws-target',
+          port: fakePort as unknown as MessagePort
+        },
         currentPathname: '/spaces/ws-target',
         snapshot: snap,
         status: 'connected'
@@ -397,12 +481,17 @@ describe('Router & Push Deep Link Contracts', () => {
       }
       let ackCalled = false
       const fakePort = {
-        postMessage: () => { ackCalled = true }
+        postMessage: () => {
+          ackCalled = true
+        }
       }
 
       // Target 'ws-ghost' has navigated to '/spaces/ws-ghost'
       const decision = evaluatePendingWorkspaceAck({
-        pendingAck: { workspaceId: 'ws-ghost', port: fakePort as unknown as MessagePort },
+        pendingAck: {
+          workspaceId: 'ws-ghost',
+          port: fakePort as unknown as MessagePort
+        },
         currentPathname: '/spaces/ws-ghost',
         snapshot: snap,
         status: 'connected'
@@ -424,11 +513,16 @@ describe('Router & Push Deep Link Contracts', () => {
       }
       const messages: unknown[] = []
       const fakePort = {
-        postMessage: (msg: unknown) => { messages.push(msg) }
+        postMessage: (msg: unknown) => {
+          messages.push(msg)
+        }
       }
 
       const decision = evaluatePendingWorkspaceAck({
-        pendingAck: { workspaceId: 'ws-ghost', port: fakePort as unknown as MessagePort },
+        pendingAck: {
+          workspaceId: 'ws-ghost',
+          port: fakePort as unknown as MessagePort
+        },
         currentPathname: '/spaces/ws-ghost',
         snapshot: snap,
         status: 'connected'
@@ -476,7 +570,10 @@ describe('Router & Push Deep Link Contracts', () => {
       const fakePort = { postMessage: () => {} }
 
       const loadingDecision = evaluatePendingWorkspaceAck({
-        pendingAck: { workspaceId: 'ws-target', port: fakePort as unknown as MessagePort },
+        pendingAck: {
+          workspaceId: 'ws-target',
+          port: fakePort as unknown as MessagePort
+        },
         currentPathname: '/spaces/ws-target',
         snapshot: null,
         status: 'loading'
@@ -487,7 +584,10 @@ describe('Router & Push Deep Link Contracts', () => {
       }
 
       const missingSnapDecision = evaluatePendingWorkspaceAck({
-        pendingAck: { workspaceId: 'ws-target', port: fakePort as unknown as MessagePort },
+        pendingAck: {
+          workspaceId: 'ws-target',
+          port: fakePort as unknown as MessagePort
+        },
         currentPathname: '/spaces/ws-target',
         snapshot: null,
         status: 'connected'
@@ -498,7 +598,10 @@ describe('Router & Push Deep Link Contracts', () => {
       }
 
       const staleSnapshotDecision = evaluatePendingWorkspaceAck({
-        pendingAck: { workspaceId: 'ws-target', port: fakePort as unknown as MessagePort },
+        pendingAck: {
+          workspaceId: 'ws-target',
+          port: fakePort as unknown as MessagePort
+        },
         currentPathname: '/spaces/ws-target',
         snapshot: { workspaces: [{ workspace_id: 'ws-target' }] },
         status: 'reconnecting'
@@ -512,9 +615,18 @@ describe('Router & Push Deep Link Contracts', () => {
 
   describe('7. Route module source guarantees', () => {
     test('routes/_index.tsx, spaces.$workspaceId.tsx, and settings.tsx exist and do not parse query strings', () => {
-      const indexPath = path.resolve(import.meta.dir, '../../app/routes/_index.tsx')
-      const spacePath = path.resolve(import.meta.dir, '../../app/routes/spaces.$workspaceId.tsx')
-      const settingsPath = path.resolve(import.meta.dir, '../../app/routes/settings.tsx')
+      const indexPath = path.resolve(
+        import.meta.dir,
+        '../../app/routes/_index.tsx'
+      )
+      const spacePath = path.resolve(
+        import.meta.dir,
+        '../../app/routes/spaces.$workspaceId.tsx'
+      )
+      const settingsPath = path.resolve(
+        import.meta.dir,
+        '../../app/routes/settings.tsx'
+      )
 
       expect(fs.existsSync(indexPath)).toBe(true)
       expect(fs.existsSync(spacePath)).toBe(true)
@@ -525,9 +637,9 @@ describe('Router & Push Deep Link Contracts', () => {
       const settingsContent = fs.readFileSync(settingsPath, 'utf8')
 
       // New app routes must not parse or generate workspace query string
-      expect(indexContent).not.toContain('searchParams.get(\'workspace\')')
-      expect(spaceContent).not.toContain('searchParams.get(\'workspace\')')
-      expect(settingsContent).not.toContain('searchParams.get(\'workspace\')')
+      expect(indexContent).not.toContain("searchParams.get('workspace')")
+      expect(spaceContent).not.toContain("searchParams.get('workspace')")
+      expect(settingsContent).not.toContain("searchParams.get('workspace')")
 
       expect(indexContent).not.toContain('?workspace=')
       expect(spaceContent).not.toContain('?workspace=')

@@ -31,9 +31,13 @@ export const getAgentPreset = (id: string): IAgentPreset | undefined => {
   return DORMANT_AGENT_PRESETS.find((p) => p.id === id)
 }
 
-export const validateAgentPresetExecution = (): { allowed: false; error: string } => {
+export const validateAgentPresetExecution = (): {
+  allowed: false
+  error: string
+} => {
   return {
     allowed: false,
-    error: 'Agent presets are dormant; no agent launch runtime or route is enabled.'
+    error:
+      'Agent presets are dormant; preset execution is disabled. Native-default agent start is a separate typed action.'
   }
 }

@@ -12,6 +12,8 @@
  *    Skipped-busy returns 'skipped_busy' without setting an error.
  */
 
+import { formatActionErrorMessage } from './action-target.ts'
+
 export type ActionResultStatus = 'acknowledged' | 'skipped_busy'
 
 export interface IActionOrchestratorConfig {
@@ -50,13 +52,7 @@ export const executeGuardedAction = async (
   try {
     await config.action()
   } catch (err) {
-    const message =
-      err && typeof err === 'object' && 'outcome' in err && (err as any).outcome === 'unknown'
-        ? 'Outcome unknown — inspect the pane before sending again.'
-        : err instanceof Error
-          ? err.message
-          : String(err)
-    config.setError(message)
+    config.setError(formatActionErrorMessage(err))
     throw err
   } finally {
     config.setIsBusy(false)

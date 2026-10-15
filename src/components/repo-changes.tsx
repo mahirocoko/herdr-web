@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type ReactNode
@@ -62,6 +63,8 @@ import {
   STATUS_WORD
 } from './repo-change-presentation.tsx'
 import './repo-changes.css'
+import { ReviewDraftContext } from './review-draft-context.ts'
+import { formatReviewQuote } from '@/utils/terminal-quote.ts'
 const RepoDiff = lazy(() => import('./repo-diff.tsx'))
 
 export const RepoPatchViewer = ({
@@ -73,6 +76,9 @@ export const RepoPatchViewer = ({
   onBack: () => void
   backLabel?: string
 }) => {
+  const dispatch = useContext(ReviewDraftContext)
+  const capturedDispatch = useRef(dispatch)
+  const [draftStatus, setDraftStatus] = useState('')
   const [answer, setAnswer] = useState<IRepoDiffFilePatch | null>(null),
     [error, setError] = useState(''),
     [copy, setCopy] = useState(''),
@@ -176,6 +182,26 @@ export const RepoPatchViewer = ({
           </p>
         </div>
         <div className="repo-diff-actions">
+          {dispatch && capturedDispatch.current && answer && (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                const scope =
+                  target.scope === 'commit'
+                    ? `Recorded commit comparison ${target.base}..${target.head}`
+                    : target.scope === 'workspace'
+                      ? 'Current working tree comparison (unstaged / untracked)'
+                      : 'Current staged comparison (index versus HEAD)'
+                setDraftStatus(
+                  capturedDispatch.current!(
+                    formatReviewQuote(target.path, scope)
+                  ) ?? 'Added path and comparison scope to draft — not sent'
+                )
+              }}
+            >
+              Add to draft
+            </Button>
+          )}
           <div
             className="repo-segmented repo-diff-styles"
             role="group"
@@ -279,6 +305,7 @@ export const RepoPatchViewer = ({
         </Button>
       </header>
       <div className="repo-diff-body">
+        {draftStatus && <p role="status">{draftStatus}</p>}
         <p className="repo-changes-note repo-reading-boundary">
           Open file shows current disk content, not a historical blob. Custom
           Git attributes and diff/filter drivers are ignored for safe reading.
@@ -709,8 +736,16 @@ const ChangesBody = ({ paneId }: { paneId: string }) => {
 }
 export const RepoChangesTrigger = ({ paneId }: { paneId: string }) => {
   const [open, setOpen] = useState(false)
+  const dispatch = useContext(ReviewDraftContext)
+  const capturedDispatch = useRef(dispatch)
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
+    <Dialog.Root
+      open={open}
+      onOpenChange={(value) => {
+        if (value && !open) capturedDispatch.current = dispatch
+        setOpen(value)
+      }}
+    >
       <Dialog.Trigger
         render={
           <Button
@@ -739,9 +774,11 @@ export const RepoChangesTrigger = ({ paneId }: { paneId: string }) => {
             />
           </header>
           <div className="file-viewer-body">
-            <ChatFiles paneId={paneId}>
-              <ChangesBody key={paneId} paneId={paneId} />
-            </ChatFiles>
+            <ReviewDraftContext.Provider value={capturedDispatch.current}>
+              <ChatFiles paneId={paneId}>
+                <ChangesBody key={paneId} paneId={paneId} />
+              </ChatFiles>
+            </ReviewDraftContext.Provider>
           </div>
         </Dialog.Popup>
       </Dialog.Portal>

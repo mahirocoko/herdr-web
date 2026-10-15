@@ -1,5 +1,36 @@
 import type { IActionTargetIdentity } from '@/types/herdr.ts'
 import type { IConversationContribution } from '@/types/conversation.ts'
+import { formatActionErrorMessage } from './action-target.ts'
+
+/** Persist only bounded HTTP facts, never arbitrary server messages or result payloads. */
+export interface ISubmissionFailure {
+  status?: number
+  code?: 'invalid-origin'
+}
+export const submissionFailure = (
+  error: unknown
+): ISubmissionFailure | undefined => {
+  if (!error || typeof error !== 'object') return undefined
+  const status =
+    'status' in error &&
+    typeof error.status === 'number' &&
+    Number.isInteger(error.status) &&
+    error.status >= 400 &&
+    error.status <= 599
+      ? error.status
+      : undefined
+  const code =
+    ('code' in error && error.code === 'invalid-origin') ||
+    ('message' in error && error.message === 'Invalid Origin')
+      ? ('invalid-origin' as const)
+      : undefined
+  return status === undefined && code === undefined
+    ? undefined
+    : {
+        ...(status === undefined ? {} : { status }),
+        ...(code === undefined ? {} : { code })
+      }
+}
 
 export interface ISubmissionBaseline {
   sessionKey: string
@@ -17,6 +48,7 @@ export interface IChatSubmission {
   baseline: ISubmissionBaseline | null
   phase: 'sending' | 'submitted-awaiting-transcript' | 'rejected' | 'uncertain'
   restored?: boolean
+  failure?: ISubmissionFailure
 }
 
 export const submissionFailurePhase = (
@@ -117,9 +149,18 @@ export const submissionLabel = (record: IChatSubmission): string => {
     uncertain:
       'Outcome uncertain — inspect Terminal before sending again. No automatic retry.'
   }[record.phase]
+  const rejection =
+    record.phase === 'rejected' && record.failure
+      ? formatActionErrorMessage({
+          ...record.failure,
+          message:
+            record.failure.code === 'invalid-origin' ? 'Invalid Origin' : ''
+        })
+      : ''
+  const evidence = rejection ? `${label} ${rejection}` : label
   return record.restored
-    ? `${label} Restored informational copy; never replayed.`
-    : label
+    ? `${evidence} Restored informational copy; never replayed.`
+    : evidence
 }
 
 export const restoreSubmissions = (raw: string | null): IChatSubmission[] => {
@@ -178,6 +219,9 @@ export const restoreSubmissions = (raw: string | null): IChatSubmission[] => {
               ids: [...row.baseline.ids]
             }
           : null,
+        ...(submissionFailure(row.failure)
+          ? { failure: submissionFailure(row.failure) }
+          : {}),
         restored: true,
         phase: row.phase === 'sending' ? 'uncertain' : row.phase
       }))

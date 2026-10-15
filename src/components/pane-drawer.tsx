@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react'
 import type { FC, FormEvent } from 'react'
 import {
   AlertTriangle,
@@ -13,41 +13,42 @@ import {
   Minus,
   Plus,
   Trash2,
-  X,
+  X
 } from 'lucide-react'
 import type {
   IAgentExplainResult,
   IPane,
   IStrictActionRequest,
   ITab,
-  IWorkspace,
+  IWorkspace
 } from '@/types/herdr.ts'
 import type { ILifecycleOperations } from '@/hooks/use-lifecycle-operations.ts'
 import { fetchAgentExplain, sendAction } from '@/services/api-client.ts'
 import {
   canSubmitNewTab,
-  deriveTabCreateSourcePanes,
+  deriveTabCreateSourcePanes
 } from '@/utils/action-target.ts'
 import {
   initialNewTabState,
   newTabStateReducer,
-  resolveInspectPaneListAction,
+  resolveInspectPaneListAction
 } from '@/utils/new-tab-state.ts'
 import {
+  nativeLaunchStatusCopy,
   freezeTabCloseConfirmation,
   tabConfirmationChanged,
-  type ITabCloseConfirmation,
+  type ITabCloseConfirmation
 } from '@/utils/lifecycle-operations.ts'
 import {
   formatTabLabel,
   groupPanesByTab,
-  isAgentPane,
+  isAgentPane
 } from '@/utils/workspace-helpers.ts'
 import {
   ACTIVITY_LABEL,
   derivePaneActivity,
   deriveTabActivity,
-  getActivityStatusDotClass,
+  getActivityStatusDotClass
 } from '@/utils/activity-status.ts'
 import { useTabNotificationPolicy } from '@/hooks/use-tab-notification-policy.ts'
 import Button from '@/components/ui/button.tsx'
@@ -57,7 +58,7 @@ import {
   Sheet,
   SheetContent,
   SheetHeader,
-  SheetTitle,
+  SheetTitle
 } from '@/components/ui/sheet.tsx'
 import Switch from '@/components/ui/switch.tsx'
 
@@ -99,7 +100,7 @@ export const formatRegionLabel = (region?: string): string => {
 
 export const formatManifestSource = (
   sourceKind?: string,
-  version?: string,
+  version?: string
 ): string => {
   let label = 'Unknown source'
   if (sourceKind === 'builtin') label = 'Herdr built-in'
@@ -123,7 +124,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
   onRefreshSnapshot,
   lifecycle,
   initialView = 'list',
-  initialTargetTabId,
+  initialTargetTabId
 }) => {
   const [expandedPaneId, setExpandedPaneId] = useState<string | null>(null)
   const [explainCache, setExplainCache] = useState<
@@ -135,21 +136,43 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
   const closeButtonRef = useRef<HTMLButtonElement | null>(null)
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const initiatingControlRef = useRef<HTMLElement | null>(null)
+  const launchTriggerRefs = useRef(new Map<string, HTMLButtonElement>())
+  const popupRef = useRef<HTMLDivElement | null>(null)
+  const returnLaunchFocusRef = useRef<string | null>(null)
   const initializedIntentRef = useRef<string | null>(null)
 
   const [lifecycleView, setLifecycleView] = useState<
-    'list' | 'close-tab' | 'status'
+    'list' | 'close-tab' | 'start-agent' | 'status'
   >('list')
   const [tabConfirmation, setTabConfirmation] =
     useState<ITabCloseConfirmation | null>(null)
   const [confirmationError, setConfirmationError] = useState<string | null>(
-    null,
+    null
+  )
+
+  const [launchTarget, setLaunchTarget] = useState<{
+    paneId: string
+    terminalId: string
+  } | null>(null)
+  const [launchName, setLaunchName] = useState('')
+  const launchPane = launchTarget
+    ? panes.find(
+        (pane) =>
+          pane.pane_id === launchTarget.paneId &&
+          pane.terminal_id === launchTarget.terminalId
+      )
+    : null
+  const launchTargetCurrent = Boolean(
+    launchPane &&
+    !isAgentPane(launchPane) &&
+    !launchPane.agent_session &&
+    launchPane.agent_status === 'idle'
   )
 
   // New Shell Tab state
   const [newTabState, dispatchNewTab] = useReducer(
     newTabStateReducer,
-    initialNewTabState,
+    initialNewTabState
   )
   const [selectedSourcePaneId, setSelectedSourcePaneId] = useState<string>('')
   const [tabLabel, setTabLabel] = useState<string>('')
@@ -178,7 +201,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
         ? tabs.find(
             (t) =>
               t.tab_id === initialTargetTabId &&
-              (!selectedWorkspaceId || t.workspace_id === selectedWorkspaceId),
+              (!selectedWorkspaceId || t.workspace_id === selectedWorkspaceId)
           )
         : null
       if (targetTab) {
@@ -199,16 +222,16 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
     lifecycle.ticket?.phase,
     panes,
     selectedWorkspaceId,
-    tabs,
+    tabs
   ])
 
   const cwdChoices = deriveTabCreateSourcePanes(
     panes,
     selectedWorkspaceId || '',
-    selectedPaneId,
+    selectedPaneId
   )
   const hasLifecycleGate = Boolean(
-    lifecycle.ticket && lifecycle.ticket.phase !== 'rejected',
+    lifecycle.ticket && lifecycle.ticket.phase !== 'rejected'
   )
 
   // Default to currently selected pane if it belongs to Space, else deterministic first pane
@@ -229,10 +252,10 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
     pendingTabIds,
     error: policyError,
     isTabReady,
-    toggleTabPolicy,
+    toggleTabPolicy
   } = useTabNotificationPolicy({
     isOpen,
-    tabs,
+    tabs
   })
 
   useEffect(() => {
@@ -286,18 +309,45 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
 
   const beginLifecycleView = (
     view: 'close-tab',
-    initiator: HTMLElement | null,
+    initiator: HTMLElement | null
   ) => {
     initiatingControlRef.current = initiator
     setConfirmationError(null)
     setLifecycleView(view)
   }
 
+  useLayoutEffect(() => {
+    if (!isOpen) return
+    if (lifecycleView === 'start-agent')
+      cancelButtonRef.current?.focus({ preventScroll: true })
+    else if (lifecycleView === 'list' && returnLaunchFocusRef.current) {
+      const trigger = launchTriggerRefs.current.get(
+        returnLaunchFocusRef.current
+      )
+      returnLaunchFocusRef.current = null
+      if (trigger?.isConnected) trigger.focus({ preventScroll: true })
+      else closeButtonRef.current?.focus({ preventScroll: true })
+    }
+  }, [isOpen, lifecycleView])
+
   const returnToList = () => {
+    const launchPaneId =
+      lifecycleView === 'start-agent' ? launchTarget?.paneId : null
+    if (launchPaneId) {
+      // Transfer focus while Cancel is still mounted: Base UI restoreFocus='popup'
+      // otherwise queues a next-frame container restoration for removed controls.
+      popupRef.current?.focus({ preventScroll: true })
+      returnLaunchFocusRef.current = launchPaneId
+    }
     setLifecycleView('list')
     setTabConfirmation(null)
     setConfirmationError(null)
-    requestAnimationFrame(() => initiatingControlRef.current?.focus())
+    if (launchPaneId) return
+    requestAnimationFrame(() => {
+      const trigger = initiatingControlRef.current
+      if (trigger?.isConnected) trigger.focus({ preventScroll: true })
+      else closeButtonRef.current?.focus({ preventScroll: true })
+    })
   }
 
   const handleConfirmTabClose = async () => {
@@ -306,13 +356,13 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
       const currentTab = tabs.find(
         (tab) =>
           tab.tab_id === tabConfirmation.tabId &&
-          tab.workspace_id === tabConfirmation.workspaceId,
+          tab.workspace_id === tabConfirmation.workspaceId
       )
       setConfirmationError(
-        'Tab membership changed. Review the updated pane count, then confirm again.',
+        'Tab membership changed. Review the updated pane count, then confirm again.'
       )
       setTabConfirmation(
-        currentTab ? freezeTabCloseConfirmation(currentTab, panes) : null,
+        currentTab ? freezeTabCloseConfirmation(currentTab, panes) : null
       )
       return
     }
@@ -322,22 +372,26 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
       target: {
         workspaceId: tabConfirmation.workspaceId,
         tabId: tabConfirmation.tabId,
-        expected: tabConfirmation.expected,
-      },
+        expected: tabConfirmation.expected
+      }
     })
     if (started.accepted) setLifecycleView('status')
   }
 
   const handleInspectLifecycle = async () => {
     const refreshed = await onRefreshSnapshot?.()
-    if (refreshed === true && lifecycle.ticket?.phase === 'unknown') {
+    if (
+      refreshed === true &&
+      (lifecycle.ticket?.phase === 'unknown' ||
+        lifecycle.ticket?.phase === 'acknowledged')
+    ) {
       lifecycle.clearUnknownAfterRefresh()
       setLifecycleView('list')
       return
     }
     if (refreshed !== true) {
       setConfirmationError(
-        'Snapshot refresh failed. The operation remains gated until inspection succeeds.',
+        'Snapshot refresh failed. The operation remains gated until inspection succeeds.'
       )
     }
   }
@@ -345,7 +399,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
   const handleCreateTab = async (e: FormEvent) => {
     e.preventDefault()
     const chosenChoice = cwdChoices.find(
-      (c) => c.pane.pane_id === selectedSourcePaneId,
+      (c) => c.pane.pane_id === selectedSourcePaneId
     )
     if (
       !chosenChoice ||
@@ -365,9 +419,9 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
       workspaceId: selectedWorkspaceId,
       target: {
         paneId: chosenChoice.pane.pane_id,
-        terminalId: chosenChoice.pane.terminal_id,
+        terminalId: chosenChoice.pane.terminal_id
       },
-      ...(tabLabel.trim() ? { label: tabLabel.trim() } : {}),
+      ...(tabLabel.trim() ? { label: tabLabel.trim() } : {})
     }
 
     let resp: Awaited<ReturnType<typeof sendAction>>
@@ -375,18 +429,18 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
       resp = await sendAction(req)
     } catch (err: any) {
       const isUnknown = Boolean(
-        err && typeof err === 'object' && err.outcome === 'unknown',
+        err && typeof err === 'object' && err.outcome === 'unknown'
       )
       if (isUnknown) {
         dispatchNewTab({
           type: 'CREATE_UNKNOWN',
           error:
-            'Creation outcome unknown. Inspect pane list before trying again.',
+            'Creation outcome unknown. Inspect pane list before trying again.'
         })
       } else {
         dispatchNewTab({
           type: 'CREATE_REJECTED',
-          error: err?.message || 'Failed to create tab',
+          error: err?.message || 'Failed to create tab'
         })
       }
       return
@@ -411,12 +465,12 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
         type: 'CREATE_UNKNOWN',
         error:
           resp.error ||
-          'Creation outcome unknown. Inspect pane list before trying again.',
+          'Creation outcome unknown. Inspect pane list before trying again.'
       })
     } else {
       dispatchNewTab({
         type: 'CREATE_REJECTED',
-        error: resp.error || 'Failed to create tab',
+        error: resp.error || 'Failed to create tab'
       })
     }
   }
@@ -425,7 +479,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
 
   const tabGroups = groupPanesByTab(tabs, panes, selectedWorkspaceId)
   const canonicalTabCount = tabs.filter(
-    (tab) => tab.workspace_id === selectedWorkspaceId,
+    (tab) => tab.workspace_id === selectedWorkspaceId
   ).length
 
   const getBasename = (pathStr?: string | null) => {
@@ -448,7 +502,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
 
     setExplainCache((prev) => ({
       ...prev,
-      [paneId]: { loading: true, fetchedStatus: currentStatus },
+      [paneId]: { loading: true, fetchedStatus: currentStatus }
     }))
 
     try {
@@ -475,8 +529,8 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
         [paneId]: {
           loading: false,
           data: result,
-          fetchedStatus: currentStatus,
-        },
+          fetchedStatus: currentStatus
+        }
       }))
     } catch (err) {
       if (
@@ -503,8 +557,8 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
         [paneId]: {
           loading: false,
           error: errorMsg,
-          fetchedStatus: currentStatus,
-        },
+          fetchedStatus: currentStatus
+        }
       }))
     } finally {
       if (abortControllerRef.current === controller) {
@@ -554,7 +608,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
   }
 
   const activeWs = workspaces.find(
-    (w) => w.workspace_id === selectedWorkspaceId,
+    (w) => w.workspace_id === selectedWorkspaceId
   )
   const activeWsLabel =
     activeWs?.label ||
@@ -563,6 +617,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
       : selectedWorkspaceId || 'Space')
 
   const isSubView =
+    lifecycleView === 'start-agent' ||
     (lifecycleView === 'status' && Boolean(lifecycle.ticket)) ||
     (lifecycleView === 'close-tab' && Boolean(tabConfirmation)) ||
     newTabState.view === 'new-tab'
@@ -577,6 +632,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
       }}
     >
       <SheetContent
+        ref={popupRef}
         id="tab-pane-drawer"
         side="bottom"
         className={
@@ -584,7 +640,9 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
         }
         aria-label="Tabs and Panes"
         initialFocus={
-          lifecycleView === 'close-tab' ? cancelButtonRef : closeButtonRef
+          lifecycleView === 'close-tab' || lifecycleView === 'start-agent'
+            ? cancelButtonRef
+            : closeButtonRef
         }
       >
         {lifecycleView === 'status' && lifecycle.ticket && (
@@ -638,25 +696,37 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                         <AlertTriangle size={16} aria-hidden="true" />
                       )}
                     <span>
-                      {lifecycle.ticket.phase === 'pending'
-                        ? 'Operation pending. You can close this drawer; it continues checking.'
-                        : lifecycle.ticket.phase === 'unknown'
-                          ? lifecycle.ticket.error ||
-                            'Outcome unknown. Refresh and inspect before another action.'
-                          : lifecycle.ticket.phase === 'reconciliation-failed'
+                      {lifecycle.ticket.type === 'agent-start'
+                        ? nativeLaunchStatusCopy(lifecycle.ticket)
+                        : lifecycle.ticket.phase === 'pending'
+                          ? 'Operation pending. You can close this drawer; it continues checking.'
+                          : lifecycle.ticket.phase === 'unknown'
                             ? lifecycle.ticket.error ||
-                              'The server observed the action, but browser reconciliation was not confirmed.'
-                            : lifecycle.ticket.phase === 'rejected'
+                              'Outcome unknown. Refresh and inspect before another action.'
+                            : lifecycle.ticket.phase === 'reconciliation-failed'
                               ? lifecycle.ticket.error ||
-                                'The action was rejected.'
-                              : lifecycle.ticket.error ||
-                                'Action observed. Refreshing and reconciling the active session.'}
+                                'The server observed the action, but browser reconciliation was not confirmed.'
+                              : lifecycle.ticket.phase === 'rejected'
+                                ? lifecycle.ticket.error ||
+                                  'The action was rejected.'
+                                : lifecycle.ticket.error ||
+                                  'Action observed. Refreshing and reconciling the active session.'}
                     </span>
                   </div>
                 </div>
                 <div className="lifecycle-ticket-details">
                   <span>{lifecycle.ticket.type}</span>
                   <code>{lifecycle.ticket.operationId}</code>
+                  {lifecycle.ticket.type === 'agent-start' && (
+                    <span>
+                      {String(lifecycle.ticket.target.name)} ·{' '}
+                      {String(lifecycle.ticket.target.paneId)} ·{' '}
+                      {String(lifecycle.ticket.target.terminalId)}
+                      {lifecycle.ticket.result?.agentSessionId
+                        ? ` · session ${lifecycle.ticket.result.agentSessionId}`
+                        : ''}
+                    </span>
+                  )}
                 </div>
                 {confirmationError && (
                   <div
@@ -668,7 +738,8 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                 )}
               </div>
               <div className="new-tab-form__footer lifecycle-form__actions">
-                {lifecycle.ticket.phase === 'unknown' && (
+                {(lifecycle.ticket.phase === 'unknown' ||
+                  lifecycle.ticket.phase === 'acknowledged') && (
                   <Button
                     type="button"
                     variant="default"
@@ -685,7 +756,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                     className="new-tab-submit-btn"
                     onClick={() =>
                       lifecycle.retryReconciliation(
-                        lifecycle.ticket!.requestIdentity,
+                        lifecycle.ticket!.requestIdentity
                       )
                     }
                   >
@@ -859,7 +930,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                       onValueChange={(val) => setSelectedSourcePaneId(val)}
                       items={cwdChoices.map((choice) => ({
                         value: choice.pane.pane_id,
-                        label: `${choice.displayCwd} (pane ${choice.pane.pane_id})`,
+                        label: `${choice.displayCwd} (pane ${choice.pane.pane_id})`
                       }))}
                       placeholder="Select source pane..."
                       disabled={newTabState.isCreating}
@@ -913,19 +984,19 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                               dispatchNewTab(
                                 resolveInspectPaneListAction(
                                   false,
-                                  'Pane list refresh is unavailable',
-                                ),
+                                  'Pane list refresh is unavailable'
+                                )
                               )
                               return
                             }
                             const refreshed = await onRefreshSnapshot()
                             dispatchNewTab(
-                              resolveInspectPaneListAction(refreshed),
+                              resolveInspectPaneListAction(refreshed)
                             )
                           } catch (refreshErr) {
                             const error = `Failed to refresh pane list: ${refreshErr instanceof Error ? refreshErr.message : String(refreshErr)}`
                             dispatchNewTab(
-                              resolveInspectPaneListAction(false, error),
+                              resolveInspectPaneListAction(false, error)
                             )
                           }
                         }}
@@ -947,7 +1018,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                       !canSubmitNewTab({
                         isCreatingTab: newTabState.isCreating,
                         hasChoices: cwdChoices.length > 0,
-                        createTabOutcome: newTabState.outcome,
+                        createTabOutcome: newTabState.outcome
                       })
                     }
                     aria-label="Create shell tab"
@@ -966,6 +1037,101 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                     )}
                   </Button>
                 )}
+              </div>
+            </form>
+          </>
+        )}
+
+        {lifecycleView === 'start-agent' && (
+          <>
+            <SheetHeader className="drawer-sheet__header">
+              <SheetTitle className="drawer-sheet__title">
+                Start Letta
+              </SheetTitle>
+            </SheetHeader>
+            <form
+              className="new-tab-form"
+              method="post"
+              action="/api/action"
+              onSubmit={async (event) => {
+                event.preventDefault()
+                if (
+                  !launchTarget ||
+                  !launchTargetCurrent ||
+                  hasLifecycleGate ||
+                  newTabState.isCreating ||
+                  newTabState.outcome === 'unknown'
+                )
+                  return
+                const started = await lifecycle.dispatchLifecycle({
+                  type: 'agent-start',
+                  operationId: crypto.randomUUID(),
+                  target: { ...launchTarget },
+                  kind: 'letta',
+                  name: launchName
+                })
+                if (started.accepted) setLifecycleView('status')
+              }}
+            >
+              <div className="new-tab-form__body">
+                <p>
+                  Letta · new conversation; configured model/permissions
+                  unchanged. No effort override or initial prompt.
+                </p>
+                <p>
+                  Target pane <code>{launchTarget?.paneId}</code>
+                  <br />
+                  Terminal <code>{launchTarget?.terminalId}</code>
+                </p>
+                <p id="launch-help">
+                  The server verifies an idle shell before launch. Existing
+                  Terminal Control refuses launch; fitted reading is retired,
+                  never taken over. Launch cannot be cancelled after submission.
+                </p>
+                <label htmlFor="launch-name">Agent name (required)</label>
+                <Input
+                  id="launch-name"
+                  name="agentName"
+                  value={launchName}
+                  onChange={(event) => setLaunchName(event.target.value)}
+                  required
+                  maxLength={64}
+                  pattern={'[a-zA-Z][a-zA-Z0-9_\\-]{0,63}'}
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  aria-describedby="launch-help"
+                />
+                {!launchTargetCurrent && (
+                  <p role="alert">
+                    The exact shell target changed or is no longer idle. Cancel
+                    and inspect the pane.
+                  </p>
+                )}
+              </div>
+              <div className="new-tab-form__footer lifecycle-form__actions">
+                <Button
+                  ref={cancelButtonRef}
+                  type="button"
+                  variant="outline"
+                  className="lifecycle-cancel-btn"
+                  onClick={returnToList}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  className="new-tab-submit-btn"
+                  disabled={
+                    !launchTargetCurrent ||
+                    hasLifecycleGate ||
+                    newTabState.isCreating ||
+                    newTabState.outcome === 'unknown'
+                  }
+                >
+                  Start Letta
+                </Button>
               </div>
             </form>
           </>
@@ -1039,15 +1205,15 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                                 deriveTabActivity(
                                   panes,
                                   selectedWorkspaceId || tab.workspace_id,
-                                  tab.tab_id,
-                                ),
+                                  tab.tab_id
+                                )
                               )}`}
                               aria-label={`Tab activity: ${
                                 ACTIVITY_LABEL[
                                   deriveTabActivity(
                                     panes,
                                     selectedWorkspaceId || tab.workspace_id,
-                                    tab.tab_id,
+                                    tab.tab_id
                                   )
                                 ]
                               } (Native attention: ${tab.agent_status || 'unknown'})`}
@@ -1056,7 +1222,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                                   deriveTabActivity(
                                     panes,
                                     selectedWorkspaceId || tab.workspace_id,
-                                    tab.tab_id,
+                                    tab.tab_id
                                   )
                                 ]
                               } (Native attention: ${tab.agent_status || 'unknown'})`}
@@ -1068,7 +1234,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                               style={{
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '4px',
+                                gap: '4px'
                               }}
                             >
                               <span
@@ -1124,11 +1290,11 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                               disabled={hasLifecycleGate}
                               onClick={(event) => {
                                 setTabConfirmation(
-                                  freezeTabCloseConfirmation(tab, panes),
+                                  freezeTabCloseConfirmation(tab, panes)
                                 )
                                 beginLifecycleView(
                                   'close-tab',
-                                  event.currentTarget,
+                                  event.currentTarget
                                 )
                               }}
                             >
@@ -1158,14 +1324,14 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                             const title =
                               p.terminal_title_stripped || p.title || p.pane_id
                             const dirName = getBasename(
-                              p.foreground_cwd || p.cwd,
+                              p.foreground_cwd || p.cwd
                             )
                             const isExpanded = expandedPaneId === p.pane_id
                             const explain = explainCache[p.pane_id]
                             const isStale = Boolean(
                               explain?.data?.available &&
                               explain.fetchedStatus &&
-                              explain.fetchedStatus !== p.agent_status,
+                              explain.fetchedStatus !== p.agent_status
                             )
 
                             const activeFlags: string[] = []
@@ -1185,6 +1351,48 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                                 key={p.pane_id}
                                 className={`pane-card ${isSelected ? 'pane-card--selected' : ''}`}
                               >
+                                {!hasAgent &&
+                                  !p.agent_session &&
+                                  p.terminal_id &&
+                                  p.agent_status === 'idle' && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      disabled={
+                                        hasLifecycleGate ||
+                                        newTabState.isCreating ||
+                                        newTabState.outcome === 'unknown'
+                                      }
+                                      onClick={(event) => {
+                                        initiatingControlRef.current =
+                                          event.currentTarget
+                                        setLaunchTarget({
+                                          paneId: p.pane_id,
+                                          terminalId: p.terminal_id!
+                                        })
+                                        setLaunchName('')
+                                        popupRef.current?.focus({
+                                          preventScroll: true
+                                        })
+                                        setLifecycleView('start-agent')
+                                      }}
+                                      ref={(element) => {
+                                        if (element)
+                                          launchTriggerRefs.current.set(
+                                            p.pane_id,
+                                            element
+                                          )
+                                        else
+                                          launchTriggerRefs.current.delete(
+                                            p.pane_id
+                                          )
+                                      }}
+                                      aria-label={`Start Letta in shell pane ${p.pane_id}`}
+                                    >
+                                      Start Letta
+                                    </Button>
+                                  )}
                                 <div className="pane-card__row">
                                   <Button
                                     type="button"
@@ -1210,7 +1418,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                                         >
                                           <span
                                             className={`space-status-dot ${getActivityStatusDotClass(
-                                              derivePaneActivity(p),
+                                              derivePaneActivity(p)
                                             )}`}
                                             aria-hidden="true"
                                           />
@@ -1261,7 +1469,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                                       onClick={() =>
                                         handleToggleExplain(
                                           p.pane_id,
-                                          p.agent_status,
+                                          p.agent_status
                                         )
                                       }
                                       aria-label={`Explain status for pane ${p.pane_id}`}
@@ -1323,7 +1531,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                                           onClick={() =>
                                             loadExplain(
                                               p.pane_id,
-                                              p.agent_status,
+                                              p.agent_status
                                             )
                                           }
                                           aria-label={`Retry explaining pane ${p.pane_id}`}
@@ -1358,7 +1566,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                                                 onClick={() =>
                                                   loadExplain(
                                                     p.pane_id,
-                                                    p.agent_status,
+                                                    p.agent_status
                                                   )
                                                 }
                                                 aria-label={`Refresh explanation for pane ${p.pane_id}`}
@@ -1403,7 +1611,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                                                 <span className="pane-explain__diagnostic-val">
                                                   {formatRegionLabel(
                                                     explain.data.matchedRule
-                                                      .region,
+                                                      .region
                                                   )}
                                                 </span>
                                               </div>
@@ -1419,7 +1627,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                                                     explain.data.manifest
                                                       .sourceKind,
                                                     explain.data.manifest
-                                                      .version,
+                                                      .version
                                                   )}
                                                 </span>
                                               </div>

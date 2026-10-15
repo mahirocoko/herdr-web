@@ -3,6 +3,10 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import type { IChatPreferences } from '@/utils/chat-preferences.ts'
 import { DEFAULT_CHAT_PREFERENCES } from '@/utils/chat-preferences.ts'
+import {
+  chatPositionStorageError,
+  forgetChatPositions
+} from '@/utils/chat-scroll-memory.ts'
 import Button from './ui/button.tsx'
 import Input from './ui/input.tsx'
 import Select from './ui/select.tsx'
@@ -38,6 +42,11 @@ const ChatPreferences = ({
   onChange,
   storageError
 }: IChatPreferencesProps) => {
+  const [readingNotice, setReadingNotice] = useState(() =>
+    chatPositionStorageError()
+      ? 'Reading positions are memory-only; browser storage is unavailable.'
+      : ''
+  )
   const [family, setFamily] = useState(preferences.fontFamily)
   useEffect(() => setFamily(preferences.fontFamily), [preferences.fontFamily])
   return (
@@ -132,6 +141,25 @@ const ChatPreferences = ({
             }
           />
         </PreferenceRow>
+        <PreferenceRow
+          label="Reading positions"
+          description="On this browser: up to 100 exact native conversation positions for 30 days. No transcript text or Send authority. Other open tabs do not synchronize."
+          wide
+        >
+          <Button
+            variant="ghost"
+            onClick={() =>
+              setReadingNotice(
+                forgetChatPositions()
+                  ? 'Saved reading positions deleted from this browser and document.'
+                  : 'Document reading positions cleared; browser deletion failed. Saved positions may remain after reload.'
+              )
+            }
+          >
+            Delete saved reading positions
+          </Button>
+        </PreferenceRow>
+        {readingNotice && <p role="status">{readingNotice}</p>}
         <div className="chat-settings-item">
           <Button
             variant="ghost"

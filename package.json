@@ -1,6 +1,6 @@
 {
   "name": "herdr-web",
-  "version": "0.9.0-rc.1",
+  "version": "0.9.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,6 +10,8 @@
     "schema:sync": "bun scripts/sync-herdr-schema.ts",
     "schema:check": "bun scripts/sync-herdr-schema.ts --check",
     "test": "bun test",
+    "test:browser": "playwright test --config browser/playwright.config.ts",
+    "typecheck:browser": "tsc --noEmit -p browser/tsconfig.json",
     "test:coverage": "bun scripts/check-coverage.ts",
     "test:live": "HERDR_LIVE_TEST=1 bun test",
     "typecheck": "react-router typegen && tsc --noEmit"
@@ -28,6 +30,7 @@
     "web-push": "3.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
     "@react-router/dev": "8.4.0",
     "@react-router/fs-routes": "8.4.0",
     "@react-router/node": "8.4.0",

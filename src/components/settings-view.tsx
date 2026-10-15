@@ -108,7 +108,9 @@ const SettingsView: FC<ISettingsViewProps> = ({
           <div className="settings-section__intro">
             <h2 className="settings-section__heading">Push Notifications</h2>
             <p className="settings-section__subheading">
-              Background alerts for agent blockers and completions.
+              Background alerts for agent blockers and completions. Push
+              enrollment is separate from permission to Send or use Terminal
+              Control.
             </p>
           </div>
 
@@ -278,7 +280,7 @@ const SettingsView: FC<ISettingsViewProps> = ({
                 <p className="settings-status-desc">
                   {isOperationPending
                     ? 'The browser operation is still pending. Its result may arrive later; reload to inspect the current state.'
-                    : `Push setup needs attention: ${error || 'Authorization failed'}`}
+                    : `Push setup needs attention: ${error || 'Push status unavailable. Re-check status to inspect this device.'}`}
                 </p>
                 <div className="settings-actions-group">
                   {isOperationPending ? (

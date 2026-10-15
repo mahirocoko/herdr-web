@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   restoreSubmissions,
+  submissionFailure,
   type IChatSubmission,
   type ISubmissionBaseline
 } from '@/utils/chat-submissions.ts'
@@ -76,10 +77,17 @@ export const useChatSubmissions = () => {
       }
     ])
   }
-  const settle = (operationId: string, phase: IChatSubmission['phase']) => {
+  const settle = (
+    operationId: string,
+    phase: IChatSubmission['phase'],
+    error?: unknown
+  ) => {
+    const failure = phase === 'rejected' ? submissionFailure(error) : undefined
     setRecords((previous) =>
       previous.map((record) =>
-        record.operationId === operationId ? { ...record, phase } : record
+        record.operationId === operationId
+          ? { ...record, phase, failure }
+          : record
       )
     )
   }

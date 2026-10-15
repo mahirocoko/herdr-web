@@ -6,15 +6,26 @@ import {
   Layers,
   Search,
   Terminal,
-  X,
+  X
 } from 'lucide-react'
-import type { IPane, ITab, IWorkspace } from '@/types/herdr.ts'
+import type {
+  IActionTargetIdentity,
+  IPane,
+  ISnapshotAgent,
+  ITab,
+  IWorkspace
+} from '@/types/herdr.ts'
+import { deriveActionTarget } from '@/utils/action-target.ts'
+import {
+  recentChatPositionIdentities,
+  type IChatPositionIdentity
+} from '@/utils/chat-scroll-memory.ts'
 import {
   formatTabLabel,
   formatWorkspaceSourceLine,
   isAgentPane,
   selectBestPaneForTab,
-  selectBestPaneForWorkspace,
+  selectBestPaneForWorkspace
 } from '@/utils/workspace-helpers.ts'
 import {
   ACTIVITY_LABEL,
@@ -22,7 +33,7 @@ import {
   deriveSpaceActivity,
   deriveTabActivity,
   getActivityStatusDotClass,
-  type KnownActivity,
+  type KnownActivity
 } from '@/utils/activity-status.ts'
 import Button from '@/components/ui/button.tsx'
 import Input from '@/components/ui/input.tsx'
@@ -30,7 +41,7 @@ import {
   Sheet,
   SheetContent,
   SheetHeader,
-  SheetTitle,
+  SheetTitle
 } from '@/components/ui/sheet.tsx'
 
 export type SearchItemType = 'space' | 'tab' | 'pane'
@@ -48,6 +59,7 @@ export interface INavigationSearchItem {
   activity?: KnownActivity
   isAgent?: boolean
   isCurrent: boolean
+  recentTarget?: IActionTargetIdentity
 }
 
 export interface INavigationSearchSheetProps {
@@ -55,6 +67,7 @@ export interface INavigationSearchSheetProps {
   workspaces: IWorkspace[]
   tabs: ITab[]
   panes: IPane[]
+  agents?: ISnapshotAgent[]
   selectedWorkspaceId: string | null
   selectedPaneId: string | null
   focusedPaneId?: string | null
@@ -75,6 +88,7 @@ export const resolveNavigationTarget = (
   panes: IPane[],
   selectedPaneId?: string | null,
   focusedPaneId?: string | null,
+  agents?: ISnapshotAgent[]
 ): INavigationTargetResolution | null => {
   if (item.type === 'space') {
     const ws = workspaces.find((w) => w.workspace_id === item.spaceId)
@@ -82,7 +96,7 @@ export const resolveNavigationTarget = (
     const targetPane = selectBestPaneForWorkspace(
       panes,
       item.spaceId,
-      focusedPaneId,
+      focusedPaneId
     )
     if (!targetPane) return null
     return { paneId: targetPane.pane_id, workspaceId: item.spaceId }
@@ -91,7 +105,7 @@ export const resolveNavigationTarget = (
   if (item.type === 'tab') {
     if (!item.tabId) return null
     const tab = tabs.find(
-      (t) => t.tab_id === item.tabId && t.workspace_id === item.spaceId,
+      (t) => t.tab_id === item.tabId && t.workspace_id === item.spaceId
     )
     if (!tab) return null
     const targetPane = selectBestPaneForTab(
@@ -99,7 +113,7 @@ export const resolveNavigationTarget = (
       item.tabId,
       item.spaceId,
       selectedPaneId,
-      focusedPaneId,
+      focusedPaneId
     )
     if (!targetPane) return null
     return { paneId: targetPane.pane_id, workspaceId: item.spaceId }
@@ -112,6 +126,22 @@ export const resolveNavigationTarget = (
     // Reject deleted, reparented, or stale panes
     if (pane.workspace_id !== item.spaceId) return null
     if (item.tabId && pane.tab_id !== item.tabId) return null
+    if (item.recentTarget) {
+      const current = deriveActionTarget(pane, agents).target
+      if (
+        !current ||
+        current.expectedMode === 'shell' ||
+        current.terminalId !== item.recentTarget.terminalId ||
+        !current.agentSessionId ||
+        current.agentSessionId !== item.recentTarget.agentSessionId ||
+        !workspaces.some((ws) => ws.workspace_id === pane.workspace_id) ||
+        !tabs.some(
+          (tab) =>
+            tab.tab_id === pane.tab_id && tab.workspace_id === pane.workspace_id
+        )
+      )
+        return null
+    }
     return { paneId: pane.pane_id, workspaceId: pane.workspace_id }
   }
 
@@ -127,17 +157,64 @@ const displayPaneTitle = (pane: IPane): string => {
   )
 }
 
+/** Saved IDs only order current live labels; absent native session evidence is not a match. */
+export const deriveRecentNavigationItems = (
+  identities: readonly IChatPositionIdentity[],
+  items: readonly INavigationSearchItem[],
+  workspaces: IWorkspace[],
+  tabs: ITab[],
+  panes: IPane[],
+  agents?: ISnapshotAgent[]
+): INavigationSearchItem[] => {
+  const result: INavigationSearchItem[] = []
+  const seen = new Set<string>()
+  for (const identity of identities) {
+    if (seen.has(identity.paneId) || !identity.agentSessionId) continue
+    const item = items.find(
+      (item) => item.type === 'pane' && item.paneId === identity.paneId
+    )
+    if (!item) continue
+    const recent = {
+      ...item,
+      id: `recent_${identity.paneId}`,
+      recentTarget: {
+        paneId: identity.paneId,
+        terminalId: identity.terminalId,
+        agentSessionId: identity.agentSessionId,
+        expectedMode: 'agent' as const
+      }
+    }
+    if (
+      !resolveNavigationTarget(
+        recent,
+        workspaces,
+        tabs,
+        panes,
+        null,
+        null,
+        agents
+      )
+    )
+      continue
+    seen.add(identity.paneId)
+    result.push(recent)
+    if (result.length === 5) break
+  }
+  return result
+}
+
 export const NavigationSearchSheet: FC<INavigationSearchSheetProps> = ({
   isOpen,
   workspaces,
   tabs,
   panes,
+  agents,
   selectedWorkspaceId,
   selectedPaneId,
   focusedPaneId,
   onSelectPane,
   onClose,
-  triggerRef,
+  triggerRef
 }) => {
   const [query, setQuery] = useState('')
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
@@ -181,7 +258,7 @@ export const NavigationSearchSheet: FC<INavigationSearchSheetProps> = ({
         spaceLabel,
         agentStatus: ws.agent_status,
         activity: spaceActivity,
-        isCurrent: ws.workspace_id === selectedWorkspaceId,
+        isCurrent: ws.workspace_id === selectedWorkspaceId
       })
     }
 
@@ -204,7 +281,7 @@ export const NavigationSearchSheet: FC<INavigationSearchSheetProps> = ({
         tabId: t.tab_id,
         agentStatus: t.agent_status,
         activity: tabActivity,
-        isCurrent: t.tab_id === activeTabId,
+        isCurrent: t.tab_id === activeTabId
       })
     }
 
@@ -232,7 +309,7 @@ export const NavigationSearchSheet: FC<INavigationSearchSheetProps> = ({
         agentStatus: p.agent_status,
         activity: paneActivity,
         isAgent,
-        isCurrent: p.pane_id === selectedPaneId,
+        isCurrent: p.pane_id === selectedPaneId
       })
     }
 
@@ -243,7 +320,7 @@ export const NavigationSearchSheet: FC<INavigationSearchSheetProps> = ({
     panes,
     selectedWorkspaceId,
     selectedPaneId,
-    activeTabId,
+    activeTabId
   ])
 
   // Filter items by query
@@ -252,12 +329,29 @@ export const NavigationSearchSheet: FC<INavigationSearchSheetProps> = ({
     if (!q) {
       // Empty query: prioritize items in current space, then other spaces
       const currentSpaceItems = allItems.filter(
-        (i) => i.spaceId === selectedWorkspaceId,
+        (i) => i.spaceId === selectedWorkspaceId
       )
       const otherSpaceItems = allItems.filter(
-        (i) => i.spaceId !== selectedWorkspaceId && i.type === 'space',
+        (i) => i.spaceId !== selectedWorkspaceId && i.type === 'space'
       )
-      return [...currentSpaceItems, ...otherSpaceItems]
+      const recent = isOpen
+        ? deriveRecentNavigationItems(
+            recentChatPositionIdentities(),
+            allItems,
+            workspaces,
+            tabs,
+            panes,
+            agents
+          )
+        : []
+      const recentPaneIds = new Set(recent.map((item) => item.paneId))
+      return [
+        ...recent,
+        ...currentSpaceItems.filter(
+          (item) => item.type !== 'pane' || !recentPaneIds.has(item.paneId)
+        ),
+        ...otherSpaceItems
+      ]
     }
 
     return allItems.filter((item) => {
@@ -268,7 +362,16 @@ export const NavigationSearchSheet: FC<INavigationSearchSheetProps> = ({
       if (item.tabId && item.tabId.toLowerCase().includes(q)) return true
       return false
     })
-  }, [allItems, query, selectedWorkspaceId])
+  }, [
+    allItems,
+    query,
+    selectedWorkspaceId,
+    isOpen,
+    workspaces,
+    tabs,
+    panes,
+    agents
+  ])
 
   // Pure predicate to check if item resolves to a valid, live target in current snapshot
   const isItemSelectable = useCallback(
@@ -281,10 +384,11 @@ export const NavigationSearchSheet: FC<INavigationSearchSheetProps> = ({
           panes,
           selectedPaneId,
           focusedPaneId,
+          agents
         ) !== null
       )
     },
-    [workspaces, tabs, panes, selectedPaneId, focusedPaneId],
+    [workspaces, tabs, panes, selectedPaneId, focusedPaneId, agents]
   )
 
   // Track selectable items
@@ -305,7 +409,7 @@ export const NavigationSearchSheet: FC<INavigationSearchSheetProps> = ({
   useEffect(() => {
     if (!highlightedId) return
     const stillPresentAndSelectable = selectableItems.some(
-      (i) => i.id === highlightedId,
+      (i) => i.id === highlightedId
     )
     if (!stillPresentAndSelectable) {
       setHighlightedId(null)
@@ -316,7 +420,7 @@ export const NavigationSearchSheet: FC<INavigationSearchSheetProps> = ({
   useEffect(() => {
     if (!highlightedId) return
     const highlightedIdx = filteredItems.findIndex(
-      (i) => i.id === highlightedId,
+      (i) => i.id === highlightedId
     )
     if (highlightedIdx >= 0) {
       const el = itemRefs.current[highlightedIdx]
@@ -327,11 +431,9 @@ export const NavigationSearchSheet: FC<INavigationSearchSheetProps> = ({
   }, [highlightedId, filteredItems])
 
   const handleDismiss = useCallback(() => {
+    // Base UI finalFocus owns return after the sheet's focus trap retires.
     onClose()
-    requestAnimationFrame(() => {
-      triggerRef?.current?.focus()
-    })
-  }, [onClose, triggerRef])
+  }, [onClose])
 
   const handleSelectItem = useCallback(
     (item: INavigationSearchItem) => {
@@ -342,6 +444,7 @@ export const NavigationSearchSheet: FC<INavigationSearchSheetProps> = ({
         panes,
         selectedPaneId,
         focusedPaneId,
+        agents
       )
       if (!target) {
         // Truthful feedback: do not close sheet on stale/empty targets
@@ -356,9 +459,10 @@ export const NavigationSearchSheet: FC<INavigationSearchSheetProps> = ({
       panes,
       selectedPaneId,
       focusedPaneId,
+      agents,
       onSelectPane,
-      handleDismiss,
-    ],
+      handleDismiss
+    ]
   )
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -381,20 +485,20 @@ export const NavigationSearchSheet: FC<INavigationSearchSheetProps> = ({
       e.preventDefault()
       if (selectableItems.length === 0) return
       const currentPos = selectableItems.findIndex(
-        (i) => i.id === highlightedId,
+        (i) => i.id === highlightedId
       )
       if (currentPos === -1) {
         setHighlightedId(selectableItems[0].id)
       } else {
         setHighlightedId(
-          selectableItems[(currentPos + 1) % selectableItems.length].id,
+          selectableItems[(currentPos + 1) % selectableItems.length].id
         )
       }
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       if (selectableItems.length === 0) return
       const currentPos = selectableItems.findIndex(
-        (i) => i.id === highlightedId,
+        (i) => i.id === highlightedId
       )
       if (currentPos === -1) {
         setHighlightedId(selectableItems[selectableItems.length - 1].id)
@@ -402,7 +506,7 @@ export const NavigationSearchSheet: FC<INavigationSearchSheetProps> = ({
         setHighlightedId(
           selectableItems[
             (currentPos - 1 + selectableItems.length) % selectableItems.length
-          ].id,
+          ].id
         )
       }
     } else if (e.key === 'Enter') {
@@ -423,30 +527,36 @@ export const NavigationSearchSheet: FC<INavigationSearchSheetProps> = ({
   const groupedSections = useMemo(() => {
     if (!query.trim()) {
       const currentSpace = workspaces.find(
-        (w) => w.workspace_id === selectedWorkspaceId,
+        (w) => w.workspace_id === selectedWorkspaceId
       )
       const currentSpaceLabel = currentSpace
         ? currentSpace.label || `Space ${currentSpace.number}`
         : 'Current Space'
 
       const currentItems = filteredItems.filter(
-        (i) => i.spaceId === selectedWorkspaceId,
+        (i) => !i.recentTarget && i.spaceId === selectedWorkspaceId
       )
       const otherSpaces = filteredItems.filter(
-        (i) => i.spaceId !== selectedWorkspaceId && i.type === 'space',
+        (i) => i.spaceId !== selectedWorkspaceId && i.type === 'space'
       )
 
       const sections: { title: string; items: INavigationSearchItem[] }[] = []
+      const recent = filteredItems.filter((item) => item.recentTarget)
+      if (recent.length)
+        sections.push({
+          title: 'Recently read · live targets only',
+          items: recent
+        })
       if (currentItems.length > 0) {
         sections.push({
           title: `Current Space: ${currentSpaceLabel}`,
-          items: currentItems,
+          items: currentItems
         })
       }
       if (otherSpaces.length > 0) {
         sections.push({
           title: 'Other Spaces',
-          items: otherSpaces,
+          items: otherSpaces
         })
       }
       return sections
@@ -485,7 +595,6 @@ export const NavigationSearchSheet: FC<INavigationSearchSheetProps> = ({
         aria-label="Navigation search"
         finalFocus={triggerRef}
       >
-
         <SheetHeader className="drawer-sheet__header">
           <SheetTitle className="drawer-sheet__title">
             Search Spaces, Tabs &amp; Panes

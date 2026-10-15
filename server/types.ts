@@ -163,7 +163,62 @@ export type IHeldActionRequest =
   | { type: 'held-send'; operationId: string; heldId: string }
   | { type: 'held-discard'; operationId: string; heldId: string }
 
+export interface IAgentStartAction {
+  type: 'agent-start'
+  operationId: string
+  target: { paneId: string; terminalId: string }
+  kind: 'letta'
+  name: string
+}
+
+export interface IAgentStartExecutionResult {
+  diagnostic?:
+    | 'transport_timeout'
+    | 'transport_error'
+    | 'native_timeout'
+    | 'native_rejection'
+    | 'malformed_reply'
+    | 'argv_mismatch'
+    | 'missing_identity'
+    | 'identity_mismatch'
+  ok: boolean
+  status: number
+  outcome: 'acknowledged' | 'rejected' | 'unknown'
+  // ACK alone never grants ready authority; only exact fresh native evidence does.
+  result?: {
+    paneId: string
+    terminalId: string
+    agentSessionId?: string
+    ready: boolean
+    agentStatus?: string
+  }
+  error?: string
+}
+
+export type IWorktreeAction =
+  | {
+      type: 'worktree-list'
+      operationId: string
+      source: IWorkspaceCreateSource
+    }
+  | {
+      type: 'worktree-open'
+      operationId: string
+      source: IWorkspaceCreateSource
+      repositoryIdentity: string
+      checkoutKey: string
+    }
+  | {
+      type: 'worktree-create'
+      operationId: string
+      source: IWorkspaceCreateSource
+      repositoryIdentity: string
+      branch: string
+    }
+
 export type IActionRequest =
+  | IWorktreeAction
+  | IAgentStartAction
   | IHeldActionRequest
   | {
       type: 'prompt-answer'
@@ -177,6 +232,7 @@ export type IActionRequest =
       operationId: string
       target: IActionTargetIdentity
       text: string
+      imageId?: string
     }
   | {
       type: 'keys'
