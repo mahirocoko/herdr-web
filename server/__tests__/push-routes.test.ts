@@ -325,14 +325,35 @@ describe('server: push API routes integration', () => {
   })
 
   test('static server serves production build from build/client and does not fall back to dist', async () => {
-    // Verifies build/client is the sole production owner and dist is not an active fallback
-    const res = await fetch(`${baseUrl}/manifest.webmanifest`)
-    expect(res.status).toBe(200)
-    expect(res.headers.get('content-type')).toContain('manifest')
-
-    // Root and client routes fall back to build/client/index.html (SPA mode)
-    const rootRes = await fetch(`${baseUrl}/`)
-    expect(rootRes.status).toBe(200)
-    expect(rootRes.headers.get('content-type')).toContain('text/html')
+    // Isolate relative static paths without depending on a prior build or changing process cwd.
+    fs.mkdirSync(path.join(tmpDir, 'build/client'), { recursive: true })
+    fs.mkdirSync(path.join(tmpDir, 'dist'), { recursive: true })
+    fs.writeFileSync(path.join(tmpDir, 'build/client/index.html'), '<html>fixture SPA</html>')
+    fs.writeFileSync(path.join(tmpDir, 'build/client/manifest.webmanifest'), '{"name":"fixture"}')
+    fs.writeFileSync(path.join(tmpDir, 'dist/decoy.txt'), 'must not serve')
+    const child = Bun.spawn([process.execPath, '-e', `
+      import { createServer } from ${JSON.stringify(new URL('../index.ts', import.meta.url).href)}
+      const server = createServer(0, '127.0.0.1', { startPushBridge: false })
+      try {
+        const results = []
+        for (const route of ['/manifest.webmanifest', '/', '/spaces/fixture', '/decoy.txt']) {
+          const response = await fetch(new URL(route, server.url))
+          results.push([response.status, response.headers.get('content-type'), await response.text()])
+        }
+        console.log(JSON.stringify(results))
+      } finally { server.stop(true) }
+    `], { cwd: tmpDir, stdout: 'pipe', stderr: 'pipe' })
+    const output = await new Response(child.stdout).text()
+    expect(await child.exited).toBe(0)
+    const [manifest, root, route, decoy] = JSON.parse(output)
+    expect(manifest[0]).toBe(200)
+    expect(manifest[1]).toContain('manifest')
+    expect(root[0]).toBe(200)
+    expect(root[1]).toContain('text/html')
+    expect(root[2]).toBe('<html>fixture SPA</html>')
+    expect(route[0]).toBe(200)
+    expect(route[1]).toContain('text/html')
+    expect(route[2]).toBe(root[2])
+    expect(decoy[2]).not.toBe('must not serve')
   })
 })

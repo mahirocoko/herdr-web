@@ -2179,7 +2179,9 @@ export const createServer = (
         const fitManager = getSharedTerminalFitManager()
         let controlTerminalId: string | null = null
         try {
-          const snapshot = await getHerdrSnapshot(3000)
+          const snapshot = await (
+            options.deps?.fetchSnapshot ?? getHerdrSnapshot
+          )(3000)
           const targetPane = (snapshot.panes || []).find(
             (p) => p && p.pane_id === pane
           )

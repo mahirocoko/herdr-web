@@ -920,7 +920,7 @@ describe('security: server endpoint origin enforcement', () => {
     const { createServer } = await import('../index.ts')
     const server = createServer(0, '127.0.0.1', { startPushBridge: false })
     try {
-      const res = await server.fetch(
+      const res = await fetch(
         new Request(
           `http://127.0.0.1:${server.port}/api/agent/explain?pane=w5N:p1`,
           {

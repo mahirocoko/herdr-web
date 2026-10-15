@@ -75,6 +75,7 @@ const read = async (
   return { response, body: await response.json() }
 }
 beforeEach(() => {
+  fs.mkdirSync(path.resolve('.agent-state/tmp'), { recursive: true })
   root = fs.realpathSync(
     fs.mkdtempSync(path.resolve('.agent-state/tmp/repo-diff-fixture-'))
   )

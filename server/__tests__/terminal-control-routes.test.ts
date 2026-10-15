@@ -154,7 +154,18 @@ describe('/api/terminal/control route and lease guarantees', () => {
     process.env.HERDR_PUSH_CONFIG_PATH = configPath
     resetSharedPushService()
 
-    const server = createServer(0, '127.0.0.1', { startPushBridge: false })
+    const server = createServer(0, '127.0.0.1', {
+      startPushBridge: false,
+      deps: {
+        fetchSnapshot: async () => ({
+          protocol: 22,
+          version: 'fixture',
+          workspaces: [],
+          tabs: [],
+          panes: []
+        })
+      }
+    })
 
     try {
       // 1. Missing tailscale-user-login header -> 403 Forbidden
