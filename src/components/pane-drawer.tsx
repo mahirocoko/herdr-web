@@ -18,6 +18,7 @@ import {
 import type {
   IAgentExplainResult,
   IPane,
+  ISnapshotAgent,
   IStrictActionRequest,
   ITab,
   IWorkspace
@@ -67,6 +68,7 @@ export interface IPaneDrawerProps {
   workspaces: IWorkspace[]
   tabs?: ITab[]
   panes: IPane[]
+  agents?: ISnapshotAgent[]
   selectedWorkspaceId: string | null
   selectedPaneId: string | null
   onSelectPane: (paneId: string, workspaceId: string) => void
@@ -85,6 +87,18 @@ interface IExplainCacheEntry {
 }
 
 export { isAgentPane } from '@/utils/workspace-helpers.ts'
+
+// Candidate only: explicit Start still requires server-side native process proof.
+export const isShellLaunchCandidate = (
+  pane: IPane | null | undefined,
+  agents?: ISnapshotAgent[]
+): boolean =>
+  Boolean(
+    pane?.terminal_id &&
+    !isAgentPane(pane, agents) &&
+    !pane.agent_session &&
+    (pane.agent_status === 'idle' || pane.agent_status === 'unknown')
+  )
 
 export const formatRegionLabel = (region?: string): string => {
   if (!region) return ''
@@ -117,6 +131,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
   workspaces,
   tabs = [],
   panes,
+  agents,
   selectedWorkspaceId,
   selectedPaneId,
   onSelectPane,
@@ -155,6 +170,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
     terminalId: string
   } | null>(null)
   const [launchName, setLaunchName] = useState('')
+  const [launchKind, setLaunchKind] = useState<'letta' | 'pi'>('letta')
   const launchPane = launchTarget
     ? panes.find(
         (pane) =>
@@ -162,12 +178,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
           pane.terminal_id === launchTarget.terminalId
       )
     : null
-  const launchTargetCurrent = Boolean(
-    launchPane &&
-    !isAgentPane(launchPane) &&
-    !launchPane.agent_session &&
-    launchPane.agent_status === 'idle'
-  )
+  const launchTargetCurrent = isShellLaunchCandidate(launchPane, agents)
 
   // New Shell Tab state
   const [newTabState, dispatchNewTab] = useReducer(
@@ -1046,7 +1057,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
           <>
             <SheetHeader className="drawer-sheet__header">
               <SheetTitle className="drawer-sheet__title">
-                Start Letta
+                Start agent
               </SheetTitle>
             </SheetHeader>
             <form
@@ -1067,16 +1078,31 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                   type: 'agent-start',
                   operationId: crypto.randomUUID(),
                   target: { ...launchTarget },
-                  kind: 'letta',
+                  kind: launchKind,
                   name: launchName
                 })
                 if (started.accepted) setLifecycleView('status')
               }}
             >
               <div className="new-tab-form__body">
+                <label htmlFor="launch-kind">Agent</label>
+                <Select
+                  id="launch-kind"
+                  name="agentKind"
+                  value={launchKind}
+                  options={[
+                    { value: 'letta', label: 'Letta' },
+                    { value: 'pi', label: 'Pi' }
+                  ]}
+                  onValueChange={(value) => {
+                    if (value === 'letta' || value === 'pi')
+                      setLaunchKind(value)
+                  }}
+                />
                 <p>
-                  Letta · new conversation; configured model/permissions
-                  unchanged. No effort override or initial prompt.
+                  {launchKind === 'pi' ? 'Pi' : 'Letta'} · new conversation;
+                  configured model/permissions unchanged. No effort override or
+                  initial prompt.
                 </p>
                 <p>
                   Target pane <code>{launchTarget?.paneId}</code>
@@ -1130,7 +1156,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                     newTabState.outcome === 'unknown'
                   }
                 >
-                  Start Letta
+                  Start {launchKind === 'pi' ? 'Pi' : 'Letta'}
                 </Button>
               </div>
             </form>
@@ -1351,48 +1377,46 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                                 key={p.pane_id}
                                 className={`pane-card ${isSelected ? 'pane-card--selected' : ''}`}
                               >
-                                {!hasAgent &&
-                                  !p.agent_session &&
-                                  p.terminal_id &&
-                                  p.agent_status === 'idle' && (
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      disabled={
-                                        hasLifecycleGate ||
-                                        newTabState.isCreating ||
-                                        newTabState.outcome === 'unknown'
-                                      }
-                                      onClick={(event) => {
-                                        initiatingControlRef.current =
-                                          event.currentTarget
-                                        setLaunchTarget({
-                                          paneId: p.pane_id,
-                                          terminalId: p.terminal_id!
-                                        })
-                                        setLaunchName('')
-                                        popupRef.current?.focus({
-                                          preventScroll: true
-                                        })
-                                        setLifecycleView('start-agent')
-                                      }}
-                                      ref={(element) => {
-                                        if (element)
-                                          launchTriggerRefs.current.set(
-                                            p.pane_id,
-                                            element
-                                          )
-                                        else
-                                          launchTriggerRefs.current.delete(
-                                            p.pane_id
-                                          )
-                                      }}
-                                      aria-label={`Start Letta in shell pane ${p.pane_id}`}
-                                    >
-                                      Start Letta
-                                    </Button>
-                                  )}
+                                {isShellLaunchCandidate(p, agents) && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={
+                                      hasLifecycleGate ||
+                                      newTabState.isCreating ||
+                                      newTabState.outcome === 'unknown'
+                                    }
+                                    onClick={(event) => {
+                                      initiatingControlRef.current =
+                                        event.currentTarget
+                                      setLaunchTarget({
+                                        paneId: p.pane_id,
+                                        terminalId: p.terminal_id!
+                                      })
+                                      setLaunchName('')
+                                      setLaunchKind('letta')
+                                      popupRef.current?.focus({
+                                        preventScroll: true
+                                      })
+                                      setLifecycleView('start-agent')
+                                    }}
+                                    ref={(element) => {
+                                      if (element)
+                                        launchTriggerRefs.current.set(
+                                          p.pane_id,
+                                          element
+                                        )
+                                      else
+                                        launchTriggerRefs.current.delete(
+                                          p.pane_id
+                                        )
+                                    }}
+                                    aria-label={`Start agent in shell pane ${p.pane_id}`}
+                                  >
+                                    Start agent
+                                  </Button>
+                                )}
                                 <div className="pane-card__row">
                                   <Button
                                     type="button"

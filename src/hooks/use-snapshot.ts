@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createSnapshotReader } from '@/services/snapshot-reader.ts'
+import { shouldPreserveEmptyCreateSelection } from '@/utils/lifecycle-operations.ts'
 import type { IPane, ISnapshotResult, ISnapshotStatus } from '@/types/herdr.ts'
 import {
   reconcileSnapshotSelection,
@@ -20,7 +21,12 @@ export interface IUseSnapshotReturn {
   getSnapshot: () => ISnapshotResult | null
 }
 
-export const useSnapshot = (pollIntervalMs = 2000): IUseSnapshotReturn => {
+export const useSnapshot = (
+  pollIntervalMs = 2000,
+  preserveEmptySelection: boolean | (() => boolean) = false
+): IUseSnapshotReturn => {
+  const preserveEmptySelectionRef = useRef(preserveEmptySelection)
+  preserveEmptySelectionRef.current = preserveEmptySelection
   const [snapshot, setSnapshot] = useState<ISnapshotResult | null>(null)
   const [status, setStatus] = useState<ISnapshotStatus>('loading')
   const [error, setError] = useState<string | null>(null)
@@ -54,6 +60,18 @@ export const useSnapshot = (pollIntervalMs = 2000): IUseSnapshotReturn => {
       return
     }
     setStatus('connected')
+    // A create from the empty index retains its null origin until Root verifies
+    // the response. Snapshot arrival alone is not explicit user selection.
+    if (
+      shouldPreserveEmptyCreateSelection(
+        typeof preserveEmptySelectionRef.current === 'function'
+          ? preserveEmptySelectionRef.current()
+          : preserveEmptySelectionRef.current,
+        selectedWorkspaceIdRef.current,
+        selectedPaneIdRef.current
+      )
+    )
+      return
     const nextSelection = reconcileSnapshotSelection(
       data,
       selectedWorkspaceIdRef.current,

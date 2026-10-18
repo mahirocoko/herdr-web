@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ITerminalClosed, ITerminalFrame } from '@/types/herdr.ts'
+import { PiScrollGestureOwner } from '@/utils/pi-scroll-gesture.ts'
 
 export type ITerminalConnectionState =
   'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error'
@@ -25,6 +26,8 @@ export interface IUseTerminalStreamReturn {
   lastError: string | null
   reconnect: () => void
   scrollState: ITerminalScrollState | null
+  piApplicationScroll: boolean
+  resetScrollGesture: () => void
   sendScroll: (params: {
     deltaRows?: number
     to?: 'latest'
@@ -175,6 +178,46 @@ export const useTerminalStream = ({
     null
   )
 
+  const [piApplicationScroll, setPiApplicationScroll] = useState(false)
+  const piGestureRef = useRef<PiScrollGestureOwner | null>(null)
+  if (!piGestureRef.current)
+    piGestureRef.current = new PiScrollGestureOwner(
+      async (binding, direction) => {
+        const generation = paneGenerationRef.current
+        const socket = socketRef.current
+        try {
+          const response = await fetch('/api/action', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              type: 'pi-scroll',
+              operationId: crypto.randomUUID(),
+              ...binding,
+              direction
+            }),
+            signal: AbortSignal.timeout(10000)
+          })
+          if (!response.ok)
+            throw new Error(
+              'Pi application scroll rejected or uncertain; reconnect to retry explicitly'
+            )
+        } catch (error) {
+          if (
+            generation === paneGenerationRef.current &&
+            socket === socketRef.current
+          ) {
+            setLastError(
+              error instanceof Error
+                ? error.message
+                : 'Pi application scroll outcome unknown; no retry'
+            )
+            setPiApplicationScroll(false)
+          }
+          throw error
+        }
+      }
+    )
+
   const [isBackgroundHidden, setIsBackgroundHidden] = useState<boolean>(() => {
     if (typeof document !== 'undefined') {
       return document.visibilityState === 'hidden'
@@ -280,6 +323,8 @@ export const useTerminalStream = ({
   }, [cols, rows])
 
   useEffect(() => {
+    piGestureRef.current?.setBinding(null)
+    setPiApplicationScroll(false)
     paneGenerationRef.current += 1
     const currentGeneration = paneGenerationRef.current
     let connectDeadline: ReturnType<typeof setTimeout> | null = null
@@ -318,6 +363,8 @@ export const useTerminalStream = ({
     const connect = () => {
       if (isManuallyClosedRef.current) return
       if (paneGenerationRef.current !== currentGeneration) return
+      piGestureRef.current?.setBinding(null)
+      setPiApplicationScroll(false)
       admissionBlockedRef.current = false
       clearConnectDeadline()
 
@@ -440,6 +487,21 @@ export const useTerminalStream = ({
                   setConnectionState('error')
                   setLastError('Terminal output could not be rendered')
                 })
+            }
+          } else if (raw.type === 'terminal.pi-scroll-binding') {
+            if (
+              Number.isSafeInteger(raw.fitGeneration) &&
+              raw.fitGeneration > 0 &&
+              raw.target?.paneId === paneId &&
+              raw.target?.terminalId === terminalId &&
+              raw.target?.expectedMode === 'agent' &&
+              typeof raw.target?.agentSessionId === 'string'
+            ) {
+              piGestureRef.current?.setBinding({
+                fitGeneration: raw.fitGeneration,
+                target: raw.target
+              })
+              setPiApplicationScroll(true)
             }
           } else if (raw.type === 'terminal.scroll-state') {
             const offset =
@@ -588,6 +650,12 @@ export const useTerminalStream = ({
     (params: { deltaRows?: number; to?: 'latest'; reset?: boolean }) => {
       const ws = socketRef.current
       if (!ws || ws.readyState !== WebSocket.OPEN) return
+      if (params.to === 'latest' && piGestureRef.current?.latest()) return
+      if (
+        typeof params.deltaRows === 'number' &&
+        piGestureRef.current?.scroll(params.deltaRows)
+      )
+        return
       try {
         ws.send(JSON.stringify({ type: 'terminal.scroll', ...params }))
       } catch {}
@@ -600,6 +668,11 @@ export const useTerminalStream = ({
     lastError,
     reconnect,
     scrollState,
+    piApplicationScroll,
+    resetScrollGesture: useCallback(
+      () => piGestureRef.current?.resetResidual(),
+      []
+    ),
     sendScroll
   }
 }

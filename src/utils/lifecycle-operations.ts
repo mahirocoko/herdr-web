@@ -14,7 +14,7 @@ export const LIFECYCLE_CREATE_UNKNOWN_COPY =
   'Outcome unknown. This Space may already have been created. Refresh and inspect before another action.'
 export const nativeLaunchStatusCopy = (ticket: ILifecycleTicket): string => {
   if (ticket.phase === 'pending')
-    return 'Starting Letta in the exact shell pane. Dismissing this sheet does not cancel launch.'
+    return `Starting ${ticket.target.kind === 'pi' ? 'Pi' : 'Letta'} in the exact shell pane. Dismissing this sheet does not cancel launch.`
   if (ticket.phase === 'acknowledged')
     return ticket.result?.ready === true
       ? 'Launch acknowledged. Native idle readiness was corroborated for the returned terminal and session at the server snapshot; inspect current state before input.'
@@ -30,7 +30,7 @@ export const getLifecycleUnknownCopy = (
   type === 'worktree-open' || type === 'worktree-create'
     ? 'Worktree outcome unknown. The checkout/Space may already exist. Refresh and inspect before another action; no automatic retry.'
     : type === 'agent-start'
-      ? 'Launch outcome unknown. Letta may already have started. Refresh and inspect the exact pane before another action; do not retry automatically.'
+      ? 'Launch outcome unknown. The agent may already have started. Refresh and inspect the exact pane before another action; do not retry automatically.'
       : type === 'workspace-create'
         ? LIFECYCLE_CREATE_UNKNOWN_COPY
         : LIFECYCLE_CLOSE_UNKNOWN_COPY
@@ -365,6 +365,26 @@ export const resolveWorkspaceSourceSelection = (
     ? { kind: 'source', source: choice.source }
     : { kind: 'missing' }
 }
+
+// Index fallback must not compete with a create receipt or its presentation.
+// Root alone applies observed results after exact refreshed-target proof.
+export const ownsIndexCreatePresentation = (
+  isOpen: boolean,
+  ticket: ILifecycleTicket | null
+): boolean =>
+  isOpen ||
+  Boolean(
+    ticket &&
+    (ticket.type === 'workspace-create' ||
+      ticket.type === 'worktree-open' ||
+      ticket.type === 'worktree-create')
+  )
+
+export const shouldPreserveEmptyCreateSelection = (
+  ownsPresentation: boolean,
+  workspaceId: string | null,
+  paneId: string | null
+): boolean => ownsPresentation && workspaceId === null && paneId === null
 
 export interface ILifecycleNavigationOrigin {
   requestIdentity: string

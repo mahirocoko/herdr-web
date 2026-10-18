@@ -25,6 +25,13 @@ export interface IFamilyResolution {
   source: FamilySource
   signature: string
   pending?: boolean
+  runtime?: {
+    provider: FamilyProvider
+    pid: number
+    start: string
+    argv: string[]
+    agentDir: string
+  }
   validate: () => Promise<void>
 }
 const prospective = (file: string, root: string) => {
@@ -111,6 +118,26 @@ const enumerateSessions = (root: string) => {
   if (result.length > 64) throw unavailable()
   return result
 }
+export class PiSessionIdentityUnavailableError extends Error {
+  constructor() {
+    super(
+      'Pi session identity unavailable: native pane reports no session and no transcript descriptor is open. Go to Terminal to read this pane.'
+    )
+    this.name = 'PiSessionIdentityUnavailableError'
+  }
+}
+// Native JSON maps (notably agent.tokens) have no stable insertion order.
+// Preserve every value and array order while comparing/signing object content.
+const nativeIdentity = (value: unknown) =>
+  JSON.stringify(value, (_key, item) =>
+    item && typeof item === 'object' && !Array.isArray(item)
+      ? Object.fromEntries(
+          Object.keys(item)
+            .sort()
+            .map((key) => [key, item[key]])
+        )
+      : item
+  )
 const unavailable = () =>
   new Error('Exact native pi-family session authority unavailable')
 export const familyProcess = (entry: any): FamilyProvider | null => {
@@ -125,6 +152,14 @@ export const familyProcess = (entry: any): FamilyProvider | null => {
   const program = (argv[at] ?? '').replaceAll('\\', '/')
   const direct = /(?:^|\/)(omp|omo|gjc|pi)(?:\.[cm]?js|\.exe)?$/.exec(program)
   if (direct) return direct[1] as FamilyProvider
+  // Official Pi npm entrypoint, including the installed 1.3.0 bundle bin.
+  if (
+    runtime &&
+    /\/@earendil-works\/pi-coding-agent\/dist\/(?:bundle\/)?cli\.js$/.test(
+      program
+    )
+  )
+    return 'pi'
   if (/\/omo-ai\//.test(program)) return 'omo'
   if (
     runtime &&
@@ -275,6 +310,10 @@ export const resolveFamily = async (
   const fdFiles = [...new Set(descriptors.map(parentFile))]
   if (fdFiles.length > 1) throw unavailable()
   if (fdFiles.length === 1) file = fdFiles[0]
+  // Pi closes its append descriptors between writes. Without native session
+  // metadata, a same-cwd file (even the newest one) cannot identify this process.
+  if (provider === 'pi' && !file && !agent.agent_session)
+    throw new PiSessionIdentityUnavailableError()
   let heldSession: string | undefined
   if (provider === 'omo') {
     const slug = `--${cwd.replace(/^[/\\]/, '').replace(/[/\\:]/g, '-')}--`
@@ -543,7 +582,14 @@ export const resolveFamily = async (
     pending,
     session,
     source: `${provider}-transcript` as FamilySource,
-    signature: JSON.stringify({ proofs, agent, pending, descriptors }),
+    signature: nativeIdentity({ proofs, agent, pending, descriptors }),
+    runtime: {
+      provider,
+      pid: process.pid,
+      start: roots.start,
+      argv: process.argv ?? [],
+      agentDir: expand(agentDir)
+    },
     validate: async () => {
       const post = await rpc('pane.process_info', { pane_id: paneId }),
         postAgent = await rpc('agent.get', { target: paneId })
@@ -551,9 +597,9 @@ export const resolveFamily = async (
         deps.processRoots ?? ((pid: number) => selectedProcessRoots(pid, true))
       )(process.pid)
       if (
-        JSON.stringify(post) !== JSON.stringify(info) ||
-        JSON.stringify(postAgent) !== JSON.stringify(agentInfo) ||
-        JSON.stringify(postRoots) !== JSON.stringify(roots)
+        nativeIdentity(post) !== nativeIdentity(info) ||
+        nativeIdentity(postAgent) !== nativeIdentity(agentInfo) ||
+        nativeIdentity(postRoots) !== nativeIdentity(roots)
       )
         throw unavailable()
       for (const proof of proofs) {

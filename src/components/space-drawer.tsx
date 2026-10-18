@@ -65,12 +65,17 @@ export interface ISpaceDrawerProps {
   onClose: () => void
   onRefreshSnapshot?: () => Promise<boolean>
   lifecycle: ILifecycleOperations
-  initialView?: 'list' | 'new-space' | 'close-space'
+  initialView?: 'list' | 'new-space' | 'close-space' | 'status'
   initialTargetWorkspaceId?: string | null
 }
 
 type SpaceDrawerView =
   'list' | 'new-space' | 'close-space' | 'worktrees' | 'status'
+
+export const retireSpaceDrawerStatus = (
+  view: SpaceDrawerView,
+  hasTicket: boolean
+): SpaceDrawerView => (view === 'status' && !hasTicket ? 'list' : view)
 
 export const getWorkspaceStatusDotClass = (status?: string): string => {
   switch (status) {
@@ -112,7 +117,10 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
   const initiatingControlRef = useRef<HTMLElement | null>(null)
   const worktreeTriggerRef = useRef<HTMLButtonElement | null>(null)
   const popupRef = useRef<HTMLDivElement | null>(null)
-  const returnWorktreeFocusRef = useRef(false)
+  const newSpaceTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const returnListFocusRef = useRef<
+    'worktrees' | 'new-space' | 'initiator' | null
+  >(null)
   const initializedIntentRef = useRef<string | null>(null)
 
   const [view, setView] = useState<SpaceDrawerView>(initialView)
@@ -188,16 +196,26 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
       initializedIntentRef.current = null
       return
     }
+    const intentKey = `${initialView}:${initialTargetWorkspaceId ?? ''}`
     if (lifecycle.ticket && lifecycle.ticket.phase !== 'rejected') {
+      // Status consumes this opening intent too; retiring its receipt must not
+      // replay an old New/Close form after Root has already reconciled it.
+      initializedIntentRef.current = intentKey
       setView('status')
       return
     }
     // Capture an opening intent once: polling must not re-freeze confirmation
     // membership or reopen a subview after the user cancels/backtracks.
-    const intentKey = `${initialView}:${initialTargetWorkspaceId ?? ''}`
-    if (initializedIntentRef.current === intentKey) return
+    if (initializedIntentRef.current === intentKey) {
+      setView((current) =>
+        retireSpaceDrawerStatus(current, Boolean(lifecycle.ticket))
+      )
+      return
+    }
     initializedIntentRef.current = intentKey
-    if (initialView === 'new-space') {
+    if (initialView === 'status' && lifecycle.ticket) {
+      setView('status')
+    } else if (initialView === 'new-space') {
       setView('new-space')
     } else if (initialView === 'close-space') {
       const targetWsId = initialTargetWorkspaceId || selectedWorkspaceId
@@ -259,9 +277,15 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
     if (!isOpen) return
     if (view === 'worktrees')
       cancelButtonRef.current?.focus({ preventScroll: true })
-    else if (view === 'list' && returnWorktreeFocusRef.current) {
-      returnWorktreeFocusRef.current = false
-      const trigger = worktreeTriggerRef.current
+    else if (view === 'list' && returnListFocusRef.current) {
+      const destination = returnListFocusRef.current
+      returnListFocusRef.current = null
+      const trigger =
+        destination === 'worktrees'
+          ? worktreeTriggerRef.current
+          : destination === 'new-space'
+            ? newSpaceTriggerRef.current
+            : initiatingControlRef.current
       if (trigger?.isConnected) trigger.focus({ preventScroll: true })
       else closeButtonRef.current?.focus({ preventScroll: true })
     }
@@ -271,19 +295,16 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
     const fromWorktrees = view === 'worktrees'
     worktreeReadGeneration.current++
     setWorktreeLoading(false)
-    if (fromWorktrees) {
-      popupRef.current?.focus({ preventScroll: true })
-      returnWorktreeFocusRef.current = true
-    }
+    // The old list trigger was unmounted; focus its live replacement after commit.
+    returnListFocusRef.current = fromWorktrees
+      ? 'worktrees'
+      : view === 'new-space'
+        ? 'new-space'
+        : 'initiator'
+    popupRef.current?.focus({ preventScroll: true })
     setView('list')
     setConfirmationError(null)
     setWorkspaceConfirmation(null)
-    if (fromWorktrees) return
-    requestAnimationFrame(() => {
-      const trigger = initiatingControlRef.current
-      if (trigger?.isConnected) trigger.focus({ preventScroll: true })
-      else closeButtonRef.current?.focus({ preventScroll: true })
-    })
   }
 
   const beginView = (
@@ -961,6 +982,7 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
                 type="button"
                 variant="secondary"
                 className="space-drawer-action"
+                ref={newSpaceTriggerRef}
                 onClick={(event) => beginView('new-space', event.currentTarget)}
                 disabled={hasLifecycleGate}
               >
@@ -978,6 +1000,7 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
                     variant="secondary"
                     className="space-drawer-action"
                     ref={worktreeTriggerRef}
+                    aria-label="Worktrees in current Space repository"
                     disabled={hasLifecycleGate || worktreeLoading}
                     onClick={(event) => {
                       const pane = panes.find(
@@ -995,7 +1018,7 @@ const SpaceDrawer: FC<ISpaceDrawerProps> = ({
                       })
                     }}
                   >
-                    Worktrees in current Space repository
+                    Worktrees
                   </Button>
                 )}
               {selectedWorkspaceId &&

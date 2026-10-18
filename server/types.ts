@@ -167,7 +167,7 @@ export interface IAgentStartAction {
   type: 'agent-start'
   operationId: string
   target: { paneId: string; terminalId: string }
-  kind: 'letta'
+  kind: 'letta' | 'pi'
   name: string
 }
 
@@ -216,7 +216,16 @@ export type IWorktreeAction =
       branch: string
     }
 
+export interface IPiScrollAction {
+  type: 'pi-scroll'
+  operationId: string
+  target: IActionTargetIdentity
+  fitGeneration: number
+  direction: 'up' | 'down' | 'latest'
+}
+
 export type IActionRequest =
+  | IPiScrollAction
   | IWorktreeAction
   | IAgentStartAction
   | IHeldActionRequest

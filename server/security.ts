@@ -292,6 +292,19 @@ const validateCloseManifestIds = (
   return { valid: true, data: normalized }
 }
 
+// Opaque equality reference only: never a filesystem or command argument.
+export const isPiSessionPathReference = (value: string): boolean =>
+  value.startsWith('/') &&
+  !value.startsWith('//') &&
+  value.endsWith('.jsonl') &&
+  new TextEncoder().encode(value).length <= 4096 &&
+  !/[\\\\\u0000-\u001f\u007f]/.test(value) &&
+  value === value.trim() &&
+  value
+    .slice(1)
+    .split('/')
+    .every((part) => !!part && part !== '.' && part !== '..')
+
 export const validateActionRequest = (
   body: unknown
 ): IValidationResult<IActionRequest> => {
@@ -344,6 +357,7 @@ export const validateActionRequest = (
 
   if (
     type !== 'prompt' &&
+    type !== 'pi-scroll' &&
     type !== 'prompt-answer' &&
     type !== 'keys' &&
     type !== 'terminal-input' &&
@@ -463,7 +477,7 @@ export const validateActionRequest = (
         (key) =>
           !['type', 'operationId', 'target', 'kind', 'name'].includes(key)
       ) ||
-      raw.kind !== 'letta' ||
+      (raw.kind !== 'letta' && raw.kind !== 'pi') ||
       typeof raw.name !== 'string' ||
       !/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(raw.name) ||
       !target ||
@@ -481,14 +495,14 @@ export const validateActionRequest = (
       return {
         valid: false,
         error:
-          'Invalid native agent start: exact pane/terminal, safe name and Letta kind required; no launch overrides allowed'
+          'Invalid native agent start: exact pane/terminal, safe name and Letta or Pi kind required; no launch overrides allowed'
       }
     return {
       valid: true,
       data: {
         type,
         operationId,
-        kind: 'letta',
+        kind: raw.kind,
         name: raw.name,
         target: { paneId: target.paneId, terminalId: target.terminalId }
       }
@@ -932,15 +946,17 @@ export const validateActionRequest = (
       }
     }
     const trimmedSession = rawTarget.agentSessionId.trim()
-    if (
-      trimmedSession.length === 0 ||
-      trimmedSession.length > 256 ||
-      !CONSERVATIVE_TOKEN_REGEX.test(trimmedSession)
-    ) {
+    if (!(
+      (trimmedSession.length > 0 &&
+        trimmedSession.length <= 256 &&
+        CONSERVATIVE_TOKEN_REGEX.test(trimmedSession)) ||
+      (expectedMode !== 'shell' &&
+        isPiSessionPathReference(rawTarget.agentSessionId))
+    )) {
       return {
         valid: false,
         error:
-          'Invalid target "agentSessionId": must be a safe token (1-256 chars, alphanumeric, underscore, period, colon, hyphen)'
+          'Invalid target "agentSessionId": expected a safe token or bounded native Pi JSONL session reference'
       }
     }
     agentSessionId = trimmedSession
@@ -951,6 +967,45 @@ export const validateActionRequest = (
     terminalId,
     expectedMode,
     ...(agentSessionId !== undefined ? { agentSessionId } : {})
+  }
+
+  if (type === 'pi-scroll') {
+    if (
+      Object.keys(raw).some(
+        (key) =>
+          ![
+            'type',
+            'operationId',
+            'target',
+            'fitGeneration',
+            'direction'
+          ].includes(key)
+      ) ||
+      Object.keys(rawTarget).some(
+        (key) =>
+          !['paneId', 'terminalId', 'expectedMode', 'agentSessionId'].includes(
+            key
+          )
+      ) ||
+      expectedMode !== 'agent' ||
+      !agentSessionId ||
+      !Number.isSafeInteger(raw.fitGeneration) ||
+      (raw.fitGeneration as number) < 1 ||
+      (raw.direction !== 'up' &&
+        raw.direction !== 'down' &&
+        raw.direction !== 'latest')
+    )
+      return { valid: false, error: 'Invalid Pi page scroll binding or fields' }
+    return {
+      valid: true,
+      data: {
+        type,
+        operationId,
+        target,
+        fitGeneration: raw.fitGeneration as number,
+        direction: raw.direction
+      }
+    }
   }
 
   if (type === 'prompt-answer') {
@@ -1301,6 +1356,32 @@ export const verifyTargetAgainstSnapshot = (
     paneAgentSession?.id ??
     owningAgent?.agent_session?.value ??
     owningAgent?.agent_session?.id
+
+  if (actionTarget.agentSessionId?.startsWith('/')) {
+    // A path-shaped reference is admitted solely for the official native Pi
+    // session metadata domain. Changing kind/source cannot retain authority.
+    const session = paneAgentSession ?? owningAgent?.agent_session
+    if (
+      targetPane.agent !== 'pi' ||
+      (owningAgent?.agent !== undefined && owningAgent.agent !== 'pi') ||
+      !isPiSessionPathReference(actionTarget.agentSessionId) ||
+      session?.kind !== 'path' ||
+      session?.agent !== 'pi' ||
+      session?.source !== 'herdr:pi' ||
+      session?.value !== actionTarget.agentSessionId ||
+      (paneAgentSession &&
+        owningAgent?.agent_session &&
+        ['kind', 'agent', 'source', 'value'].some(
+          (key) =>
+            (paneAgentSession as any)[key] !== owningAgent.agent_session?.[key]
+        ))
+    )
+      return {
+        ok: false,
+        status: 409,
+        error: 'Native Pi session path binding changed or unavailable'
+      }
+  }
 
   if (
     actionTarget.expectedMode === 'agent' ||

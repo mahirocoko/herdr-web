@@ -358,11 +358,31 @@ export interface IFittedTerminalSession {
   cols: number
   rows: number
   createdAt: number
+  // Set only after this exact producer/socket emits a validated terminal.frame.
+  validatedFirstFrame?: boolean
   initialScrollOffset?: number
   lastAppliedScrollOffset?: number
   pendingScrollIntent?: IPendingScrollIntent | null
   scrollDrainPromise?: Promise<void> | null
 }
+
+// Internal producer fence, not native Pi/session/mode authority. A future action
+// owner must hold the coordinator claim and verify those independently.
+export interface IPiScrollProducerBinding {
+  readonly paneId: string
+  readonly terminalId: string
+  readonly generation: number
+  readonly session: IFittedTerminalSession
+  readonly producer: any
+  readonly socket: any
+  readonly writer: any
+}
+
+const PI_SCROLL_PAGE_PACKETS = {
+  up: JSON.stringify({ type: 'terminal.input', text: '\u001b[5~' }) + '\n',
+  down: JSON.stringify({ type: 'terminal.input', text: '\u001b[6~' }) + '\n',
+  latest: JSON.stringify({ type: 'terminal.input', text: '\u001b[1;5F' }) + '\n'
+} as const
 
 export type ISpawnTerminalFitProcess = (
   terminalId: string,
@@ -822,6 +842,7 @@ export class TerminalFitManager {
       return false
     }
     session.proc = proc
+    session.validatedFirstFrame = false
     return true
   }
 
@@ -850,10 +871,102 @@ export class TerminalFitManager {
 
     session.proc = proc
     session.ws = ws
+    session.validatedFirstFrame = false
     session.cols = cols
     session.rows = rows
     session.status = 'active'
     return true
+  }
+
+  public markValidatedFirstFrame(
+    terminalId: string,
+    generation: number,
+    producer: any,
+    socket: any
+  ): boolean {
+    const session = this.activeSessions.get(terminalId)
+    if (
+      !session ||
+      session.generation !== generation ||
+      session.status !== 'active' ||
+      session.proc !== producer ||
+      session.ws !== socket ||
+      socket?.readyState !== 1 ||
+      socket?.data?.closed === true ||
+      this.isFitBlocked(terminalId)
+    )
+      return false
+    session.validatedFirstFrame = true
+    return true
+  }
+
+  public capturePiScrollProducer(identity: {
+    paneId: string
+    terminalId: string
+    generation: number
+  }): IPiScrollProducerBinding | null {
+    const session = this.activeSessions.get(identity.terminalId)
+    if (!session) return null
+    const binding: IPiScrollProducerBinding = {
+      ...identity,
+      session,
+      producer: session.proc,
+      socket: session.ws,
+      writer: session.proc?.stdin
+    }
+    return this.isPiScrollProducerCurrent(binding) ? binding : null
+  }
+
+  private isPiScrollProducerCurrent(
+    binding: IPiScrollProducerBinding
+  ): boolean {
+    const session = this.activeSessions.get(binding.terminalId)
+    return !!(
+      session &&
+      session === binding.session &&
+      session.paneId === binding.paneId &&
+      session.generation === binding.generation &&
+      session.status === 'active' &&
+      session.validatedFirstFrame === true &&
+      !this.isFitBlocked(binding.terminalId) &&
+      session.proc === binding.producer &&
+      session.ws === binding.socket &&
+      binding.producer?.stdin === binding.writer &&
+      typeof binding.writer?.write === 'function' &&
+      binding.producer?.exitCode == null &&
+      binding.socket?.readyState === 1 &&
+      binding.socket?.data?.closed !== true
+    )
+  }
+
+  // After async native preflights the action owner rechecks this exact producer
+  // and writes one constant packet synchronously, with no await gap. Only flush
+  // completion may await; 'written' is pipe acceptance, not native application ACK.
+  // The typed Pi scroll action owns these constants, not generic keyboard input.
+  public async writePiScrollPage(
+    binding: IPiScrollProducerBinding,
+    direction: 'up' | 'down' | 'latest'
+  ): Promise<{ outcome: 'written' | 'rejected' | 'unknown' }> {
+    if (
+      (direction !== 'up' && direction !== 'down' && direction !== 'latest') ||
+      !this.isPiScrollProducerCurrent(binding)
+    )
+      return { outcome: 'rejected' }
+    try {
+      const written = binding.writer.write(PI_SCROLL_PAGE_PACKETS[direction])
+      if (typeof binding.writer.flush === 'function')
+        await binding.writer.flush()
+      // A short/throwing write can already have delivered bytes. Never retry it.
+      return {
+        outcome:
+          written ===
+          new TextEncoder().encode(PI_SCROLL_PAGE_PACKETS[direction]).length
+            ? 'written'
+            : 'unknown'
+      }
+    } catch {
+      return { outcome: 'unknown' }
+    }
   }
 
   public handleClientResize(

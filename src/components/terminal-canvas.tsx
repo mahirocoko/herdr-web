@@ -231,6 +231,8 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
     connectionState: streamConnectionState,
     lastError: streamLastError,
     scrollState,
+    piApplicationScroll,
+    resetScrollGesture,
     sendScroll,
     reconnect: reconnectStream
   } = useTerminalStream({
@@ -470,6 +472,15 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
       getTerminal: () => terminalRef.current,
       isObserverMode: () => modeRef.current === 'observer',
       onTouchScroll: (deltaRows) => {
+        if (
+          isManuallyPaused ||
+          (piApplicationScroll &&
+            (isTouchSelectingRef.current ||
+              terminalRef.current?.hasSelection()))
+        ) {
+          resetScrollGesture()
+          return
+        }
         sendScroll({ deltaRows })
       },
       onSelection: (text) => {
@@ -480,6 +491,7 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
       },
       onTouchSelectingChange: (isSelecting) => {
         isTouchSelectingRef.current = isSelecting
+        if (isSelecting) resetScrollGesture()
       }
     })
 
@@ -487,7 +499,14 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
       cleanup()
       isTouchSelectingRef.current = false
     }
-  }, [mode, paneId, sendScroll])
+  }, [
+    mode,
+    paneId,
+    sendScroll,
+    isManuallyPaused,
+    resetScrollGesture,
+    piApplicationScroll
+  ])
 
   // Clear or reset terminal on pane change; reset mode to observer and reset panning
   useEffect(() => {
@@ -592,6 +611,13 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
   // Native source scroll on wheel in observer mode
   const handleWheel = (e: WheelEvent<HTMLDivElement>) => {
     if (mode !== 'observer' || isManuallyPaused) return
+    if (
+      piApplicationScroll &&
+      (isTouchSelectingRef.current || terminalRef.current?.hasSelection())
+    ) {
+      resetScrollGesture()
+      return
+    }
     if (Math.abs(e.deltaY) < 2) return
     // In Herdr: offset_from_bottom: 0 is bottom/latest.
     // Scrolling UP (deltaY < 0) reveals earlier rows -> offset increases (positive deltaRows).
@@ -600,7 +626,7 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
     sendScroll({ deltaRows: rowDelta })
   }
 
-  // Restore latest vertical visibility while preserving horizontal pan and reset native scroll offset
+  // Restore Pi application/native-history visibility while preserving horizontal pan.
   const handleJumpToLatest = () => {
     if (mode === 'observer') {
       sendScroll({ to: 'latest' })
@@ -677,13 +703,17 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
         <div className="terminal-canvas__scope-info">
           {mode === 'observer' ? (
             <>
-              <span className="terminal-canvas__scope-tag">Read only</span>
+              <span className="terminal-canvas__scope-tag">
+                {piApplicationScroll ? 'Pi page scroll' : 'Read only'}
+              </span>
               <span className="terminal-canvas__scope-desc">
                 {isManuallyPaused
                   ? 'Fit paused · native desktop display active'
-                  : scrollState && scrollState.maxOffset === 0
-                    ? 'Native output · no scrollback in current screen'
-                    : 'Native output · bounded scrollback'}
+                  : piApplicationScroll
+                    ? 'Application page keys · bounded gestures'
+                    : scrollState && scrollState.maxOffset === 0
+                      ? 'Native output · no scrollback in current screen'
+                      : 'Native output · bounded scrollback'}
               </span>
               {controlNotice && (
                 <span className="terminal-canvas__scope-notice" role="alert">
@@ -743,9 +773,11 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
                   <span>Quote in message</span>
                 </Button>
               )}
-              {/* Latest affordance button: restores vertical bottom prompt and resets native scroll offset */}
+              {/* Pi uses Ctrl+End; other panes reset the native history offset. */}
               {!isManuallyPaused &&
-                (isScrolledAway || (scrollState?.offset ?? 0) > 0) && (
+                (piApplicationScroll ||
+                  isScrolledAway ||
+                  (scrollState?.offset ?? 0) > 0) && (
                   <Button
                     type="button"
                     variant="secondary"
@@ -754,9 +786,11 @@ const TerminalCanvas: FC<ITerminalCanvasProps> = ({
                     onClick={handleJumpToLatest}
                     aria-label="Jump to latest terminal output"
                     title={
-                      scrollState && scrollState.offset > 0
-                        ? `Jump to latest (offset ${scrollState.offset})`
-                        : 'Follow latest output'
+                      piApplicationScroll
+                        ? 'Jump to latest Pi output (Ctrl+End)'
+                        : scrollState && scrollState.offset > 0
+                          ? `Jump to latest (offset ${scrollState.offset})`
+                          : 'Follow latest output'
                     }
                   >
                     <ArrowDown size={13} aria-hidden="true" />

@@ -45,7 +45,11 @@ import {
   reconcilePairMirrors
 } from './pair-parser.ts'
 import { pairMetadata } from './pair-metadata.ts'
-import { resolveFamily, type IFamilyDeps } from './pi-family-resolver.ts'
+import {
+  PiSessionIdentityUnavailableError,
+  resolveFamily,
+  type IFamilyDeps
+} from './pi-family-resolver.ts'
 import {
   isFamilySource,
   familyContributions,
@@ -1772,6 +1776,8 @@ export const readPaneConversation = async (
   try {
     return await readInternal(paneId, options, opened)
   } catch (error) {
+    if (error instanceof PiSessionIdentityUnavailableError)
+      throw new ConversationError(409, error.message)
     if (error instanceof ConversationError) throw error
     throw new ConversationError(422, 'Transcript unavailable')
   } finally {

@@ -229,7 +229,14 @@ describe('Router & Push Deep Link Contracts', () => {
         path.resolve(import.meta.dir, '../../app/routes/_index.tsx'),
         'utf8'
       )
-      expect(source).toContain('initialView="new-space"')
+      expect(source).toContain(
+        "initialView={lifecycle.ticket ? 'status' : 'new-space'}"
+      )
+      expect(source).toContain(
+        "if (ownsCreatePresentation || status !== 'connected' || !snapshot) return"
+      )
+      expect(source).toContain('View operation status')
+      expect(source).toContain('Open current Space')
       expect(source).toContain('snapshotReadNotice')
       expect(snapshotReadNotice('empty', null)).toContain(
         'No active Herdr Spaces or panes found.'

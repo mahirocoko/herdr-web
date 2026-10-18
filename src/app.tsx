@@ -1462,6 +1462,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
 
       {/* Active-Space Tab and Pane Switcher Sheet */}
       <PaneDrawer
+        agents={snapshot?.agents}
         isOpen={isTabDrawerOpen}
         workspaces={workspaces}
         tabs={tabs}

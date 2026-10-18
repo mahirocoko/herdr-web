@@ -703,7 +703,11 @@ const isPaneInfoShape = (value: unknown): value is Record<string, unknown> => {
   )
 }
 
-const LETTA_NEW_CONVERSATION_ARGS = ['--new'] as const
+// Pi 1.3.0 creates a fresh session by default (resume/continue are opt-in).
+const NEW_CONVERSATION_ARGS = {
+  letta: ['--new'],
+  pi: []
+} as const
 
 // Called under the route's exclusive topology + exact pane claim, after fit retirement.
 export const executeAgentStart = async (
@@ -727,7 +731,9 @@ export const executeAgentStart = async (
   })
   if (getTransportMode() !== 'socket')
     return rejected('Native agent start requires socket transport')
-  if (action.kind !== 'letta') return rejected('Unsupported native agent kind')
+  if (action.kind !== 'letta' && action.kind !== 'pi')
+    return rejected('Unsupported native agent kind')
+  const launchArgs = NEW_CONVERSATION_ARGS[action.kind]
   const fetchSnapshot = options.deps?.fetchSnapshot ?? getHerdrSnapshot
   const sendRequest = options.deps?.sendSocketRequest ?? sendRawSocketRequest
   let before: ISnapshotResult
@@ -806,7 +812,7 @@ export const executeAgentStart = async (
         kind: action.kind,
         pane_id: action.target.paneId,
         // Trusted server-owned CLI argument: never resume an unrelated conversation.
-        args: [...LETTA_NEW_CONVERSATION_ARGS]
+        args: [...launchArgs]
       },
       { timeoutMs: 35000 }
     )
@@ -827,9 +833,9 @@ export const executeAgentStart = async (
   if (response?.type !== 'agent_started') return unknown('malformed_reply')
   if (
     !Array.isArray(response.argv) ||
-    response.argv.length !== 2 ||
-    response.argv[0] !== 'letta' ||
-    response.argv[1] !== '--new'
+    response.argv.length !== launchArgs.length + 1 ||
+    response.argv[0] !== action.kind ||
+    launchArgs.some((arg, index) => response.argv[index + 1] !== arg)
   )
     return unknown('argv_mismatch')
   const agent = response.agent

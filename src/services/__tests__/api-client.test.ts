@@ -17,6 +17,56 @@ afterEach(() => {
   globalThis.fetch = originalFetch
 })
 
+describe.each(['letta', 'pi'] as const)(
+  '%s launch response contract',
+  (kind) => {
+    const launch: IActionRequest = {
+      type: 'agent-start',
+      operationId: 'launch',
+      kind,
+      name: 'agent',
+      target: { paneId: 'pane:test', terminalId: 'term' }
+    }
+    it('accepts ACK without readiness but rejects replaced, malformed and unsupported success', async () => {
+      const result = { paneId: 'pane:test', terminalId: 'term', ready: false }
+      globalThis.fetch = (async (_url: unknown, options: RequestInit) => {
+        expect(JSON.parse(options.body as string)).toEqual(launch)
+        return Response.json({ ok: true, outcome: 'acknowledged', result })
+      }) as unknown as typeof fetch
+      expect((await sendAction(launch)).result?.ready).toBe(false)
+      for (const response of [
+        { ok: true, outcome: 'observed', result },
+        {
+          ok: true,
+          outcome: 'acknowledged',
+          result: { ...result, terminalId: 'replaced' }
+        },
+        {
+          ok: true,
+          outcome: 'acknowledged',
+          result: { ...result, ready: true }
+        },
+        {
+          ok: true,
+          outcome: 'acknowledged',
+          result: {
+            ...result,
+            ready: true,
+            agentSessionId: 'same',
+            agentStatus: 'blocked'
+          }
+        }
+      ]) {
+        globalThis.fetch = (async () =>
+          Response.json(response)) as unknown as typeof fetch
+        await expect(sendAction(launch)).rejects.toMatchObject({
+          outcome: 'unknown'
+        })
+      }
+    })
+  }
+)
+
 describe('snapshot read deadlines', () => {
   it('aborts and settles a hanging fetch within its deadline', async () => {
     let signal: AbortSignal | undefined

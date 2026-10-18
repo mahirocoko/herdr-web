@@ -2,6 +2,8 @@ import { describe, expect, it } from 'bun:test'
 import type { IPane, ISnapshotResult, ITab, IWorkspace } from '@/types/herdr.ts'
 import {
   nativeLaunchStatusCopy,
+  ownsIndexCreatePresentation,
+  shouldPreserveEmptyCreateSelection,
   LIFECYCLE_CLOSE_UNKNOWN_COPY,
   LIFECYCLE_CREATE_UNKNOWN_COPY,
   deriveWorkspaceSourceChoices,
@@ -18,6 +20,59 @@ import {
 } from '../lifecycle-operations.ts'
 import { reconcileSnapshotSelection } from '../workspace-helpers.ts'
 
+it.each([
+  'pending',
+  'unknown',
+  'rejected',
+  'observed',
+  'reconciliation-failed'
+] as const)(
+  'keeps snapshot-first empty-index create presentation owned during %s',
+  (phase) => {
+    const ticket = {
+      requestIdentity: 'create',
+      operationId: 'one-post',
+      type: 'workspace-create' as const,
+      target: {},
+      phase,
+      reconciliationAttempt: 0,
+      error: null,
+      result: null
+    }
+    expect(ownsIndexCreatePresentation(true, null)).toBe(true)
+    expect(ownsIndexCreatePresentation(false, ticket)).toBe(true)
+    expect(shouldPreserveEmptyCreateSelection(true, null, null)).toBe(true)
+    expect(
+      shouldPreserveEmptyCreateSelection(true, 'existing', 'existing:pane')
+    ).toBe(false)
+    const navigation = {
+      origin: {
+        requestIdentity: 'create',
+        pathname: '/',
+        workspaceId: null,
+        paneId: null
+      },
+      requestIdentity: 'create',
+      attempt: 0,
+      currentTicket: ticket,
+      currentPathname: '/',
+      currentWorkspaceId: null,
+      currentPaneId: null
+    }
+    expect(shouldApplyCreateResultNavigation(navigation)).toBe(
+      phase === 'observed'
+    )
+    expect(
+      shouldApplyCreateResultNavigation({
+        ...navigation,
+        currentPathname: '/spaces/user-selected'
+      })
+    ).toBe(false)
+    expect(ownsIndexCreatePresentation(false, null)).toBe(false)
+    expect(shouldPreserveEmptyCreateSelection(false, null, null)).toBe(false)
+  }
+)
+
 it('escaped native name pattern compiles under v semantics and matches server ASCII contract', () => {
   const htmlPattern = new RegExp('^(?:[a-zA-Z][a-zA-Z0-9_\\-]{0,63})$', 'v')
   const serverPattern = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/
@@ -33,55 +88,79 @@ it('escaped native name pattern compiles under v semantics and matches server AS
     expect(htmlPattern.test(value)).toBe(serverPattern.test(value))
 })
 
-it('keeps native launch ACK distinct, gates duplicate intent and clears only explicit inspection', () => {
-  const ticket = {
-    requestIdentity: 'start',
-    operationId: 'op',
-    type: 'agent-start' as const,
-    target: Object.freeze({
-      paneId: 'ws:pane',
-      terminalId: 'term',
-      name: 'agent',
-      kind: 'letta'
-    }),
-    phase: 'pending' as const,
-    reconciliationAttempt: 0,
-    error: null,
-    result: null
-  }
-  const pending = lifecycleReducer(initialLifecycleState, {
-    type: 'BEGIN',
-    ticket
-  })
-  expect(
-    lifecycleReducer(pending, {
+it.each(['letta', 'pi'])(
+  'keeps %s launch ACK distinct, gates duplicate intent and clears only explicit inspection',
+  (kind) => {
+    const ticket = {
+      requestIdentity: 'start',
+      operationId: 'op',
+      type: 'agent-start' as const,
+      target: Object.freeze({
+        paneId: 'ws:pane',
+        terminalId: 'term',
+        name: 'agent',
+        kind
+      }),
+      phase: 'pending' as const,
+      reconciliationAttempt: 0,
+      error: null,
+      result: null
+    }
+    const pending = lifecycleReducer(initialLifecycleState, {
       type: 'BEGIN',
-      ticket: { ...ticket, requestIdentity: 'duplicate' }
+      ticket
     })
-  ).toBe(pending)
-  const ack = lifecycleReducer(pending, {
-    type: 'SETTLE',
-    requestIdentity: 'start',
-    phase: 'acknowledged',
-    result: { paneId: 'ws:pane', terminalId: 'term', ready: false }
-  })
-  expect(nativeLaunchStatusCopy(ack.ticket!)).toContain(
-    'readiness was not corroborated'
-  )
-  expect(
-    lifecycleReducer(ack, { type: 'CLEAR_OBSERVED', requestIdentity: 'start' })
-  ).toBe(ack)
-  expect(lifecycleReducer(ack, { type: 'BEGIN', ticket })).toBe(ack)
-  expect(
-    lifecycleReducer(ack, { type: 'CLEAR_UNKNOWN_AFTER_REFRESH' }).ticket
-  ).toBeNull()
-  expect(
-    nativeLaunchStatusCopy({
-      ...ack.ticket!,
-      result: { ready: true, agentSessionId: 'same', agentStatus: 'idle' }
+    expect(nativeLaunchStatusCopy(ticket)).toContain(
+      kind === 'pi' ? 'Starting Pi' : 'Starting Letta'
+    )
+    expect(getLifecycleUnknownCopy('agent-start')).not.toContain('Letta')
+    expect(
+      lifecycleReducer(pending, {
+        type: 'BEGIN',
+        ticket: { ...ticket, requestIdentity: 'duplicate' }
+      })
+    ).toBe(pending)
+    const ack = lifecycleReducer(pending, {
+      type: 'SETTLE',
+      requestIdentity: 'start',
+      phase: 'acknowledged',
+      result: { paneId: 'ws:pane', terminalId: 'term', ready: false }
     })
-  ).toContain('at the server snapshot')
-})
+    expect(
+      lifecycleReducer(pending, {
+        type: 'SETTLE',
+        requestIdentity: 'stale-launch',
+        phase: 'acknowledged',
+        result: { ready: true }
+      })
+    ).toBe(pending)
+    const unknown = lifecycleReducer(pending, {
+      type: 'SETTLE',
+      requestIdentity: 'start',
+      phase: 'unknown'
+    })
+    expect(lifecycleReducer(unknown, { type: 'BEGIN', ticket })).toBe(unknown)
+    expect(nativeLaunchStatusCopy(ack.ticket!)).toContain(
+      'readiness was not corroborated'
+    )
+    expect(
+      lifecycleReducer(ack, {
+        type: 'CLEAR_OBSERVED',
+        requestIdentity: 'start'
+      })
+    ).toBe(ack)
+    expect(lifecycleReducer(ack, { type: 'BEGIN', ticket })).toBe(ack)
+    expect(
+      lifecycleReducer(ack, { type: 'CLEAR_UNKNOWN_AFTER_REFRESH' }).ticket
+    ).toBeNull()
+    expect(
+      nativeLaunchStatusCopy({
+        ...ack.ticket!,
+        result: { ready: true, agentSessionId: 'same', agentStatus: 'idle' }
+      })
+    ).toContain('at the server snapshot')
+  }
+)
 
 const workspace = (id: string): IWorkspace => ({
   workspace_id: id,

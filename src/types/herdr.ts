@@ -171,7 +171,7 @@ export type IStrictActionRequest =
       type: 'agent-start'
       operationId: string
       target: { paneId: string; terminalId: string }
-      kind: 'letta'
+      kind: 'letta' | 'pi'
       name: string
     }
   | {

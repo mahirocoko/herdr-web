@@ -4,6 +4,7 @@ import type { IAppOutletContext } from '../root.tsx'
 import SpaceDrawer from '@/components/space-drawer.tsx'
 import Button from '@/components/ui/button.tsx'
 import { snapshotReadNotice } from '@/utils/readiness-copy.ts'
+import { ownsIndexCreatePresentation } from '@/utils/lifecycle-operations.ts'
 import { selectFocusedPaneFromSnapshot } from '@/utils/workspace-helpers.ts'
 
 export const resolveAuthoritativeWorkspaceId = (
@@ -59,8 +60,13 @@ const IndexRoute = () => {
   const navigate = useNavigate()
   const [isNewSpaceOpen, setIsNewSpaceOpen] = useState(false)
 
+  const ownsCreatePresentation = ownsIndexCreatePresentation(
+    isNewSpaceOpen,
+    lifecycle.ticket
+  )
+
   useEffect(() => {
-    if (status !== 'connected' || !snapshot) return
+    if (ownsCreatePresentation || status !== 'connected' || !snapshot) return
     const targetWsId = resolveAuthoritativeWorkspaceId(
       snapshot,
       selectedWorkspaceId
@@ -68,7 +74,7 @@ const IndexRoute = () => {
     if (targetWsId) {
       navigate('/spaces/' + encodeURIComponent(targetWsId), { replace: true })
     }
-  }, [status, snapshot, selectedWorkspaceId, navigate])
+  }, [ownsCreatePresentation, status, snapshot, selectedWorkspaceId, navigate])
 
   const appStyle = viewportGeometry
     ? {
@@ -108,10 +114,15 @@ const IndexRoute = () => {
         </div>
       )}
 
-      {status === 'empty' && (
+      {(status === 'empty' ||
+        (status === 'connected' && ownsCreatePresentation)) && (
         <div className="herdr-empty-canvas herdr-empty-canvas--actions">
           <div className="system-banner system-banner--empty">
-            <span>{snapshotReadNotice(status, snapshotError)}</span>
+            <span>
+              {lifecycle.ticket
+                ? 'Space operation status is available. Inspect before another action.'
+                : snapshotReadNotice(status, snapshotError)}
+            </span>
           </div>
           <Button
             ref={menuTriggerRef}
@@ -119,8 +130,22 @@ const IndexRoute = () => {
             className="system-banner__retry"
             onClick={() => setIsNewSpaceOpen(true)}
           >
-            New Space
+            {lifecycle.ticket ? 'View operation status' : 'New Space'}
           </Button>
+          {snapshot && snapshot.workspaces.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                const target = resolveAuthoritativeWorkspaceId(
+                  snapshot,
+                  selectedWorkspaceId
+                )
+                if (target) navigate('/spaces/' + encodeURIComponent(target))
+              }}
+            >
+              Open current Space
+            </Button>
+          )}
           <Button variant="outline" onClick={() => refreshSnapshot()}>
             Refresh snapshot
           </Button>
@@ -129,7 +154,7 @@ const IndexRoute = () => {
 
       <SpaceDrawer
         isOpen={isNewSpaceOpen}
-        initialView="new-space"
+        initialView={lifecycle.ticket ? 'status' : 'new-space'}
         status={status}
         pushState={push.state}
         workspaces={snapshot?.workspaces || []}

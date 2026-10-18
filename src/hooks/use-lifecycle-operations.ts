@@ -177,8 +177,13 @@ export const useLifecycleOperations = () => {
     dispatch({ type: 'RETRY_RECONCILIATION', requestIdentity })
   }, [])
 
+  // Snapshot delivery can precede React's BEGIN commit. Read the same admission
+  // owner synchronously rather than constructing a second pending store.
+  const getTicket = useCallback(() => stateRef.current.ticket, [])
+
   return {
     ticket: state.ticket,
+    getTicket,
     isBusy:
       state.ticket?.phase === 'pending' || state.ticket?.phase === 'observed',
     dispatchLifecycle,

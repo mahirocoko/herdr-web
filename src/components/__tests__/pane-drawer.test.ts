@@ -3,8 +3,63 @@ import {
   formatManifestSource,
   formatRegionLabel,
   isAgentPane,
+  isShellLaunchCandidate
 } from '../pane-drawer.tsx'
 import type { IPane } from '@/types/herdr.ts'
+
+describe('shell launch candidate (not process readiness)', () => {
+  // Native QA wAB:p1: blank shell at prompt had UNKNOWN, not IDLE.
+  // The previous direct guard `agent_status === idle` rejected this shape.
+  const nativeShell: IPane = {
+    pane_id: 'wAB:p1',
+    terminal_id: 'term_65e1b4c85f42128',
+    workspace_id: 'wAB',
+    tab_id: 'wAB:t1',
+    agent_status: 'unknown',
+    cwd: null,
+    focused: false,
+    revision: 0
+  }
+  it('offers a bounded unknown shell candidate without claiming readiness', () => {
+    expect(nativeShell.agent_status === 'idle').toBe(false)
+    expect(isShellLaunchCandidate(nativeShell)).toBe(true)
+    expect(
+      isShellLaunchCandidate({ ...nativeShell, agent_status: 'idle' })
+    ).toBe(true)
+  })
+  it('blocks stale terminal, session and both pane/snapshot agent evidence', () => {
+    expect(isShellLaunchCandidate(null)).toBe(false)
+    expect(
+      isShellLaunchCandidate({ ...nativeShell, terminal_id: undefined })
+    ).toBe(false)
+    expect(isShellLaunchCandidate({ ...nativeShell, agent: 'pi' })).toBe(false)
+    expect(
+      isShellLaunchCandidate({ ...nativeShell, display_agent: 'Letta' })
+    ).toBe(false)
+    expect(
+      isShellLaunchCandidate({
+        ...nativeShell,
+        agent_session: {
+          source: 'native',
+          agent: 'pi',
+          kind: 'id',
+          value: 'new-session'
+        }
+      })
+    ).toBe(false)
+    for (const agent of [
+      { pane_id: nativeShell.pane_id },
+      { target: nativeShell.pane_id }
+    ]) {
+      expect(isShellLaunchCandidate(nativeShell, [agent])).toBe(false)
+    }
+    for (const agent_status of ['working', 'blocked', 'done', '', 'stale']) {
+      expect(isShellLaunchCandidate({ ...nativeShell, agent_status })).toBe(
+        false
+      )
+    }
+  })
+})
 
 describe('pane-drawer: pure helpers', () => {
   describe('isAgentPane', () => {
@@ -17,7 +72,7 @@ describe('pane-drawer: pure helpers', () => {
         display_agent: 'Letta',
         cwd: '/tmp',
         focused: false,
-        agent_status: 'working',
+        agent_status: 'working'
       }
       expect(isAgentPane(lettaPane)).toBe(true)
 
@@ -28,7 +83,7 @@ describe('pane-drawer: pure helpers', () => {
         agent: 'agy',
         cwd: '/tmp',
         focused: false,
-        agent_status: 'blocked',
+        agent_status: 'blocked'
       }
       expect(isAgentPane(agyPane)).toBe(true)
     })
@@ -41,7 +96,7 @@ describe('pane-drawer: pure helpers', () => {
         display_agent: 'Shell',
         cwd: '/tmp',
         focused: false,
-        agent_status: 'unknown',
+        agent_status: 'unknown'
       }
       expect(isAgentPane(shellPane)).toBe(false)
 
@@ -51,7 +106,7 @@ describe('pane-drawer: pure helpers', () => {
         tab_id: 'w1:t1',
         cwd: '/tmp',
         focused: false,
-        agent_status: 'unknown',
+        agent_status: 'unknown'
       }
       expect(isAgentPane(plainPane)).toBe(false)
 
@@ -62,7 +117,7 @@ describe('pane-drawer: pure helpers', () => {
         agent: 'shell',
         cwd: '/tmp',
         focused: false,
-        agent_status: 'unknown',
+        agent_status: 'unknown'
       }
       expect(isAgentPane(lowerShellPane)).toBe(false)
     })
@@ -73,13 +128,13 @@ describe('pane-drawer: pure helpers', () => {
       expect(formatRegionLabel('osc_title')).toBe('OSC Title')
       expect(formatRegionLabel('osc_progress')).toBe('OSC Progress')
       expect(formatRegionLabel('bottom_non_empty_lines(8)')).toBe(
-        'Recent output (bottom)',
+        'Recent output (bottom)'
       )
       expect(formatRegionLabel('screen')).toBe('Full screen')
       expect(formatRegionLabel('cursor')).toBe('Cursor area')
       expect(formatRegionLabel('whole_recent')).toBe('Recent output')
       expect(formatRegionLabel('custom_unknown_region')).toBe(
-        'custom_unknown_region',
+        'custom_unknown_region'
       )
       expect(formatRegionLabel(undefined)).toBe('')
     })
@@ -88,10 +143,10 @@ describe('pane-drawer: pure helpers', () => {
   describe('lifecycle source and accessibility guards', () => {
     it('uses bounded source choices without arbitrary cwd, env, or focus inputs', async () => {
       const spaceSource = await Bun.file(
-        new URL('../space-drawer.tsx', import.meta.url),
+        new URL('../space-drawer.tsx', import.meta.url)
       ).text()
       const tabSource = await Bun.file(
-        new URL('../pane-drawer.tsx', import.meta.url),
+        new URL('../pane-drawer.tsx', import.meta.url)
       ).text()
       expect(spaceSource).toContain('id="new-space-source"')
       expect(spaceSource).toContain('workspaceSourceChoices.map')
@@ -106,7 +161,7 @@ describe('pane-drawer: pure helpers', () => {
 
     it('delegates overlay containment and focus traps to Base UI Sheet without manual dialog impersonation', async () => {
       const tabSource = await Bun.file(
-        new URL('../pane-drawer.tsx', import.meta.url),
+        new URL('../pane-drawer.tsx', import.meta.url)
       ).text()
       expect(tabSource).toContain('<Sheet')
       expect(tabSource).toContain('<SheetContent')
@@ -118,7 +173,7 @@ describe('pane-drawer: pure helpers', () => {
 
     it('supports initialView new-tab to enter create form directly', async () => {
       const tabSource = await Bun.file(
-        new URL('../pane-drawer.tsx', import.meta.url),
+        new URL('../pane-drawer.tsx', import.meta.url)
       ).text()
       expect(tabSource).toContain("initialView?: 'list' | 'new-tab'")
       expect(tabSource).toContain("initialView === 'new-tab'")
@@ -129,11 +184,11 @@ describe('pane-drawer: pure helpers', () => {
   describe('formatManifestSource', () => {
     it('formats manifest sources cleanly with optional version', () => {
       expect(formatManifestSource('builtin', '0.9.1')).toBe(
-        'Herdr built-in (0.9.1)',
+        'Herdr built-in (0.9.1)'
       )
       expect(formatManifestSource('builtin')).toBe('Herdr built-in')
       expect(formatManifestSource('remote', '2026.08.24.1')).toBe(
-        'Remote manifest (2026.08.24.1)',
+        'Remote manifest (2026.08.24.1)'
       )
       expect(formatManifestSource('local')).toBe('Local manifest')
       expect(formatManifestSource('unknown')).toBe('Unknown source')

@@ -30,6 +30,7 @@ import {
 import { HerdrSocketError } from './herdr-socket.ts'
 import { HeldQueue, HELD_CAPABILITY_HEADER } from './held-queue.ts'
 import { executeWorktreeAction } from './worktree.ts'
+import { executePiScroll, resolvePiScrollRuntime } from './pi-scroll.ts'
 import {
   InteractivePromptService,
   type IPromptDeps
@@ -417,7 +418,7 @@ export const createServer = (
         return handleConversationImageRequest(req, {
           ownerLogin: getConfiguredOwnerLogin(),
           deps: {
-            fetchSnapshot: options.deps?.fetchSnapshot ?? getHerdrSnapshot
+            fetchSnapshot: options.deps?.fetchSnapshot
           }
         })
       }
@@ -427,7 +428,7 @@ export const createServer = (
         return handleConversationOutputRequest(req, {
           ownerLogin: getConfiguredOwnerLogin(),
           deps: {
-            fetchSnapshot: options.deps?.fetchSnapshot ?? getHerdrSnapshot
+            fetchSnapshot: options.deps?.fetchSnapshot
           }
         })
       }
@@ -480,7 +481,7 @@ export const createServer = (
           const conversation = await readPaneConversation(paneId.trim(), {
             before: before ? before.trim() : null,
             deps: {
-              fetchSnapshot: options.deps?.fetchSnapshot ?? getHerdrSnapshot
+              fetchSnapshot: options.deps?.fetchSnapshot
             }
           })
           return new Response(JSON.stringify(conversation), {
@@ -842,7 +843,16 @@ export const createServer = (
             let responseBody: any
             let responseStatus = 200
 
-            if (
+            if (action.type === 'pi-scroll') {
+              const result = await executePiScroll(action, {
+                manager: getSharedTerminalFitManager(),
+                snapshot: () =>
+                  (options.deps?.fetchSnapshot ?? getHerdrSnapshot)(3000),
+                ready: (target) => interactivePrompts.heldReadiness(target)
+              })
+              responseStatus = result.status
+              responseBody = result
+            } else if (
               action.type === 'worktree-list' ||
               action.type === 'worktree-open' ||
               action.type === 'worktree-create'
@@ -2813,6 +2823,7 @@ export const createServer = (
         const decoder = new TextDecoder()
         let buffer = ''
 
+        let piBindingPublished = false
         const readStream = async () => {
           try {
             while (!data.closed && data.proc === proc) {
@@ -2866,6 +2877,53 @@ export const createServer = (
                     return
                   }
 
+                  if (validated.data.type === 'terminal.frame') {
+                    fitManager.markValidatedFirstFrame(
+                      data.terminalId,
+                      data.generation,
+                      proc,
+                      ws
+                    )
+                    if (!piBindingPublished) {
+                      piBindingPublished = true
+                      void (options.deps?.fetchSnapshot ?? getHerdrSnapshot)(
+                        3000
+                      )
+                        .then(async (snapshot) => {
+                          await resolvePiScrollRuntime(data.pane, snapshot)
+                          const pane = snapshot.panes.find(
+                            (item) => item.pane_id === data.pane
+                          )
+                          const session = pane?.agent_session
+                          if (
+                            pane?.terminal_id !== data.terminalId ||
+                            pane.agent !== 'pi' ||
+                            session?.kind !== 'path' ||
+                            session.agent !== 'pi' ||
+                            session.source !== 'herdr:pi' ||
+                            !fitManager.capturePiScrollProducer({
+                              paneId: data.pane,
+                              terminalId: data.terminalId,
+                              generation: data.generation
+                            })
+                          )
+                            return
+                          ws.send(
+                            JSON.stringify({
+                              type: 'terminal.pi-scroll-binding',
+                              fitGeneration: data.generation,
+                              target: {
+                                paneId: data.pane,
+                                terminalId: data.terminalId,
+                                expectedMode: 'agent',
+                                agentSessionId: session.value
+                              }
+                            })
+                          )
+                        })
+                        .catch(() => {})
+                    }
+                  }
                   ws.send(JSON.stringify(validated.data))
                   if (validated.data.type === 'terminal.closed') {
                     data.closed = true

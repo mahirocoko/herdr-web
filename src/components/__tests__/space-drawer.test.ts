@@ -1,9 +1,37 @@
 import { describe, expect, it } from 'bun:test'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { getWorkspaceStatusDotClass } from '../space-drawer.tsx'
+import {
+  getWorkspaceStatusDotClass,
+  retireSpaceDrawerStatus
+} from '../space-drawer.tsx'
 
 describe('space-drawer: pure helpers and state contracts', () => {
+  it('returns retired create, close, or externally cleared status to the list', () => {
+    // Pure transition coverage only; mounted Root reconciliation is browser QA.
+    expect(retireSpaceDrawerStatus('status', false)).toBe('list')
+  })
+
+  it('keeps every extant receipt and preserves explicit non-status views', () => {
+    for (const phase of [
+      'pending',
+      'unknown',
+      'rejected',
+      'observed',
+      'reconciliation-failed'
+    ]) {
+      expect(retireSpaceDrawerStatus('status', Boolean(phase))).toBe('status')
+    }
+    for (const view of [
+      'list',
+      'new-space',
+      'close-space',
+      'worktrees'
+    ] as const) {
+      expect(retireSpaceDrawerStatus(view, false)).toBe(view)
+    }
+  })
+
   it('maps upstream Space attention values to distinct truthful dots', () => {
     expect(getWorkspaceStatusDotClass('blocked')).toBe(
       'space-status-dot--blocked'
@@ -54,11 +82,18 @@ describe('source-led Space and Tab sheet contracts', () => {
     expect(spaceDrawerContent).toContain("if (view !== 'worktrees')")
     expect(spaceDrawerContent).toContain('useLayoutEffect(() => {')
     expect(spaceDrawerContent).toContain(
-      'returnWorktreeFocusRef.current = true'
+      'returnListFocusRef.current = fromWorktrees'
     )
-    expect(spaceDrawerContent).toContain(
-      'const trigger = worktreeTriggerRef.current'
+    expect(spaceDrawerContent).toContain("destination === 'worktrees'")
+    expect(spaceDrawerContent).toContain('worktreeTriggerRef.current')
+    expect(spaceDrawerContent).toContain("destination === 'new-space'")
+    expect(spaceDrawerContent).toContain('newSpaceTriggerRef.current')
+    expect(spaceDrawerContent).toContain('ref={newSpaceTriggerRef}')
+    const returnBlock = spaceDrawerContent.slice(
+      spaceDrawerContent.indexOf('const returnToList ='),
+      spaceDrawerContent.indexOf('const beginView =')
     )
+    expect(returnBlock).not.toContain('requestAnimationFrame')
     for (const source of [paneDrawerContent, spaceDrawerContent])
       expect(source).toContain('ref={popupRef}')
   })
@@ -95,7 +130,7 @@ describe('source-led Space and Tab sheet contracts', () => {
 
   it('guards opening intent before snapshot polling can refreeze a close confirmation', () => {
     const guard = spaceDrawerContent.indexOf(
-      'if (initializedIntentRef.current === intentKey) return'
+      'if (initializedIntentRef.current === intentKey) {'
     )
     const freeze = spaceDrawerContent.indexOf(
       'freezeWorkspaceCloseConfirmation(target, tabs, panes)'

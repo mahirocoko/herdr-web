@@ -139,6 +139,64 @@ describe('pi-family source fixtures only', () => {
       fs.rmSync(root, { recursive: true, force: true })
     }
   })
+  test('idle native Pi without session metadata or open FD refuses same-cwd history', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-pi-unbound-'))
+    try {
+      fs.mkdirSync(path.join(root, 'slug'))
+      const file = path.join(root, 'slug', 'unrelated.jsonl')
+      fs.writeFileSync(
+        file,
+        json([{ type: 'session', id: 'not-owned', cwd: '/cwd' }])
+      )
+      const snapshot = {
+        workspaces: [{ workspace_id: 'w' }],
+        tabs: [{ tab_id: 't', workspace_id: 'w' }],
+        panes: [
+          {
+            pane_id: 'p',
+            workspace_id: 'w',
+            tab_id: 't',
+            terminal_id: 'terminal',
+            agent: 'pi',
+            agent_session: null,
+            cwd: '/cwd'
+          }
+        ]
+      } as unknown as ISnapshotResult
+      let files: string[] = []
+      const deps = {
+        familyRoots: { pi: root },
+        fetchSnapshot: async () => snapshot,
+        processRoots: async (pid: number) => ({
+          pid,
+          start: '1:1',
+          source: 'kern-procargs2' as const,
+          keys: { HOME: root, CODEX_HOME: null, CLAUDE_CONFIG_DIR: null }
+        }),
+        familyFiles: async () => files,
+        nativeRpc: async (method: string) =>
+          method === 'agent.get'
+            ? { agent: { pane_id: 'p', agent: 'pi', agent_session: null } }
+            : {
+                process_info: {
+                  pane_id: 'p',
+                  foreground_processes: [{ pid: 10, name: 'node', argv0: 'pi' }]
+                }
+              }
+      }
+      await expect(readPaneConversation('p', { deps })).rejects.toMatchObject({
+        status: 409,
+        message: expect.stringContaining('Pi session identity unavailable')
+      })
+      // A real exact descriptor is sufficient even when agent_session is null.
+      files = [file]
+      expect((await readPaneConversation('p', { deps })).source).toBe(
+        'pi-transcript'
+      )
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
   for (const provider of ['omp', 'omo', 'gjc', 'pi'] as const)
     test(`${provider} fenced reader, whole output and session replacement`, async () => {
       const root = fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-family-'))
@@ -149,7 +207,14 @@ describe('pi-family source fixtures only', () => {
         fs.writeFileSync(
           file,
           json([
-            { type: 'session', id: 'native-session', cwd: '/cwd' },
+            {
+              type: 'session',
+              id:
+                provider === 'pi'
+                  ? '01a14ee4-1547-7535-9c23-17f9a3542fdd'
+                  : 'native-session',
+              cwd: '/cwd'
+            },
             {
               type: 'model_change',
               id: 'm',
@@ -231,6 +296,7 @@ describe('pi-family source fixtures only', () => {
             }
           ]
         } as unknown as ISnapshotResult
+        let agentReads = 0
         const deps = {
           familyRoots: { [provider]: root },
           fetchSnapshot: async () => snapshot,
@@ -246,7 +312,11 @@ describe('pi-family source fixtures only', () => {
                   agent: {
                     pane_id: 'p',
                     agent: provider,
-                    agent_session: session
+                    agent_session: session,
+                    tokens:
+                      ++agentReads % 2
+                        ? { model: 'same', provider: 'same' }
+                        : { provider: 'same', model: 'same' }
                   }
                 }
               : {
@@ -266,6 +336,24 @@ describe('pi-family source fixtures only', () => {
           reasoning_effort: 'medium',
           context: { used: provider === 'pi' ? 128 : 123, window: null }
         })
+        if (provider === 'pi') {
+          const again = await readPaneConversation('p', { deps })
+          expect(again.sessionKey).toBe(page.sessionKey)
+          const originalRpc = deps.nativeRpc
+          let changes = 0
+          deps.nativeRpc = async (method: string) => {
+            const response = await originalRpc(method)
+            if (response.agent)
+              response.agent.tokens.model = `changed-${++changes}`
+            return response
+          }
+          await expect(
+            readPaneConversation('p', { deps })
+          ).rejects.toMatchObject({
+            status: 422
+          })
+          deps.nativeRpc = originalRpc
+        }
         const ref = page.contributions?.find((row) => row.result?.outputRef)
           ?.result?.outputRef
         expect(ref).toBeString()
@@ -434,6 +522,16 @@ describe('pi-family source fixtures only', () => {
   test('provider program ownership does not inspect arbitrary command arguments', () => {
     expect(familyProcess({ argv: ['grep', '/bin/omo'] })).toBeNull()
     expect(familyProcess({ argv: ['node', '--eval', 'pi'] })).toBeNull()
+    for (const entry of ['dist/cli.js', 'dist/bundle/cli.js']) {
+      const program = `/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/${entry}`
+      expect(familyProcess({ argv: ['node', program] })).toBe('pi')
+      expect(familyProcess({ argv: ['grep', program] })).toBeNull()
+      expect(
+        familyProcess({
+          argv: ['node', program.replace('@earendil-works', '@untrusted')]
+        })
+      ).toBeNull()
+    }
     expect(familyProcess({ argv: ['bun', '/x/omo-ai/cli.js'] })).toBe('omo')
   })
   for (const provider of ['omp', 'omo', 'gjc', 'pi'] as const)

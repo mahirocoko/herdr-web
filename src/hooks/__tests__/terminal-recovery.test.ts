@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { readFileSync } from 'node:fs'
+import { PiScrollGestureOwner } from '../../utils/pi-scroll-gesture.ts'
 
 // Evaluate the production hook with local dependencies; never mock React's
 // module or replace global timers, so this harness cannot pollute other tests.
@@ -55,6 +56,7 @@ const harness = () => {
     }
   }
   const dependencies = {
+    PiScrollGestureOwner,
     window: browser,
     document: page,
     WebSocket: TestSocket,

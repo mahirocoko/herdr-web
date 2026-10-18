@@ -12,6 +12,204 @@ import {
 } from '../terminal-control.ts'
 import { getSharedOperationCoordinator } from '../operation-coordinator.ts'
 
+describe('server/terminal-fit: bounded Pi page producer fence', () => {
+  const fixture = () => {
+    const manager = new TerminalFitManager()
+    const reservation = manager.reserveFit('term_pi_fixture', 'w7Q:p1Z')
+    if (!reservation.ok) throw new Error('fixture reservation failed')
+    const packets: string[] = []
+    const writer = {
+      write: (packet: string) => {
+        packets.push(packet)
+        return new TextEncoder().encode(packet).length
+      },
+      flush: () => 0
+    }
+    const producer = { stdin: writer, exitCode: null as number | null }
+    const socket = { readyState: 1, data: { closed: false } }
+    manager.activateSession(
+      'term_pi_fixture',
+      reservation.generation,
+      producer,
+      socket,
+      80,
+      24
+    )
+    const identity = {
+      paneId: 'w7Q:p1Z',
+      terminalId: 'term_pi_fixture',
+      generation: reservation.generation
+    }
+    const mark = () =>
+      manager.markValidatedFirstFrame(
+        identity.terminalId,
+        identity.generation,
+        producer,
+        socket
+      )
+    const capture = () => manager.capturePiScrollProducer(identity)
+    return {
+      manager,
+      reservation,
+      packets,
+      producer,
+      socket,
+      identity,
+      mark,
+      capture
+    }
+  }
+
+  it('requires a validated frame from the exact active producer and socket', () => {
+    const f = fixture()
+    expect(f.capture()).toBeNull()
+    expect(
+      f.manager.markValidatedFirstFrame(
+        f.identity.terminalId,
+        f.identity.generation,
+        {},
+        f.socket
+      )
+    ).toBe(false)
+    expect(
+      f.manager.markValidatedFirstFrame(
+        f.identity.terminalId,
+        f.identity.generation,
+        f.producer,
+        {}
+      )
+    ).toBe(false)
+    expect(
+      f.manager.markValidatedFirstFrame(
+        f.identity.terminalId,
+        f.identity.generation + 1,
+        f.producer,
+        f.socket
+      )
+    ).toBe(false)
+    expect(f.capture()).toBeNull()
+    expect(f.mark()).toBe(true)
+    expect(f.capture()).not.toBeNull()
+  })
+
+  it('invalidates first-frame evidence when a producer is registered again', () => {
+    const f = fixture()
+    f.mark()
+    expect(f.capture()).not.toBeNull()
+    expect(
+      f.manager.registerProcess(
+        f.identity.terminalId,
+        f.identity.generation,
+        f.producer
+      )
+    ).toBe(true)
+    expect(f.capture()).toBeNull()
+    expect(f.mark()).toBe(true)
+    expect(f.capture()).not.toBeNull()
+  })
+
+  it('writes exactly one fixed page packet per call, never text or generic keys', async () => {
+    const f = fixture()
+    f.mark()
+    const binding = f.capture()!
+    expect(await f.manager.writePiScrollPage(binding, 'up')).toEqual({
+      outcome: 'written'
+    })
+    expect(await f.manager.writePiScrollPage(binding, 'down')).toEqual({
+      outcome: 'written'
+    })
+    expect(await f.manager.writePiScrollPage(binding, 'latest')).toEqual({
+      outcome: 'written'
+    })
+    expect(f.packets).toEqual([
+      JSON.stringify({ type: 'terminal.input', text: '\u001b[5~' }) + '\n',
+      JSON.stringify({ type: 'terminal.input', text: '\u001b[6~' }) + '\n',
+      JSON.stringify({ type: 'terminal.input', text: '\u001b[1;5F' }) + '\n'
+    ])
+    expect(await f.manager.writePiScrollPage(binding, 'Enter' as any)).toEqual({
+      outcome: 'rejected'
+    })
+    expect(f.packets).toHaveLength(3)
+  })
+
+  it.each(['retiring', 'closed', 'reserving'] as const)(
+    'rejects %s after capture',
+    async (status) => {
+      const f = fixture()
+      f.mark()
+      const binding = f.capture()!
+      f.reservation.session.status = status
+      expect(await f.manager.writePiScrollPage(binding, 'up')).toEqual({
+        outcome: 'rejected'
+      })
+      expect(f.packets).toHaveLength(0)
+    }
+  )
+
+  it.each([
+    'generation',
+    'pane',
+    'producer',
+    'socket',
+    'writer',
+    'disconnected',
+    'closedSocket',
+    'exited',
+    'blocked',
+    'frame'
+  ])('rechecks %s immediately before write', async (change) => {
+    const f = fixture()
+    f.mark()
+    const binding = f.capture()!
+    const session = f.reservation.session
+    if (change === 'generation') session.generation++
+    if (change === 'pane') session.paneId = 'w7Q:p2'
+    if (change === 'producer') session.proc = { stdin: f.producer.stdin }
+    if (change === 'socket') session.ws = { readyState: 1 }
+    if (change === 'writer') f.producer.stdin = { ...f.producer.stdin }
+    if (change === 'disconnected') f.socket.readyState = 3
+    if (change === 'closedSocket') f.socket.data.closed = true
+    if (change === 'exited') f.producer.exitCode = 0
+    if (change === 'blocked') f.manager.blockFitAdmission(f.identity.terminalId)
+    if (change === 'frame') session.validatedFirstFrame = false
+    expect(await f.manager.writePiScrollPage(binding, 'down')).toEqual({
+      outcome: 'rejected'
+    })
+    expect(f.packets).toHaveLength(0)
+  })
+
+  it('classifies throwing, short and failed-flush writes unknown without retry', async () => {
+    for (const failure of ['throw', 'short', 'flush']) {
+      const f = fixture()
+      f.mark()
+      let calls = 0
+      f.producer.stdin.write = (_packet: string) => {
+        calls++
+        if (failure === 'throw') throw new Error('possibly delivered')
+        return failure === 'short'
+          ? 1
+          : new TextEncoder().encode(_packet).length
+      }
+      if (failure === 'flush')
+        f.producer.stdin.flush = () => {
+          throw new Error('flush failed')
+        }
+      const result = await f.manager.writePiScrollPage(f.capture()!, 'up')
+      expect(result).toEqual({ outcome: 'unknown' })
+      expect(calls).toBe(1)
+    }
+  })
+
+  it('keeps arbitrary terminal.input forbidden on the fitted WebSocket', () => {
+    expect(
+      validateTerminalFitClientMessage({
+        type: 'terminal.input',
+        text: '\u001b[5~'
+      }).valid
+    ).toBe(false)
+  })
+})
+
 describe('server/terminal-fit: native producer invocation', () => {
   it('spawns exact mobile dimensions with pipe transport, without takeover or shell interpretation', () => {
     const process = {} as any

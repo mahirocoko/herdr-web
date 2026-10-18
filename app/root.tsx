@@ -28,6 +28,7 @@ import {
   parseSpacePath
 } from '@/utils/push-orchestration.ts'
 import {
+  ownsIndexCreatePresentation,
   shouldApplyCreateResultNavigation,
   snapshotConfirmsCreatedTarget,
   type ILifecycleNavigationOrigin
@@ -102,6 +103,8 @@ export const Layout = ({ children }: { children: ReactNode }) => {
 }
 
 const Root = () => {
+  const lifecycle = useLifecycleOperations()
+  const location = useLocation()
   const {
     snapshot,
     status,
@@ -113,15 +116,18 @@ const Root = () => {
     setSelectedPaneId,
     refreshSnapshot,
     getSnapshot
-  } = useSnapshot(2000)
+  } = useSnapshot(
+    2000,
+    () =>
+      location.pathname === '/' &&
+      ownsIndexCreatePresentation(false, lifecycle.getTicket())
+  )
 
   const submissions = useChatSubmissions()
   const held = useHeldMessages()
-  const lifecycle = useLifecycleOperations()
   const push = usePushSubscription()
   const chatPreferences = useChatPreferences()
   const viewportGeometry = useVisualViewport()
-  const location = useLocation()
   const navigate = useNavigate()
 
   const drawerTriggerRef = useRef<HTMLButtonElement | null>(null)
