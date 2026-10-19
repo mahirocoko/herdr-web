@@ -1,0 +1,200 @@
+.update-actions,
+.update-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settings-updates .settings-hint,
+.settings-herdr-update .settings-hint {
+  overflow-wrap: anywhere;
+}
+
+.update-notice {
+  flex: 0 0 auto;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-4);
+  color: var(--text-strong);
+  background: var(--bg-elevated);
+  border-bottom: var(--hairline) solid var(--border);
+  font-size: var(--fs-xs);
+}
+
+/* the text takes the room, the buttons keep to the end of the line and wrap under it on a phone */
+.update-notice > span {
+  flex: 1 1 12rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* a release's line never wraps: its sentence is cut with an ellipsis, its buttons keep their width */
+.update-notice.is-line {
+  flex-wrap: nowrap;
+}
+
+.update-notice.is-line > span {
+  flex: 1 1 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.update-notice.is-line > button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* the reload warning is read in full on a phone: its sentence wraps instead of being cut */
+.update-notice.is-line.is-warning { flex-wrap: wrap; }
+.update-notice.is-line.is-warning > span { white-space: normal; overflow: visible; text-overflow: clip; }
+
+.update-notice-dismiss {
+  margin-inline-end: calc(var(--space-2) * -1);
+}
+
+.update-progress {
+  max-width: 32rem;
+}
+
+/* on the line: the step and its count, then the bar in the rest of the row */
+.update-notice .update-progress {
+  max-width: none;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.update-notice .update-progress .bridge-progress-step {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.update-notice .update-progress .bridge-progress-step > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.update-notice .update-progress .bridge-progress-bar {
+  flex: 1 1 3rem;
+  min-width: 3rem;
+}
+
+.update-output {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  max-height: 14em;
+  overflow: auto;
+  color: var(--text);
+  background: var(--bg-elevated);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* focused from code when a button points at the section: it is where reading starts, not a control */
+.settings-updates:focus {
+  outline: none;
+}
+
+/* a release's notes: read in a box of their own, so a long release does not push the
+   buttons out of the dialog */
+.update-notes {
+  --chat-fs-body: var(--fs-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-height: min(24rem, calc(var(--app-height, 100dvh) * 0.5));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-3);
+  color: var(--text);
+  background: var(--bg-elevated);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.update-notes h4 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  color: var(--text-strong);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+}
+
+.update-notes h4 time {
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-regular);
+}
+
+/* a release as patch notes: short lines under what is new, improved and fixed */
+.update-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-base);
+  overflow-wrap: anywhere;
+}
+
+.update-summary h5 {
+  margin: 0 0 var(--space-1);
+  color: var(--text-dim);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+
+.update-summary ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding-inline-start: var(--space-4);
+}
+
+/* the release's changelog section, on request */
+.update-details {
+  margin-top: var(--space-2);
+}
+
+.update-details > summary {
+  width: fit-content;
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+}
+
+.update-details[open] > summary {
+  margin-bottom: var(--space-2);
+}
+
+/* Added, Changed, Fixed: labels over their lists, as the dialog's own section titles */
+.update-notes .markdown h3 {
+  margin: var(--space-3) 0 var(--space-1);
+  color: var(--text-dim);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+
+.update-notes .markdown > h3:first-child {
+  margin-top: 0;
+}
+
+.update-output[data-failed] {
+  border-color: var(--status-blocked);
+}

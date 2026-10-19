@@ -1,0 +1,668 @@
+/**
+ * User preferences: one localStorage record, one React context, applied to the
+ * document as `data-theme` / `data-density` / `data-chat-width` attributes that src/styles.css keys
+ * its token overrides on. xterm reads no CSS, so `terminalTheme()` mirrors the
+ * `--term-*` tokens of each theme for PaneTerminal's theme object.
+ */
+
+import type { TelemetrySettings } from "../../shared/telemetry.ts";
+import { mirrorPalette, SHARED_SETTING_KEYS, type SharedSettingKey } from "../../shared/preferences.ts";
+import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { DEFAULT_THEME, isThemeId, terminalColors, themeColor as themeTableColor, type ThemeId, type ThemeEntry } from "./themes.ts";
+import { LANGUAGE_SETTINGS, LOCALE_TAGS, resolveLanguage, setCurrentLanguage, type Language, type LanguageSetting } from "./i18n.ts";
+import type { AlertPrefs, DoneAlerts } from "../../shared/notify-policy.ts";
+import { chatFontStack, sanitizeFontFamily } from "./fontFamily.ts";
+import { fontScale, sanitizeUiFontSize } from "./typography.ts";
+import { sanitizeKeyBarExtras, type KeyBarExtra } from "./keys.ts";
+import { themeFor } from "./themeFor.ts";
+import { DEFAULT_KEY_BAR_ITEMS, migrateKeyBarItems, sanitizeKeyBarItems, type KeyBarItem } from "./keyBar.ts";
+
+export type ThemeSetting = "dark" | "light" | "system";
+export type ResolvedTheme = "dark" | "light";
+export type Density = "compact" | "comfortable";
+/** One line names the workspace; two lines say what its pane is doing, with the workspace under it. */
+export type SidebarRows = "one" | "two";
+/** the Agents list's order: herdr's workspace order, or a waiting agent first and then the latest change */
+export type AgentOrder = "workspace" | "activity";
+/** how agent logos are drawn: in their brand colors, or without color: Claude's in the text color, the others in grey (data-marks on <html>) */
+export type AgentMarks = "color" | "mono";
+/** what the plan meters count: the share of a limit used, or what is left of it */
+export type UsageCount = "used" | "left";
+/** the limit a plan meter shows: the plan's week, or its short session (5 hours on Claude and Codex) */
+export type UsageGlance = "week" | "session";
+/** amber: the herdr look (the default before codex); charcoal: neutral Ghostty-style dark;
+ *  catppuccin: Catppuccin Mocha in dark, Latte in light. A record naming a palette that was removed
+ *  (report, lilac, forest) loads as amber. */
+export type Palette = ThemeId;
+/** the chat lane's widest: the transcript, the composer column and the held list share it (--chat-w in src/styles.css).
+ *  narrow: 820px; default: follows the pane, up to 60rem (chatLaneWidth); wide: 72rem; full: the pane, less the gutters */
+export type ChatWidth = "narrow" | "default" | "wide" | "full";
+export const CHAT_WIDTHS: readonly ChatWidth[] = ["narrow", "default", "wide", "full"];
+/** the microphone button. auto: in the chat composer off a phone, and only where dictation can work;
+ *  on: there, on a phone and in the terminal input line, disabled with its reason where it cannot work; off: nowhere */
+export type VoiceButton = "auto" | "on" | "off";
+export const VOICE_BUTTONS: readonly VoiceButton[] = ["auto", "on", "off"];
+/**
+ * The languages dictation can be set to, as BCP 47 tags (SpeechRecognition.lang; the transcribe
+ * route takes the first subtag). Auto can also use a browser language outside this list when
+ * its primary subtag is two letters and the UI is not translated into it.
+ */
+export const DICTATION_LANGUAGES = [
+  "ar-SA", "cs-CZ", "da-DK", "de-DE", "el-GR", "en-GB", "en-US", "es-ES", "fi-FI", "fr-FR", "he-IL", "hi-IN",
+  "hu-HU", "id-ID", "it-IT", "ja-JP", "ko-KR", "nb-NO", "nl-NL", "pl-PL", "pt-BR", "pt-PT", "ro-RO", "ru-RU",
+  "sk-SK", "sv-SE", "th-TH", "tr-TR", "uk-UA", "vi-VN", "zh-CN", "zh-TW",
+] as const;
+export type DictationLanguage = "auto" | (typeof DICTATION_LANGUAGES)[number];
+/** the lens a pane opens in until it is switched there: auto is chat for an agent on a touch screen, else terminal */
+export type DefaultView = "auto" | "chat" | "terminal";
+import { sanitizeShortcutOverrides, type ShortcutOverrides } from "./shortcutBindings.ts";
+import type { StatusIndicators } from "./status.ts";
+import { WEB_LINK_TARGETS, type WebLinkTarget } from "./webPanel.ts";
+import { FILE_OPEN_TARGETS, type FilePresentation } from "./filePresentation.ts";
+import { CLAUDE_LAUNCH_MODES, CODEX_LAUNCH_MODES, type ClaudeLaunchMode, type CodexLaunchMode } from "./agentLaunchMode.ts";
+
+export interface Settings {
+  terminalInputMode: "auto" | "line" | "direct";
+  /** Kept for migration of the old fixed-order bar. New layouts use keyBarItems. */
+  keyBarExtras: KeyBarExtra[];
+  /** This device's terminal keys, sticky modifiers and exact chords, in display order. */
+  keyBarItems: KeyBarItem[];
+  shortcutOverrides: ShortcutOverrides;
+  theme: ThemeSetting;
+  density: Density;
+  /** How much a workspace row says: its name, or its pane's title over its place. */
+  sidebarRows: SidebarRows;
+  /** The Agents list's order. Activity is display-only: herdr's own order never changes. */
+  agentOrder: AgentOrder;
+  /** Agent logos: brand colors, or without color, so a list of one agent is not a stripe of tiles */
+  agentMarks: AgentMarks;
+  /** the sidebar's state marks: this app's own, or herdr's dots or symbols, as its `[ui] status_indicators` (lib/status.ts) */
+  statusIndicators: StatusIndicators;
+  /** the chrome color family, keyed as data-palette in src/styles.css */
+  palette: Palette;
+  /** Legacy mirrors for older app versions. */
+  paletteLight: Palette;
+  paletteDark: Palette;
+  darkTheme: ThemeId;
+  lightTheme: ThemeId;
+  /** xterm font size in px */
+  terminalFontSize: number;
+  /** mouse reports sent to herdr per wheel event in the terminal: 1 is what xterm sends by itself */
+  terminalWheelSpeed: number;
+  /** fonts tried before the built-in terminal stack, as a CSS font-family list; "" keeps the built-in one */
+  terminalFontFamily: string;
+  /** let a pane's OSC 52 sequence write the clipboard (lib/osc52.ts), as vim, tmux and Claude Code copy;
+   *  on unless chosen off, since any process in the pane can then plant text the user pastes elsewhere.
+   *  Stored under this key, not 0.4.1's `terminalOsc52`: settings are saved whole, so a `false` there
+   *  was written by any change at all, not chosen, and is ignored. */
+  paneClipboard: boolean;
+  /** a desktop tab out of use for a moment detaches its pane (PaneTerminal's release) and only watches it, so herdr's own
+   *  window keeps the pane at its size; paused where the server cannot watch. Off: the tab keeps the pane and its size. */
+  releasePaneAway: boolean;
+  /** chat text size in px (its body text; the rest scales with it); null follows the interface size */
+  chatFontSize: number | null;
+  /** fonts tried before the UI font in the chat's prose (code stays mono), as a CSS font-family list; "" keeps the UI font */
+  chatFontFamily: string;
+  /** the interface's body size in px (--fs-md; every other --fs-* scales with it as --ui-scale); null follows the density.
+   *  The chat follows it until it has a size of its own; the terminal keeps terminalFontSize */
+  uiFontSize: number | null;
+  /** how wide the chat lane may run on a large screen, keyed as data-chat-width in src/styles.css; default follows the pane
+   *  (chatLaneWidth, written by lib/chatLane.ts); a narrower pane is never affected */
+  chatWidth: ChatWidth;
+  /** true: Enter sends in the composer, Shift+Enter breaks the line; false: Ctrl/Cmd+Enter sends */
+  enterSends: boolean;
+  /** true: a message sent while the agent works goes by itself when the turn ends; false: it waits for Send now */
+  autoSendQueued: boolean;
+  /** on a touch screen, a chip above the message box offers the prompt the agent suggests next.
+   * Not `showSuggestionChip`: that key was on by default until 0.4.9 and is still stored on phones */
+  suggestionChip: boolean;
+  /** show the agent's folded reasoning blocks in the chat view */
+  showThinking: boolean;
+  /** request a screen wake lock while a pane is open in this visible tab */
+  keepScreenOn: boolean;
+  /** UI language; `system` follows the browser (src/lib/i18n.ts) */
+  language: LanguageSetting;
+  /** alerts on this device at all: the bell turns them off (push subscription dropped) and on */
+  alertsOn: boolean;
+  /** alert this device when an agent waits on the user (shared/notify-policy.ts AlertPrefs) */
+  alertInput: boolean;
+  /** alert this device when a turn finishes: never, after a long one, or every one */
+  alertDone: DoneAlerts;
+  /** while the app is on screen, the same alerts drop in from the top edge (components/Droplet.tsx) */
+  alertInApp: boolean;
+  /** an open tab chimes for the same alerts (lib/alertSound.ts), heard also when a Focus silences notifications; off until chosen */
+  alertSound: boolean;
+  /** one-tap replies above the composer, in order; blank ones are kept while being typed, never shown */
+  quickReplies: string[];
+  /** whether the quick replies show above the composer at all */
+  showQuickReplies: boolean;
+  /** the plan meters beside Settings in the sidebar (GET /api/usage); off until chosen, as it sends this PC's sign-ins out */
+  showUsage: boolean;
+  usageCount: UsageCount;
+  usageGlance: UsageGlance;
+  /** every pane's lens until switched in that pane; changing it puts every pane back on it */
+  defaultView: DefaultView;
+  /** the plan meters' order by ProviderUsage.key; accounts not in it follow as the server lists them */
+  usageOrder: string[];
+  /** accounts left out of the plan meters, strip and popover alike, by ProviderUsage.key */
+  usageHidden: string[];
+  /** the microphone button in the composer and the terminal input line; nothing is recorded until it is pressed */
+  voiceInput: VoiceButton;
+  /** the language dictation listens for; auto: the UI language's, or the browser's the UI lacks (src/lib/voice.ts dictationLocale) */
+  voiceLanguage: DictationLanguage;
+  voicePolishChat: boolean;
+  /** off by default: a terminal line is usually a command, kept as spoken */
+  voicePolishTerminal: boolean;
+  /** the file viewer wraps long lines instead of scrolling sideways */
+  wrapCode: boolean;
+  /** the width of a Markdown preview: the chat's lane (--chat-w), centered, or the viewer's width */
+  markdownWidth: MarkdownWidth;
+  /** a repository diff as one column of old and new lines, or the two side by side (a phone shows one column either way) */
+  diffStyle: DiffStyle;
+  /** where a file opens from the chat, terminal or Files: the popup, or beside the pane on a wide window (lib/filePresentation.ts) */
+  fileOpen: FilePresentation;
+  /** where a click on a web address opens it: a new tab, or the panel beside the pane (lib/webPanel.ts); Shift opens the other one */
+  webLinks: WebLinkTarget;
+  /** the mode a Claude Code started from the new workspace, tab and worktree dialogs runs in (lib/agentLaunchMode.ts); default adds no flag */
+  claudeLaunchMode: ClaudeLaunchMode;
+  /** the same for Codex: a sandbox and approval preset */
+  codexLaunchMode: CodexLaunchMode;
+}
+
+export const MARKDOWN_WIDTHS = ["readable", "full"] as const;
+export type MarkdownWidth = (typeof MARKDOWN_WIDTHS)[number];
+export const DIFF_STYLES = ["unified", "split"] as const;
+export type DiffStyle = (typeof DIFF_STYLES)[number];
+
+/** Raw custom text, key combinations and account keys are never copied. Requiring every other
+ * Settings field in the projection makes a new field require an explicit collection decision.
+ * fileOpen, webLinks and the launch modes are not collected: the telemetry schema (shared/telemetry.ts) does not carry them. */
+type TelemetrySourceSettings = Omit<Settings,
+  "keyBarExtras" | "keyBarItems" | "shortcutOverrides" | "terminalFontFamily" | "chatFontFamily"
+  | "quickReplies" | "usageOrder" | "usageHidden" | "fileOpen" | "webLinks" | "claudeLaunchMode" | "codexLaunchMode">;
+
+/** Compare structured custom settings by content against this app's built-in defaults. */
+function differsFromDefault(value: unknown, defaultValue: unknown): boolean {
+  return JSON.stringify(value) !== JSON.stringify(defaultValue);
+}
+
+/** Full allowlisted snapshot. Text and account-key values are only used for safe summaries. */
+export function telemetrySettingsSnapshot(settings: Settings): TelemetrySettings & TelemetrySourceSettings {
+  return {
+    terminalInputMode: settings.terminalInputMode,
+    theme: settings.theme,
+    density: settings.density,
+    sidebarRows: settings.sidebarRows,
+    agentOrder: settings.agentOrder,
+    agentMarks: settings.agentMarks,
+    statusIndicators: settings.statusIndicators,
+    palette: settings.palette,
+    paletteLight: settings.paletteLight,
+    paletteDark: settings.paletteDark,
+    terminalFontSize: settings.terminalFontSize,
+    terminalWheelSpeed: settings.terminalWheelSpeed,
+    paneClipboard: settings.paneClipboard,
+    releasePaneAway: settings.releasePaneAway,
+    chatFontSize: settings.chatFontSize,
+    uiFontSize: settings.uiFontSize,
+    chatWidth: settings.chatWidth,
+    enterSends: settings.enterSends,
+    autoSendQueued: settings.autoSendQueued,
+    suggestionChip: settings.suggestionChip,
+    showThinking: settings.showThinking,
+    keepScreenOn: settings.keepScreenOn,
+    language: settings.language,
+    alertsOn: settings.alertsOn,
+    alertInput: settings.alertInput,
+    alertDone: settings.alertDone,
+    alertInApp: settings.alertInApp,
+    alertSound: settings.alertSound,
+    showQuickReplies: settings.showQuickReplies,
+    showUsage: settings.showUsage,
+    usageCount: settings.usageCount,
+    usageGlance: settings.usageGlance,
+    defaultView: settings.defaultView,
+    voiceInput: settings.voiceInput,
+    voiceLanguage: settings.voiceLanguage,
+    voicePolishChat: settings.voicePolishChat,
+    voicePolishTerminal: settings.voicePolishTerminal,
+    wrapCode: settings.wrapCode,
+    markdownWidth: settings.markdownWidth,
+    diffStyle: settings.diffStyle,
+    terminalFontCustom: settings.terminalFontFamily !== DEFAULT_SETTINGS.terminalFontFamily,
+    chatFontCustom: settings.chatFontFamily !== DEFAULT_SETTINGS.chatFontFamily,
+    shortcutsCustom: differsFromDefault(settings.shortcutOverrides, DEFAULT_SETTINGS.shortcutOverrides),
+    keyBarCustom: differsFromDefault(settings.keyBarItems, DEFAULT_SETTINGS.keyBarItems)
+      || differsFromDefault(settings.keyBarExtras, DEFAULT_SETTINGS.keyBarExtras),
+    quickRepliesCustom: differsFromDefault(settings.quickReplies, DEFAULT_SETTINGS.quickReplies),
+    quickReplyCount: settings.quickReplies.length,
+    usageHiddenCount: settings.usageHidden.length,
+    usageOrderCustom: settings.usageOrder.length > 0,
+    darkTheme: settings.darkTheme,
+    lightTheme: settings.lightTheme,
+  };
+}
+
+/**
+ * Which settings every browser of this server shares (shared/preferences.ts, lib/preferencesSync.ts)
+ * and which stay this device's: its screen, keyboard, terminal, alerts and microphone. A new setting
+ * must be placed here, or the build fails; when in doubt it is the device's.
+ */
+export const SETTING_SCOPE = {
+  theme: "shared", palette: "shared", darkTheme: "shared", lightTheme: "shared", language: "shared", sidebarRows: "shared", agentOrder: "shared",
+  agentMarks: "shared", autoSendQueued: "shared", showThinking: "shared", quickReplies: "shared",
+  showQuickReplies: "shared", showUsage: "shared", usageCount: "shared",
+  usageGlance: "shared", usageOrder: "shared", usageHidden: "shared", defaultView: "device", suggestionChip: "device",
+  terminalInputMode: "device", keyBarExtras: "device", keyBarItems: "device", shortcutOverrides: "device", density: "device",
+  terminalFontSize: "device",
+  terminalWheelSpeed: "device", terminalFontFamily: "device", paneClipboard: "device", releasePaneAway: "device",
+  chatFontSize: "device", chatFontFamily: "device", uiFontSize: "device", chatWidth: "device", enterSends: "device",
+  keepScreenOn: "device", alertsOn: "device", alertInput: "device", alertDone: "device", alertInApp: "device", alertSound: "device",
+  paletteLight: "device", paletteDark: "device", statusIndicators: "device",
+  voiceInput: "device", voiceLanguage: "device", voicePolishChat: "device", voicePolishTerminal: "device",
+  // Viewer layout follows this screen, as chatWidth does.
+  wrapCode: "device", markdownWidth: "device", diffStyle: "device", fileOpen: "device", webLinks: "device",
+  // a new agent starts the same way whichever device opened it
+  claudeLaunchMode: "shared", codexLaunchMode: "shared",
+} as const satisfies Record<keyof Settings, "shared" | "device">;
+
+/** The shared part of `settings`, by the names shared/preferences.ts lists. */
+export function sharedSettings(settings: Settings): Partial<Record<SharedSettingKey, unknown>> {
+  return Object.fromEntries(SHARED_SETTING_KEYS.map((key) => [key, settings[key]]));
+}
+
+export const DEFAULT_SETTINGS: Settings = {
+  terminalInputMode: "auto",
+  keyBarExtras: ["alt"],
+  keyBarItems: DEFAULT_KEY_BAR_ITEMS,
+  shortcutOverrides: {},
+  theme: "dark",
+  density: "comfortable",
+  sidebarRows: "one",
+  agentOrder: "workspace",
+  agentMarks: "color",
+  statusIndicators: "classic",
+  palette: DEFAULT_THEME,
+  paletteLight: DEFAULT_THEME,
+  paletteDark: DEFAULT_THEME,
+  darkTheme: DEFAULT_THEME,
+  lightTheme: DEFAULT_THEME,
+  terminalFontSize: 13,
+  terminalWheelSpeed: 1,
+  terminalFontFamily: "",
+  paneClipboard: true,
+  releasePaneAway: false,
+  chatFontSize: null,
+  chatFontFamily: "",
+  uiFontSize: null,
+  chatWidth: "default",
+  enterSends: true,
+  autoSendQueued: true,
+  suggestionChip: false,
+  showThinking: false,
+  keepScreenOn: false,
+  language: "system",
+  alertsOn: true,
+  alertInput: true,
+  alertDone: "long",
+  alertInApp: true,
+  alertSound: false,
+  quickReplies: ["continue", "yes", "no", "commit and push", "retry"],
+  showQuickReplies: false,
+  showUsage: false,
+  usageCount: "left",
+  usageGlance: "session",
+  defaultView: "auto",
+  usageOrder: [],
+  usageHidden: [],
+  voiceInput: "auto",
+  voiceLanguage: "auto",
+  voicePolishChat: true,
+  voicePolishTerminal: false,
+  wrapCode: false,
+  markdownWidth: "readable",
+  diffStyle: "unified",
+  fileOpen: "popup",
+  webLinks: "tab",
+  claudeLaunchMode: "default",
+  codexLaunchMode: "default",
+};
+
+export const QUICK_REPLIES_MAX = 12;
+/** accounts the usage order and hiding remember; more are a hand-edited record */
+export const USAGE_KEYS_MAX = 64;
+
+/** A list of usage keys: strings only, each once, bounded. */
+function usageKeys(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((key): key is string => typeof key === "string" && key.length > 0 && key.length <= 512))].slice(0, USAGE_KEYS_MAX);
+}
+export const QUICK_REPLY_MAX_CHARS = 200;
+
+/**
+ * A record from before the button had a place of its own holds a boolean: on stays on. Its off
+ * was also what a device that never chose held, so it follows the default.
+ */
+function voiceButton(value: unknown): VoiceButton {
+  if (value === true) return "on";
+  return VOICE_BUTTONS.includes(value as VoiceButton) ? value as VoiceButton : DEFAULT_SETTINGS.voiceInput;
+}
+
+/** Whether an input asks for dictation at all: auto leaves the terminal input line and a phone's composer alone. */
+export function wantsVoiceInput(setting: VoiceButton, mode: "chat" | "terminal", phone: boolean): boolean {
+  return setting === "on" || (setting === "auto" && mode === "chat" && !phone);
+}
+
+/** The replies worth a button: what the list holds, without the blank ones still being written. */
+export function quickReplyButtons(settings: Settings): string[] {
+  return settings.quickReplies.filter((reply) => reply.trim() !== "");
+}
+
+/** This device's alert choices, as the server keeps them with its push subscription. */
+export function alertPrefs(settings: Settings): AlertPrefs {
+  return { input: settings.alertInput, done: settings.alertDone };
+}
+
+const STORAGE_KEY = "herdr-web-ui:settings";
+const THEMES_STORAGE_KEY = "herdr-web-ui:themes";
+export const TERMINAL_FONT_MIN = 10;
+export const TERMINAL_FONT_MAX = 22;
+export const TERMINAL_WHEEL_SPEED_MIN = 1;
+export const TERMINAL_WHEEL_SPEED_MAX = 10;
+
+export const CHAT_FONT_MIN = 11;
+export const CHAT_FONT_MAX = 24;
+/** each density's body size, --fs-md in src/styles.css: the interface's size when none is chosen, and through it the chat's */
+const BODY_FONT: Record<Density, number> = { comfortable: 14, compact: 13 };
+
+function clampFont(size: number): number {
+  return Math.min(TERMINAL_FONT_MAX, Math.max(TERMINAL_FONT_MIN, Math.round(size)));
+}
+
+/** The interface's body text size in px: the chosen one, or the density's. */
+export function uiFontSize(settings: Settings): number {
+  return settings.uiFontSize ?? BODY_FONT[settings.density];
+}
+
+/** The chat's body text size in px: the chosen one, or the interface's. */
+export function chatFontSize(settings: Settings): number {
+  return settings.chatFontSize ?? uiFontSize(settings);
+}
+
+/** The Default chat lane never runs narrower than this, in px: --content-w, the Narrow step. */
+export const CHAT_LANE_MIN = 820;
+/** ...or wider than this, in rem: 960px at a 16px root. In rem because Wide is (72rem, styles.css),
+ *  so Default stays the narrower of the two at a root font of 11.39px and up; under that the
+ *  820px floor wins and is itself wider than Wide (see chatLaneLength). */
+export const CHAT_LANE_MAX_REM = 60;
+/** The share of its pane the Default chat lane takes between the two. */
+export const CHAT_LANE_RATIO = 0.7143;
+/** The root font size chatLaneWidth resolves the rem ceiling with when none is given. */
+export const ROOT_FONT_PX = 16;
+
+/** The Default lane's pane-following part in whole px, before the rem ceiling: 71.43% of the pane, min 820px. */
+function chatLaneFollow(paneWidth: number): number {
+  if (!Number.isFinite(paneWidth)) return CHAT_LANE_MIN;
+  return Math.max(CHAT_LANE_MIN, Math.round(paneWidth * CHAT_LANE_RATIO));
+}
+
+/**
+ * The Default chat lane for a pane this wide, as the CSS length lib/chatLane.ts writes to --chat-w:
+ * 71.43% of the pane, min 820px, max 60rem.
+ * A length with no percentage in it: the lane's columns sit in boxes of different widths (the
+ * transcript and the composer column inside a gutter, the held list and the menus outside it),
+ * and one length is what keeps them equal. A pane narrower than the result is unaffected:
+ * every column is min(100%, lane).
+ * The ceiling is left to the stylesheet engine as 60rem, not resolved here: Wide's 72rem follows
+ * the root font size the moment it changes, and so must this, or Default would be the wider of
+ * the two until the pane was next measured.
+ * Where the two ends cross (60rem is under 820px below a 13.67px root) the floor wins: Default is
+ * then the same lane as Narrow, never narrower than it, and still no wider than Wide down to an
+ * 11.39px root, under which Narrow's own 820px is already wider than Wide's 72rem.
+ */
+export function chatLaneLength(paneWidth: number): string {
+  return `min(max(${CHAT_LANE_MIN}px, ${CHAT_LANE_MAX_REM}rem), ${chatLaneFollow(paneWidth)}px)`;
+}
+
+/** What chatLaneLength resolves to at this root font size, in px (960 at most at 16px): the rule in numbers. */
+export function chatLaneWidth(paneWidth: number, rootFontPx: number = ROOT_FONT_PX): number {
+  const root = Number.isFinite(rootFontPx) && rootFontPx > 0 ? rootFontPx : ROOT_FONT_PX;
+  return Math.min(Math.max(CHAT_LANE_MIN, CHAT_LANE_MAX_REM * root), chatLaneFollow(paneWidth));
+}
+
+/** Only known keys with the right type survive: a stale or hand-edited record never breaks the UI. */
+export function sanitizeSettings(raw: unknown): Settings {
+  const record = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
+  const theme = record["theme"] === "dark" || record["theme"] === "light" || record["theme"] === "system" ? record["theme"] : DEFAULT_SETTINGS.theme;
+  const palette = isThemeId(record["palette"]) ? record["palette"] : "amber";
+  // Absence migrates (a record from before themes wore amber, so it keeps amber); an explicitly
+  // unknown id falls back to the default, not a stale pair.
+  const darkTheme = "darkTheme" in record
+    ? (isThemeId(record["darkTheme"]) ? record["darkTheme"] : DEFAULT_THEME)
+    : theme === "dark" ? palette : isThemeId(record["paletteDark"]) ? record["paletteDark"] : theme === "system" && record["paletteDark"] !== undefined ? "amber" : palette;
+  const lightTheme = "lightTheme" in record
+    ? (isThemeId(record["lightTheme"]) ? record["lightTheme"] : DEFAULT_THEME)
+    : theme === "light" ? palette : isThemeId(record["paletteLight"]) ? record["paletteLight"] : theme === "system" && record["paletteLight"] !== undefined ? "amber" : palette;
+  const density = record["density"];
+  const font = record["terminalFontSize"];
+  const chatFont = record["chatFontSize"];
+  const keyBarExtras = sanitizeKeyBarExtras(record["keyBarExtras"], DEFAULT_SETTINGS.keyBarExtras);
+  const keyBarFallback = Array.isArray(record["keyBarExtras"])
+    ? migrateKeyBarItems(keyBarExtras)
+    : DEFAULT_KEY_BAR_ITEMS;
+  return {
+    terminalInputMode: record["terminalInputMode"] === "line" || record["terminalInputMode"] === "direct" ? record["terminalInputMode"] : "auto",
+    keyBarExtras,
+    keyBarItems: sanitizeKeyBarItems(record["keyBarItems"], keyBarFallback),
+    shortcutOverrides: sanitizeShortcutOverrides(record["shortcutOverrides"]),
+    theme: theme === "dark" || theme === "light" || theme === "system" ? theme : DEFAULT_SETTINGS.theme,
+    density: density === "compact" || density === "comfortable" ? density : DEFAULT_SETTINGS.density,
+    sidebarRows: record["sidebarRows"] === "one" || record["sidebarRows"] === "two" ? record["sidebarRows"] : DEFAULT_SETTINGS.sidebarRows,
+    agentOrder: record["agentOrder"] === "workspace" || record["agentOrder"] === "activity" ? record["agentOrder"] : DEFAULT_SETTINGS.agentOrder,
+    agentMarks: record["agentMarks"] === "color" || record["agentMarks"] === "mono" ? record["agentMarks"] : DEFAULT_SETTINGS.agentMarks,
+    statusIndicators: record["statusIndicators"] === "classic" || record["statusIndicators"] === "dots" || record["statusIndicators"] === "symbols" ? record["statusIndicators"] : DEFAULT_SETTINGS.statusIndicators,
+    darkTheme,
+    lightTheme,
+    palette: mirrorPalette(theme, darkTheme, lightTheme),
+    paletteLight: lightTheme,
+    paletteDark: darkTheme,
+    terminalFontSize: typeof font === "number" && Number.isFinite(font) ? clampFont(font) : DEFAULT_SETTINGS.terminalFontSize,
+    terminalWheelSpeed: typeof record["terminalWheelSpeed"] === "number" && Number.isFinite(record["terminalWheelSpeed"])
+      ? Math.min(TERMINAL_WHEEL_SPEED_MAX, Math.max(TERMINAL_WHEEL_SPEED_MIN, Math.round(record["terminalWheelSpeed"])))
+      : DEFAULT_SETTINGS.terminalWheelSpeed,
+    chatFontSize: typeof chatFont === "number" && Number.isFinite(chatFont)
+      ? Math.min(CHAT_FONT_MAX, Math.max(CHAT_FONT_MIN, Math.round(chatFont)))
+      : DEFAULT_SETTINGS.chatFontSize,
+    terminalFontFamily: sanitizeFontFamily(record["terminalFontFamily"]),
+    uiFontSize: sanitizeUiFontSize(record["uiFontSize"]),
+    paneClipboard: typeof record["paneClipboard"] === "boolean" ? record["paneClipboard"] : DEFAULT_SETTINGS.paneClipboard,
+    releasePaneAway: typeof record["releasePaneAway"] === "boolean" ? record["releasePaneAway"] : DEFAULT_SETTINGS.releasePaneAway,
+    chatFontFamily: sanitizeFontFamily(record["chatFontFamily"]),
+    chatWidth: CHAT_WIDTHS.includes(record["chatWidth"] as ChatWidth) ? record["chatWidth"] as ChatWidth : DEFAULT_SETTINGS.chatWidth,
+    enterSends: typeof record["enterSends"] === "boolean" ? record["enterSends"] : DEFAULT_SETTINGS.enterSends,
+    autoSendQueued: typeof record["autoSendQueued"] === "boolean" ? record["autoSendQueued"] : DEFAULT_SETTINGS.autoSendQueued,
+    suggestionChip: typeof record["suggestionChip"] === "boolean" ? record["suggestionChip"] : DEFAULT_SETTINGS.suggestionChip,
+    showThinking: typeof record["showThinking"] === "boolean" ? record["showThinking"] : DEFAULT_SETTINGS.showThinking,
+    keepScreenOn: typeof record["keepScreenOn"] === "boolean" ? record["keepScreenOn"] : DEFAULT_SETTINGS.keepScreenOn,
+    language: LANGUAGE_SETTINGS.includes(record["language"] as LanguageSetting) ? record["language"] as LanguageSetting : DEFAULT_SETTINGS.language,
+    alertsOn: typeof record["alertsOn"] === "boolean" ? record["alertsOn"] : DEFAULT_SETTINGS.alertsOn,
+    alertInput: typeof record["alertInput"] === "boolean" ? record["alertInput"] : DEFAULT_SETTINGS.alertInput,
+    alertDone: record["alertDone"] === "off" || record["alertDone"] === "long" || record["alertDone"] === "always" ? record["alertDone"] : DEFAULT_SETTINGS.alertDone,
+    alertInApp: typeof record["alertInApp"] === "boolean" ? record["alertInApp"] : DEFAULT_SETTINGS.alertInApp,
+    alertSound: typeof record["alertSound"] === "boolean" ? record["alertSound"] : DEFAULT_SETTINGS.alertSound,
+    // kept as typed (a trailing space is the next word being started), only bounded
+    quickReplies: Array.isArray(record["quickReplies"])
+      ? record["quickReplies"].filter((reply): reply is string => typeof reply === "string").slice(0, QUICK_REPLIES_MAX).map((reply) => reply.slice(0, QUICK_REPLY_MAX_CHARS))
+      : [...DEFAULT_SETTINGS.quickReplies],
+    showQuickReplies: typeof record["showQuickReplies"] === "boolean" ? record["showQuickReplies"] : DEFAULT_SETTINGS.showQuickReplies,
+    showUsage: typeof record["showUsage"] === "boolean" ? record["showUsage"] : DEFAULT_SETTINGS.showUsage,
+    usageCount: record["usageCount"] === "used" || record["usageCount"] === "left" ? record["usageCount"] : DEFAULT_SETTINGS.usageCount,
+    usageGlance: record["usageGlance"] === "week" || record["usageGlance"] === "session" ? record["usageGlance"] : DEFAULT_SETTINGS.usageGlance,
+    defaultView: record["defaultView"] === "chat" || record["defaultView"] === "terminal" || record["defaultView"] === "auto" ? record["defaultView"] : DEFAULT_SETTINGS.defaultView,
+    usageOrder: usageKeys(record["usageOrder"]),
+    usageHidden: usageKeys(record["usageHidden"]),
+    voiceInput: voiceButton(record["voiceInput"]),
+    voiceLanguage: DICTATION_LANGUAGES.includes(record["voiceLanguage"] as (typeof DICTATION_LANGUAGES)[number]) ? record["voiceLanguage"] as DictationLanguage : DEFAULT_SETTINGS.voiceLanguage,
+    voicePolishChat: typeof record["voicePolishChat"] === "boolean" ? record["voicePolishChat"] : DEFAULT_SETTINGS.voicePolishChat,
+    voicePolishTerminal: typeof record["voicePolishTerminal"] === "boolean" ? record["voicePolishTerminal"] : DEFAULT_SETTINGS.voicePolishTerminal,
+    wrapCode: typeof record["wrapCode"] === "boolean" ? record["wrapCode"] : DEFAULT_SETTINGS.wrapCode,
+    markdownWidth: MARKDOWN_WIDTHS.find((width) => width === record["markdownWidth"]) ?? DEFAULT_SETTINGS.markdownWidth,
+    diffStyle: DIFF_STYLES.find((style) => style === record["diffStyle"]) ?? DEFAULT_SETTINGS.diffStyle,
+    fileOpen: FILE_OPEN_TARGETS.find((target) => target === record["fileOpen"]) ?? DEFAULT_SETTINGS.fileOpen,
+    webLinks: WEB_LINK_TARGETS.find((target) => target === record["webLinks"]) ?? DEFAULT_SETTINGS.webLinks,
+    claudeLaunchMode: CLAUDE_LAUNCH_MODES.find((mode) => mode === record["claudeLaunchMode"]) ?? DEFAULT_SETTINGS.claudeLaunchMode,
+    codexLaunchMode: CODEX_LAUNCH_MODES.find((mode) => mode === record["codexLaunchMode"]) ?? DEFAULT_SETTINGS.codexLaunchMode,
+  };
+}
+
+export function loadSettings(): Settings {
+  let settings = DEFAULT_SETTINGS;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    settings = raw === null ? DEFAULT_SETTINGS : sanitizeSettings(JSON.parse(raw));
+  } catch {
+    /* a damaged main record does not hide the protected theme choice */
+  }
+  try {
+    const raw = window.localStorage.getItem(THEMES_STORAGE_KEY);
+    const themes: unknown = raw === null ? null : JSON.parse(raw);
+    if (typeof themes === "object" && themes !== null && "darkTheme" in themes && "lightTheme" in themes) {
+      return sanitizeSettings({ ...settings, darkTheme: themes.darkTheme, lightTheme: themes.lightTheme });
+    }
+  } catch { /* denied or damaged storage: keep the main record */ }
+  return settings;
+}
+
+export function saveSettings(settings: Settings): void {
+  const mirrored = sanitizeSettings(settings);
+  try {
+    window.localStorage.setItem(THEMES_STORAGE_KEY, JSON.stringify({
+      darkTheme: mirrored.darkTheme, lightTheme: mirrored.lightTheme,
+      mirror: { palette: mirrored.palette, paletteDark: mirrored.paletteDark, paletteLight: mirrored.paletteLight },
+    }));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mirrored));
+  } catch {
+    /* private mode: preferences last for the session */
+  }
+}
+
+const DARK_QUERY = "(prefers-color-scheme: dark)";
+
+export function resolveTheme(setting: ThemeSetting): ResolvedTheme {
+  if (setting !== "system") return setting;
+  return typeof window !== "undefined" && window.matchMedia?.(DARK_QUERY).matches === false ? "light" : "dark";
+}
+
+type TerminalColors = { background: string; foreground: string; cursor: string; selectionBackground: string };
+
+export function terminalTheme(theme: ResolvedTheme, palette: Palette = "amber"): TerminalColors {
+  return { ...terminalColors(palette, theme) };
+}
+
+/** `<meta name="theme-color">` follows the panel surface so the PWA title bar matches. */
+export function themeColor(theme: ResolvedTheme, palette: Palette = "amber"): string {
+  return themeTableColor(palette, theme);
+}
+
+export function applyToDocument(settings: Settings, entry: ThemeEntry, language: Language): void {
+  const root = document.documentElement;
+  root.lang = LOCALE_TAGS[language];
+  root.dataset["theme"] = entry.mode;
+  root.dataset["density"] = settings.density;
+  root.dataset["palette"] = entry.id;
+  root.dataset["chatWidth"] = settings.chatWidth;
+  // src/components/AgentMark.css keys the mono logos on it
+  root.dataset["marks"] = settings.agentMarks;
+  // src/styles.css multiplies every --fs-* token but --fs-input by this: the interface's body size over the density's
+  const uiPx = uiFontSize(settings);
+  root.style.setProperty("--ui-scale", String(fontScale(uiPx, BODY_FONT[settings.density])));
+  // ChatView.css scales its type tokens by this (the chat's and a Markdown preview's): the chat's size over the
+  // interface's, so a chosen chat size is drawn as itself whatever the interface size, and an unchosen one follows it
+  root.style.setProperty("--chat-scale", String(fontScale(chatFontSize(settings), uiPx)));
+  // ChatView.css sets the transcript's and a Markdown preview's prose in this, and falls back to --font-ui without it
+  const chatFont = chatFontStack(settings.chatFontFamily);
+  if (chatFont === null) root.style.removeProperty("--font-chat");
+  else root.style.setProperty("--font-chat", chatFont);
+  root.style.colorScheme = entry.mode;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", themeColor(entry.mode, entry.id));
+}
+
+interface SettingsContextValue {
+  settings: Settings;
+  /** the theme after resolving `system` against the OS preference */
+  resolvedTheme: ResolvedTheme;
+  /** The actual rendered row, whose mode may differ from the selected side. */
+  resolvedEntry: ThemeEntry;
+  /** the language after resolving `system` against the browser's */
+  resolvedLanguage: Language;
+  update: (patch: Partial<Settings>) => void;
+}
+
+const SettingsContext = createContext<SettingsContextValue | null>(null);
+
+export function SettingsProvider({ children }: { children: ReactNode }) {
+  const [settings, setSettings] = useState<Settings>(loadSettings);
+  const [systemDark, setSystemDark] = useState(() => resolveTheme("system") === "dark");
+
+  useEffect(() => {
+    const query = window.matchMedia?.(DARK_QUERY);
+    if (!query) return;
+    const onChange = (event: MediaQueryListEvent): void => setSystemDark(event.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+
+  const resolvedTheme: ResolvedTheme = settings.theme === "system" ? (systemDark ? "dark" : "light") : settings.theme;
+
+  const resolvedEntry = themeFor(settings, resolvedTheme);
+
+  const [browserLanguages, setBrowserLanguages] = useState<readonly string[]>(() => (typeof navigator !== "undefined" ? navigator.languages : []));
+  useEffect(() => {
+    const onChange = (): void => setBrowserLanguages([...navigator.languages]);
+    window.addEventListener("languagechange", onChange);
+    return () => window.removeEventListener("languagechange", onChange);
+  }, []);
+  const resolvedLanguage = resolveLanguage(settings.language, browserLanguages);
+  // helpers outside React read this during the same render, so it is set before the children render
+  setCurrentLanguage(resolvedLanguage);
+
+  useEffect(() => {
+    applyToDocument(settings, resolvedEntry, resolvedLanguage);
+  }, [settings, resolvedEntry, resolvedLanguage]);
+
+  const update = useCallback((patch: Partial<Settings>) => {
+    setSettings((current) => {
+      const next = sanitizeSettings({ ...current, ...patch });
+      saveSettings(next);
+      return next;
+    });
+  }, []);
+
+  const value = useMemo(() => ({ settings, resolvedTheme, resolvedEntry, resolvedLanguage, update }), [settings, resolvedTheme, resolvedEntry, resolvedLanguage, update]);
+  return createElement(SettingsContext.Provider, { value }, children);
+}
+
+export function useSettings(): SettingsContextValue {
+  const value = useContext(SettingsContext);
+  if (value === null) throw new Error("useSettings needs a SettingsProvider above it");
+  return value;
+}
+
+export const PANE_VIEW_KEY_PREFIX = "herdr-web-ui:view:";
+
+/** Forgets every pane's own lens on this device, so each opens in the default one again. */
+export function forgetPaneViews(given?: Pick<Storage, "length" | "key" | "removeItem">): number {
+  const keys: string[] = [];
+  try {
+    // inside the try: reading localStorage itself throws where storage is blocked
+    const storage = given ?? window.localStorage;
+    for (let index = 0; index < storage.length; index++) {
+      const key = storage.key(index);
+      if (key?.startsWith(PANE_VIEW_KEY_PREFIX)) keys.push(key);
+    }
+    for (const key of keys) storage.removeItem(key);
+  } catch {
+    /* private mode: there is nothing remembered to forget */
+  }
+  return keys.length;
+}

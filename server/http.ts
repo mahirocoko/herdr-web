@@ -1,0 +1,78 @@
+/**
+ * The `{ error: { code, message } }` envelope every herdr-web-ui route answers with.
+ *
+ * It lives outside index.ts because the auth routes must fail in exactly the shape
+ * the pane routes fail in: a second copy of this envelope is how one API ends up
+ * with two error formats and a client that only handles one of them.
+ */
+
+import { randomBytes } from "node:crypto";
+import { HerdrError } from "./herdr/client.ts";
+
+const presentationTokens = new Set([
+  "summary", "progress", "quota", "subagents", "subagents_running", "subagents_ended",
+  "mahiro_sidebar_context", "mahiro_sidebar_model", "mahiro_sidebar_provider",
+  "mahiro_sidebar_q1_critical", "mahiro_sidebar_q1_ok", "mahiro_sidebar_q2_ok",
+  "mahiro_workspace_branch", "mahiro_workspace_git_status", "mahiro_workspace_worktree",
+]);
+
+/** Presentation data only; native identity/session tokens stay on their native authority. */
+export function forkBrowserReplacer(key: string, value: unknown): unknown {
+  if (process.env["HERDR_WEB_FORK_PRIVACY"] !== "1") return value;
+  // These raw native records are server-only; the source browser consumes neither.
+  if (key === "agent_session" || key === "state_labels") return undefined;
+  if (key !== "tokens") return value;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter(([name, text]) =>
+    presentationTokens.has(name) && typeof text === "string" && text.length <= 512 && !/[\x00-\x1f\x7f]/.test(text)));
+}
+
+export function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/** A non-negative integer: a row, a column or a scroll offset. */
+export function isCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+export function jsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
+  return new Response(JSON.stringify(body, forkBrowserReplacer), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8", ...headers },
+  });
+}
+
+export function errorResponse(error: unknown): Response {
+  if (error instanceof HerdrError) {
+    const status = error.code === "connect_failed" || error.code === "timeout" ? 502 : 404;
+    return jsonResponse({ error: { code: error.code, message: error.message } }, status);
+  }
+  // A system error carries absolute paths, the herdr socket and whatever a dependency
+  // throws; the client is told none of it but a handle to quote in a bug report, and the
+  // real exception is logged here beside that handle. Short enough to say out loud, long
+  // enough that nobody reads another's.
+  const id = randomBytes(6).toString("hex");
+  console.error(`internal_error ${id}: ${error instanceof Error ? error.stack ?? error.message : String(error)}`);
+  return jsonResponse({ error: { code: "internal_error", message: `internal error (${id})` } }, 500);
+}
+
+export function conflictResponse(code: string, message: string): Response {
+  return jsonResponse({ error: { code, message } }, 409);
+}
+
+export function badRequest(code: string, message: string): Response {
+  return jsonResponse({ error: { code, message } }, 400);
+}
+
+/** A JSON route's body as an object, or the 400 that says it is not JSON or not an object. */
+export async function readJsonObject<T extends object = Record<string, unknown>>(request: Request): Promise<T | Response> {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return badRequest("invalid_json", "request body must be JSON");
+  }
+  if (!isJsonObject(body)) return badRequest("invalid_body", "request body must be a JSON object");
+  return body as T;
+}

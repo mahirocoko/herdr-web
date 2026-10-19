@@ -1,0 +1,371 @@
+name: CI
+on:
+  pull_request:
+    # ready_for_review: a draft run skips the heavy checks, so leaving draft must run them.
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      self_hosted_labels:
+        description: 'Runner labels (JSON array containing "self-hosted") for this run; empty uses CI_SELF_HOSTED_LABELS'
+        required: false
+        default: ''
+        type: string
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      draft: ${{ steps.filter.outputs.draft }}
+      linux: ${{ steps.route.outputs.linux }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - id: route
+        name: Choose the Linux runner
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPOSITORY: ${{ github.repository }}
+          REQUESTED_LABELS: ${{ inputs.self_hosted_labels }}
+          CONFIGURED_LABELS: ${{ vars.CI_SELF_HOSTED_LABELS }}
+        run: bash scripts/ci-runner-route.sh >> "$GITHUB_OUTPUT"
+      - id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$PR_DRAFT" = "true" ]; then
+            echo "draft=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "draft=false" >> "$GITHUB_OUTPUT"
+          fi
+          # Only a pull request may skip the heavy jobs as docs-only. Every other event validates in
+          # full, including workflow_call from release.yml and manual pages.yml dispatches, where github.event_name is
+          # the caller's event and a docs-only last commit must not skip release validation.
+          if [ "$EVENT_NAME" != "pull_request" ] || [ -z "$BASE_SHA" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          CHANGED=$(git diff --name-only "$BASE_SHA" HEAD || echo "")
+          if [ -z "$CHANGED" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Docs-only: under docs/, any *.md or *.txt, the root LICENSE, or an issue template.
+          if echo "$CHANGED" | grep -qvE '^docs/|\.(md|txt)$|^LICENSE$|^\.github/ISSUE_TEMPLATE/'; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+            echo "Only documentation changes detected, skipping heavy tests"
+          fi
+  windows-install:
+    name: Native Windows install
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 10
+    env:
+      HERDR_TEST_MODE: unit
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: ./.github/actions/setup-ci
+      # A required check: a draft run must not report it green without running it, or a stale
+      # draft result could satisfy the merge gate. Marking the PR ready reruns CI.
+      - name: Fail on draft PRs (Windows tests not run)
+        if: needs.changes.outputs.draft == 'true'
+        run: |
+          Write-Host "::error::Draft PR: the Windows install tests did not run. Mark the PR ready for review to run them."
+          exit 1
+      - run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows-install.test.ps1
+        if: needs.changes.outputs.draft != 'true'
+      - run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/preflight.ps1
+        if: needs.changes.outputs.draft != 'true'
+      - run: bun install --frozen-lockfile
+        if: needs.changes.outputs.draft != 'true'
+      - run: bun run build
+        if: needs.changes.outputs.draft != 'true'
+      - run: bun test ./scripts/windows-plugin.test.ts ./scripts/plugin-runtime.test.ts ./scripts/phone-setup.test.ts ./server/windows-native.test.ts
+        if: needs.changes.outputs.draft != 'true'
+  macos-session:
+    name: Native macOS session identity
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: macos-15
+    timeout-minutes: 5
+    env:
+      HERDR_TEST_MODE: unit
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: ./.github/actions/setup-ci
+      - name: Skip heavy tests on draft PRs
+        if: needs.changes.outputs.draft == 'true'
+        run: |
+          echo "Draft PR detected, skipping macOS tests"
+          exit 0
+      - run: bun install --frozen-lockfile
+        if: needs.changes.outputs.draft != 'true'
+      - run: bun test ./server/claude-store.test.ts ./server/process-start.test.ts
+        if: needs.changes.outputs.draft != 'true'
+  fast:
+    name: Fast checks
+    needs: changes
+    runs-on: ${{ fromJSON(needs.changes.outputs.linux) }}
+    timeout-minutes: 10
+    env:
+      CHECK_DIR: ${{ github.workspace }}/.ci
+      UNIT_TEST_WORKERS: 4
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: ./.github/actions/setup-ci
+        with:
+          node: 'true'
+      - run: bun install --frozen-lockfile
+      - run: bun run check fast
+      # A release (package.json's version not tagged yet) must raise REMOTE_BUNDLE_VERSION when the
+      # bundle's inputs changed, record the telemetry Worker deploy and carry its patch notes. Only the
+      # change that bumps the version against BASE_SHA counts, so PRs merged before the Release run
+      # pass. The checkout is shallow, so the tags and the base it compares with are fetched first.
+      - name: Release guards
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          git fetch --no-tags --depth=1 origin '+refs/tags/v*:refs/tags/v*' '+refs/tags/remote-v*:refs/tags/remote-v*'
+          if [ -n "$BASE_SHA" ]; then git fetch --no-tags --depth=1 origin "$BASE_SHA" || true; fi
+          bun scripts/release-guards.ts --base "$BASE_SHA"
+      - name: Preserve check report and verification logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: check-fast-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .ci/report.json
+            .ci/**/*.log
+            .ci/browser-evidence/**/*.png
+            .ci/browser-evidence/**/*.json
+            .ci/browser-evidence/**/*.zip
+          include-hidden-files: true
+          if-no-files-found: ignore
+  integration:
+    name: Integration tests
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ${{ fromJSON(needs.changes.outputs.linux) }}
+    # a wait for a slot counts against it
+    timeout-minutes: 50
+    env:
+      CHECK_DIR: ${{ github.workspace }}/.ci
+      # The herdr-backed lanes of every runner on the self-hosted PC share check.ts's slots
+      # (scripts/self-hosted-runner/run.sh): at most CHECK_MAX_RUNS at once, and a lane that finds
+      # them taken waits its turn instead of failing. A hosted runner has the slots to itself.
+      CHECK_MAX_RUNS: 3
+      CHECK_WAIT_SECONDS: 2400
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - name: Skip heavy tests on draft PRs
+        if: needs.changes.outputs.draft == 'true'
+        run: |
+          echo "Draft PR detected, skipping integration tests"
+          exit 0
+      - uses: ./.github/actions/setup-ci
+        if: needs.changes.outputs.draft != 'true'
+        with:
+          node: 'true'
+          herdr: 'true'
+      - run: bun install --frozen-lockfile
+        if: needs.changes.outputs.draft != 'true'
+      - name: Integration tests (updater restart and rollback included)
+        if: needs.changes.outputs.draft != 'true'
+        env:
+          HERDR_TEST_SHARDS: ${{ runner.environment == 'self-hosted' && '4' || '1' }}
+        run: bun run check integration
+      - name: Preserve check report and verification logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: integration-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .ci/report.json
+            .ci/**/*.log
+            .ci/config/herdr/sessions/*/test-server.log
+          include-hidden-files: true
+          if-no-files-found: ignore
+  browser-main:
+    name: Browser regression (ui-regression)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ${{ fromJSON(needs.changes.outputs.linux) }}
+    # a wait for a slot counts against it
+    timeout-minutes: 50
+    env:
+      CHECK_DIR: ${{ github.workspace }}/.ci
+      # The herdr-backed lanes of every runner on the self-hosted PC share check.ts's slots
+      # (scripts/self-hosted-runner/run.sh): at most CHECK_MAX_RUNS at once, and a lane that finds
+      # them taken waits its turn instead of failing. A hosted runner has the slots to itself.
+      CHECK_MAX_RUNS: 3
+      CHECK_WAIT_SECONDS: 2400
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - name: Skip heavy tests on draft PRs
+        if: needs.changes.outputs.draft == 'true'
+        run: |
+          echo "Draft PR detected, skipping browser-main tests"
+          exit 0
+      - uses: ./.github/actions/setup-ci
+        if: needs.changes.outputs.draft != 'true'
+        with:
+          node: 'true'
+          herdr: 'true'
+      - run: bun install --frozen-lockfile
+        if: needs.changes.outputs.draft != 'true'
+      - name: Get Playwright version
+        if: needs.changes.outputs.draft != 'true'
+        id: playwright-version
+        run: echo "version=$(bun -e 'console.log(require("playwright-core/package.json").version)')" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browser
+        if: needs.changes.outputs.draft != 'true' && runner.environment != 'self-hosted'
+        uses: actions/cache@v4
+        with:
+          path: .ci-cache/playwright
+          key: playwright-workspace-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright-version.outputs.version }}
+      - run: bun run build
+        if: needs.changes.outputs.draft != 'true'
+      - name: Browser regression (UI suites)
+        if: needs.changes.outputs.draft != 'true'
+        env:
+          BROWSER_SCRIPTS: scripts/ui-regression.ts,scripts/ui-contexts-regression.ts
+          BROWSER_WORKERS: 2
+        run: bun run check run -- bun scripts/ci-browser-parallel.ts
+      - name: Preserve browser logs and evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-main-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .ci/browser-logs/**
+            .ci/browser-evidence/**/*.png
+            .ci/browser-evidence/**/*.json
+            .ci/browser-evidence/**/*.zip
+          include-hidden-files: true
+          if-no-files-found: ignore
+  browser-other:
+    name: Browser regression (other scripts)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ${{ fromJSON(needs.changes.outputs.linux) }}
+    # a wait for a slot counts against it
+    timeout-minutes: 50
+    env:
+      CHECK_DIR: ${{ github.workspace }}/.ci
+      # The herdr-backed lanes of every runner on the self-hosted PC share check.ts's slots
+      # (scripts/self-hosted-runner/run.sh): at most CHECK_MAX_RUNS at once, and a lane that finds
+      # them taken waits its turn instead of failing. A hosted runner has the slots to itself.
+      CHECK_MAX_RUNS: 3
+      CHECK_WAIT_SECONDS: 2400
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - name: Skip heavy tests on draft PRs
+        if: needs.changes.outputs.draft == 'true'
+        run: |
+          echo "Draft PR detected, skipping browser-other tests"
+          exit 0
+      - uses: ./.github/actions/setup-ci
+        if: needs.changes.outputs.draft != 'true'
+        with:
+          node: 'true'
+          herdr: 'true'
+      - run: bun install --frozen-lockfile
+        if: needs.changes.outputs.draft != 'true'
+      - name: Get Playwright version
+        if: needs.changes.outputs.draft != 'true'
+        id: playwright-version
+        run: echo "version=$(bun -e 'console.log(require("playwright-core/package.json").version)')" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browser
+        if: needs.changes.outputs.draft != 'true' && runner.environment != 'self-hosted'
+        uses: actions/cache@v4
+        with:
+          path: .ci-cache/playwright
+          key: playwright-workspace-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright-version.outputs.version }}
+      - run: bun run build
+        if: needs.changes.outputs.draft != 'true'
+      - name: Browser regression (parallel)
+        if: needs.changes.outputs.draft != 'true'
+        env:
+          # Every script of scripts/ci-browser.sh except the two browser-main runs.
+          BROWSER_EXCLUDE: scripts/ui-regression.ts,scripts/ui-contexts-regression.ts
+          BROWSER_WORKERS: ${{ runner.environment == 'self-hosted' && '6' || '4' }}
+        run: bun run check run -- bun scripts/ci-browser-parallel.ts
+      - name: Preserve browser logs and evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-other-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .ci/browser-logs/**
+            .ci/browser-evidence/**/*.png
+            .ci/browser-evidence/**/*.json
+            .ci/browser-evidence/**/*.zip
+          include-hidden-files: true
+          if-no-files-found: ignore
+  integration-browser:
+    name: Integration and browser
+    needs: [changes, integration, browser-main, browser-other]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check results
+        env:
+          CODE: ${{ needs.changes.outputs.code }}
+          DRAFT: ${{ needs.changes.outputs.draft }}
+          INTEGRATION_RESULT: ${{ needs.integration.result }}
+          BROWSER_MAIN_RESULT: ${{ needs.browser-main.result }}
+          BROWSER_OTHER_RESULT: ${{ needs.browser-other.result }}
+        run: |
+          if [ "$CODE" = "false" ]; then
+            echo "Skipped: only documentation changes"
+            exit 0
+          fi
+          # A required check: a draft run skipped the heavy tests, so it must not report green,
+          # or a stale draft result could satisfy the merge gate. Marking the PR ready reruns CI.
+          if [ "$DRAFT" = "true" ]; then
+            echo "::error::Draft PR: integration and browser tests did not run. Mark the PR ready for review to run them."
+            exit 1
+          fi
+          if [ "$INTEGRATION_RESULT" != "success" ]; then
+            echo "Integration tests failed"
+            exit 1
+          fi
+          if [ "$BROWSER_MAIN_RESULT" != "success" ]; then
+            echo "Browser regression (ui-regression) failed"
+            exit 1
+          fi
+          if [ "$BROWSER_OTHER_RESULT" != "success" ]; then
+            echo "Browser regression (other scripts) failed"
+            exit 1
+          fi
+          echo "All tests passed"

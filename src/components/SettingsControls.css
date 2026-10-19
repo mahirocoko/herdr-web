@@ -1,0 +1,263 @@
+/* Settings is built from these: a group (caption + card), a row, and the four controls. */
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.settings-section h3 {
+  margin: 0;
+  padding: 0 var(--space-1);
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+
+.settings-note {
+  margin: 0;
+  padding: 0 var(--space-1);
+}
+
+/* one surface per group: its rows are parted by hairlines, never by boxes of their own */
+.settings-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg-elevated);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.settings-card > .settings-row,
+.settings-card > .settings-item {
+  padding: var(--space-3) var(--space-4);
+}
+
+.settings-card > * + * {
+  border-top: var(--hairline) solid var(--border);
+}
+
+/* a block that is not label + control: a list, a form, a panel of its own */
+.settings-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-width: 0;
+  min-height: var(--control-h);
+}
+
+.settings-row > * {
+  flex: 0 0 auto;
+}
+
+.settings-row-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-label {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+
+.settings-description,
+.settings-hint {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+}
+
+/* a sentence under a label stays a column of text, not a line as wide as the card */
+.settings-row-text > .settings-description,
+.settings-row-text > .settings-hint {
+  max-width: 54ch;
+}
+
+/* a condition that applies right now, on its own line under the sentence */
+.settings-condition {
+  display: block;
+  color: var(--text);
+}
+
+/* one sentence at rest; its conditions and exceptions open under it (DESIGN.md: messages say
+   only what the person needs now). The toggle word stands in for the marker. */
+.settings-details {
+  margin: 0;
+}
+
+.settings-details > summary {
+  width: fit-content;
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+  list-style: none;
+  cursor: pointer;
+}
+
+.settings-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-details-toggle {
+  color: var(--accent);
+}
+
+/* no-break spaces: the dot and the word stay with the sentence's last word */
+.settings-details-toggle::before {
+  content: "\00a0\00b7\00a0";
+  color: var(--text-dim);
+}
+
+.settings-details[open] > summary {
+  margin-bottom: var(--space-1);
+}
+
+/* fingers: the line keeps its height; an invisible expander reaches the target's height, as the
+   segmented options do (styles.css). The opened text is positioned so its link stays on top. */
+@media (pointer: coarse) {
+  .settings-details > summary {
+    position: relative;
+  }
+
+  .settings-details > summary::after {
+    content: "";
+    position: absolute;
+    inset: calc((var(--fs-xs) * var(--lh-base) - var(--touch-target)) / 2) 0;
+  }
+
+  .settings-details > summary + * {
+    position: relative;
+  }
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* the controls sit in wells of the input color, so a card reads as one surface with holes */
+.settings-segmented {
+  background: var(--bg-input);
+}
+
+.settings-stepper {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-input);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.settings-stepper output {
+  min-width: 3.5em;
+  color: var(--text-strong);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+
+.settings-select {
+  max-width: 100%;
+}
+
+/* fingers: a select is a finger-sized target, like the file viewer's controls */
+@media (pointer: coarse) {
+  .settings-select {
+    height: max(44px, var(--touch-target));
+  }
+}
+
+.settings-font-input {
+  flex: 0 1 16rem;
+  min-width: 0;
+}
+
+/* the switch keeps a finger-sized box; the negative margin keeps that box from growing its row */
+.settings-toggle {
+  position: relative;
+  width: calc(var(--touch-target) + var(--space-2));
+  height: var(--touch-target);
+  margin-block: calc(var(--space-1) * -1);
+  padding: var(--space-2) var(--space-1);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.settings-toggle::before {
+  position: absolute;
+  inset: var(--space-3) var(--space-1);
+  content: "";
+  background: var(--bg-input);
+  border: var(--hairline) solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+
+/* the thumb sits 2px inside the track's edge, off and on */
+.settings-toggle-thumb {
+  position: absolute;
+  top: calc(var(--space-3) + 2px);
+  left: calc(var(--space-1) + 2px);
+  width: var(--space-4);
+  height: var(--space-4);
+  background: var(--text-dim);
+  border-radius: var(--radius-pill);
+  transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+
+.settings-toggle[aria-checked="true"]::before {
+  background: var(--primary-tint);
+  border-color: var(--primary);
+}
+
+.settings-toggle[aria-checked="true"] .settings-toggle-thumb {
+  background: var(--primary);
+  transform: translateX(var(--space-6));
+}
+
+@media (max-width: 640px) {
+  /* a control that needs the line gets it: under its label, as wide as the card */
+  .settings-row.is-wide {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .settings-row.is-wide > .settings-segmented {
+    display: flex;
+  }
+
+  .settings-row.is-wide > .settings-segmented > button {
+    flex: 1 1 0;
+    justify-content: center;
+    min-width: 0;
+  }
+
+  .settings-row.is-wide > .settings-font-input {
+    flex: 0 0 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-toggle::before,
+  .settings-toggle-thumb {
+    transition: none;
+  }
+}

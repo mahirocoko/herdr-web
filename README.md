@@ -1,155 +1,36 @@
-<div align="center">
-  <img src="public/favicon.svg" alt="Herdr Web logo" width="64" height="64" />
-  <h1>Herdr Web</h1>
-  <p>Read and steer your local coding-agent sessions from a browser or phone.</p>
-  <p>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="Apache 2.0 license" /></a>
-  </p>
-  <p>
-    <a href="#quick-start">Quick start</a> ·
-    <a href="#features">Features</a> ·
-    <a href="#remote-access">Remote access</a> ·
-    <a href="#security">Security</a> ·
-    <a href="#development">Development</a> ·
-    <a href="#documentation">Documentation</a>
-  </p>
-</div>
+# Herdr Web
 
----
+Private, source-native browser UI for the installed Herdr terminal manager. The complete frontend/backend is adopted from `devswha/herdr-web-ui` at `d918448647e41079c52047ffc96cdaac50ccba32`, rather than adapted through the former local API.
 
-Herdr Web is an independent companion for [Herdr](https://github.com/ogulcancelik/herdr), not an official Herdr project. It connects to your local Herdr daemon and makes its Spaces, Tabs, agent conversations and terminals available through a mobile-first web interface.
+## Run this fork
 
-Use it on the host through loopback, or privately from another device through Tailscale Serve. It is not a generic SSH client or an arbitrary remote shell.
+The approved project-local Bun **1.4.2** is selected by the wrapper; global Bun is not upgraded. Node must be real Node with the lock-pinned `@lydell/node-pty`. Herdr must already be installed/running (verified local host: 0.9.5, protocol 22).
 
-## Quick start
-
-You need **Bun** (1.3.11 or compatible) and a running **Herdr** daemon on macOS. The tracked host schema is Herdr 0.9.3, protocol 22; check compatibility before starting. Other host platforms are not verified.
-
-```bash
-git clone https://github.com/mahirocoko/herdr-web.git
-cd herdr-web
-bun install
-bun run schema:check
-bun run build
-bun run start
+```sh
+bash scripts/bun-project.sh run typecheck
+bash scripts/bun-project.sh run build
+bash scripts/bun-project.sh run test
+bash scripts/bun-project.sh run test:native
+bash scripts/bun-project.sh run source:verify
+bash scripts/bun-project.sh run start
 ```
 
-Open **http://127.0.0.1:8787**. The server binds only to loopback.
+Normal app: `http://127.0.0.1:8787`. Start in a named visible project terminal. `start`, `server` and `dev` all invoke the safe imported-builder launcher; none invokes upstream managed updates or its direct-main entrypoint. This is the real source client/native server, not the fictional demo. It serves the built `dist/` application; rebuild after client edits.
 
-`schema:check` compares the installed Herdr API schema with the tracked contract. Protocol mismatches fail closed at startup; use the schema check to catch other contract changes too.
+The server uses project-owned private state and the existing authenticated HOME. The previously configured private Tailscale Serve address remains owner-restricted; no new exposure/configuration is created. Legacy credentials, subscriptions, browser drafts and held evidence are preserved, not imported into source automatic queues. The same existing VAPID identity is copied privately so an already-permitted browser is not silently unsubscribed/rekeyed; subscription/policy stores are not bulk-translated and physical Push receipt is still unproven. Existing browser pages must reload after cutover; retired legacy action/controllers cannot write through the new API. Do not clear browser storage.
 
-## Features
+## Scope and evidence
 
-### Read conversations and terminals
+The 22:53 Settings refinement hides Subscription usage (including old palette requests and page links) without removing its backend. About identifies this fork and its pinned upstream source, not upstream update/install controls. Agent integrations describes local private Letta Code history separately from unsupported native session hooks; it performs no installation. App-owned Install app controls are removed; the PWA manifest, service worker and normal browser installation remain intact. The provider mark is Letta's unmodified official organization image, locally vendored with provenance. Terminal Pause fit detaches the fitted view and preserves its drained last screen without stopping the process; Resume Live obtains a fresh screen under current source authority. Pane replacement resets pause; switching to Chat leaves this terminal-only pause. The existing server serves the verified production build without a backend restart. Independent scoped desktop/mobile and actual Light/Dark checks passed, including populated-grid pause/detach/resume; human acceptance and native post-Stop recovery remain open. See the parity inventory for unexercised boundaries and intentional QA guard failures.
 
-- **Chat** is the default for agent panes. It reads native conversation records with messages, tool details, attachments and interactive questions. Readers support Letta, Agy, Codex, Claude, OMP, OmO, GJC and PI on the macOS host. If records are unavailable, Chat explains why and offers Terminal instead.
-- **Terminal** is the default for shell panes and remains available for agents. It streams real ANSI output, fits the native terminal grid to the browser and supports source scrolling. Your reading position stays put while you review older output.
-- **Question** is an additional reading surface for blocked-agent questions. Status changes do not replace the surface you selected. Panel remains an internal source fallback, not a primary header mode.
+The adopted source retains its complete UI, local-PC management, Chat/native history, Node PTY terminal, composer, prompt, filesystem/diff and workspace/tab/worktree implementations. A source implementation or shell fixture does **not** prove every provider/device feature. Optional account/login, forced usage refresh, paid voice, account proxy, public exposure, remote-PC mutation, plugin execution and managed-update capabilities return explicit approval-required/unavailable status rather than changing global accounts or configuration. Valid read-only subscription usage is retained; no OAuth refresh is performed. Provider-specific live Chat/input and physical Push remain separately scoped proof. Upstream has no Letta Chat reader; this fork now adapts read-only Letta history into the existing source Chat path with explicit bounded indexing/paging. Synthetic checks do not establish live rendering or Letta Send/Stop safety.
 
-### Navigate without mixing hierarchies
+The canonical coverage/status inventory and rollback references are in `docs/upstream-parity.md`. The reintegrated Letta reader has real read-only HTTP proof for newest/older pages, 304 and 409 without logging transcript bodies, plus independent live desktop/mobile rendering and visible older-history proof. Images remain unavailable-preview notices and full-output fetching is not implemented. An explicitly authorized fresh Letta conversation proved real Send/reply and Stop/interruption, but automatic post-Stop recovery is blocked by native lifecycle status remaining `working`; the web queue must not invent idle. Physical-device/PWA receipt and Mahiro's product acceptance remain separate; automated engineering checks are not human acceptance. The separate T194 provider checkpoint is not closed by this migration.
 
-- The **Space sidebar** and mobile drawer list Spaces, their activity, counts and lifecycle actions. They no longer contain a nested Tabs & Panes list.
-- The horizontal **Tab rail** switches between Tabs in the current Space. The separate **Tabs & Panes drawer** handles pane selection, New Shell Tab, Close Tab, notification policy and agent diagnostics through **Why?**.
-- **Search** finds Spaces, Tabs and Panes from the live snapshot. It is a compact palette on desktop and a bottom sheet on mobile.
-- **Needs input** shortcuts take you to agents waiting for attention. Activity indicators distinguish Working, Done and blocked states while retaining native attention information in accessible labels and tooltips.
+Never run bare `bun test` (the upstream test preload can start native sessions). `test` is unit-only and `test:native` uses a disposable shell-only fixture that refuses main/default targets. Broader source integration/browser/SSH/install scripts need their own explicit scope; do not run them as a generic smoke test.
 
-### Send input deliberately
+## Source, history and licenses
 
-- The composer preserves drafts and supports IME input. Chat keeps keyboard actions behind **More controls**; Terminal retains its key rail.
-- **Stop** requests Ctrl+C for the current agent. Acknowledgement is not completion: the UI waits for a fresh native state or reports an unconfirmed outcome without automatic retry.
-- **Commands & Keys** offers read-only repository shortcuts and browser-local custom actions. Draft-fill actions require an explicit Send. Personal actions can be created, edited, pinned and deleted; they do not sync between devices or write repository configuration.
-- Space and Tab creation/closure use target-bound requests and explicit confirmations. Close Tab cannot remove the last Tab in a Space. Unknown outcomes require inspection rather than automatic retry.
-- **Terminal Control** is opt-in and restricted to verified idle shell panes under an exclusive lease. Agent panes cannot enter it.
+`SOURCE_MANIFEST.json` records the pin, exclusions and explicit fork patches. `scripts/verify-upstream.ts` independently derives the pinned Git tree, checks source byte/mode ownership and rejects leftover legacy app owners; the manifest is not its own authority. Source UI/CSS conventions remain upstream-owned.
 
-### Dark workspace
-
-The compact, dark-only shell and Chat use layered neutral surfaces with vivid colors for actions, activity and recorded Skill labels. Base UI owns component behavior; project-owned tokens and CSS recipes own presentation.
-
-The current visual candidate studies BoardUI Dashboard and AI Chat without copying their assets. Earlier `devswha/herdr-web-ui` anatomy remains credited. Final visual acceptance is pending; see the [styling guide](docs/styling.md) for ownership and provenance.
-
-## Remote access
-
-Tailscale is optional. Configure private HTTPS on the host with Tailscale Serve:
-
-```bash
-tailscale serve --bg 8787
-tailscale serve status
-curl -fsS https://<device-name>.<tailnet-name>.ts.net/api/health
-```
-
-Remote input, lifecycle actions, Terminal Control and push management also require an authorized Tailscale login. Initialize owner identity and VAPID keys, then restart the server:
-
-```bash
-bun scripts/init-push.ts --owner-login <your-tailscale-login> --subject mailto:<your-email>
-```
-
-Configuration lives outside the repository in `~/.config/herdr-web/push-config.json`. Push enrollment is optional; owner authorization is still required for remote mutations and Terminal Control.
-
-### Web Push
-
-Optional **Needs input** and **Done** alerts identify the Space without including terminal output, prompts, code, paths or pane IDs.
-
-Needs input follows enabled Tabs. Done alerts once per observed work round, after every agent in the Space—including muted Tabs—is done or idle. At least one Tab must have notifications enabled. Empty shells, initial idle states and policy changes do not manufacture completion alerts.
-
-Push requires socket transport. On iOS, use Safari installed as a standalone PWA. Physical-device delivery and switching back to an existing PWA still require on-device verification.
-
-To remove the private HTTPS proxy:
-
-```bash
-tailscale serve --https=443 off
-```
-
-## Security
-
-- The Bun server binds to **127.0.0.1**, never raw LAN or `0.0.0.0`. Browsers do not receive Unix socket paths or raw Herdr RPC methods.
-- Requests use allowed Host checks and route-specific authorization. Mutations and WebSocket upgrades enforce same-origin boundaries; permissive CORS is not supported.
-- Remote mutations, Terminal Control and push management require `Tailscale-User-Login` to match the configured owner. Read-only event and observer streams do not apply that owner check. Keep access private through Tailscale Serve.
-- Pane actions bind to exact terminal/session identity; close confirmations bind to exact membership. Operation IDs prevent duplicate dispatch, and topology changes cannot overlap conflicting control or input operations.
-- There is no arbitrary shell endpoint or `--takeover` path. Terminal Control remains limited to one verified idle shell pane.
-
-For request validation, transport fallback and lease details, read the [transport architecture](docs/transport-architecture.md).
-
-## Development
-
-Run the backend and React Router dev server in separate terminals:
-
-```bash
-bun run start
-bun run dev
-```
-
-The dev server at **http://localhost:5173** proxies API and WebSocket requests to the backend on port 8787.
-
-```bash
-bun test                 # Deterministic tests; no daemon required
-bun run typecheck
-bun run build
-bun run test:coverage    # Global coverage floors
-bun run test:live        # Requires the local Herdr daemon
-```
-
-Use `bun run schema:check` to verify compatibility. Use `bun run schema:sync` only when intentionally updating the tracked host contract. [Development commands](docs/development-commands.md) documents configuration, transport options and the complete verification workflow.
-
-## Limits
-
-- One user and one active local Herdr daemon; macOS is the established host target.
-- Space/Tab lifecycle and Web Push require socket transport, not CLI fallback.
-- Native source scrolling is not agent-app scrolling. Alternate-screen applications expose their current screen, not source scrollback.
-- Physical-device behavior and final visual acceptance are not implied by automated tests.
-- Install from this repository. `package.json` is marked private to prevent accidental npm publication.
-
-## Documentation
-
-- [Project overview](docs/project-overview.md) — Features and behavior boundaries.
-- [Onboarding](docs/onboarding.md) — Architecture and setup.
-- [Transport architecture](docs/transport-architecture.md) — Socket bridge, authorization and action safety.
-- [Development commands](docs/development-commands.md) — Configuration and verification.
-- [Styling](docs/styling.md) — Presentation owners, tokens and reference provenance.
-- [File organization](docs/file-organization.md) — Source layout.
-- [Best practices](docs/best-practices.md) — Code conventions.
-- [Commit guide](docs/commit-guide.md) — Verification and staging.
-- [Agent guidance](AGENTS.md) — Repository rules for coding assistants.
-
-## License
-
-[Apache License 2.0](LICENSE).
+This fork retains its Apache-2.0 `LICENSE`; adopted source retains MIT copyright/permission in `UPSTREAM_LICENSE` and applicable `THIRD_PARTY_NOTICES.md` (including both dependency patches). Upstream readmes in `docs/upstream-reference/` and upstream installer/maintainer documents are reference material, not this fork's deployment instructions. Pre-cutover guides are explicitly historical under `docs/history/legacy/`; the old React Router application is no longer runnable in the canonical tree.

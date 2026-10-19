@@ -1,26 +1,38 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "useDefineForClassFields": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "ESNext",
-    "skipLibCheck": true,
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "moduleDetection": "force",
-    "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
+    "noUncheckedIndexedAccess": true,
     "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "types": [
+      "bun",
+      "react",
+      "react-dom",
+      "vite/client"
+    ],
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
     "paths": {
-      "@/*": ["./src/*"]
-    },
-    "rootDirs": [".", "./.react-router/types"],
-    "types": ["bun-types"]
+      "@shared/*": [
+        "./shared/*"
+      ]
+    }
   },
-  "include": ["src", "server", "app", ".react-router/types/**/*"]
+  "include": [
+    "src",
+    "server",
+    "shared",
+    "telemetry",
+    "vite.config.ts"
+  ]
 }

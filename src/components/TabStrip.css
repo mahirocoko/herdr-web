@@ -1,0 +1,268 @@
+/* herdr's tab row, over the pane: quiet names on a hairline, the open one underlined in amber */
+.tab-strip {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-1);
+  flex: 0 0 auto;
+  min-height: var(--control-h);
+  padding: 0 var(--space-3);
+  /* the strip's surface, which the + that covers the scrolling tabs paints too */
+  --strip-bg: var(--bg-panel);
+  background: var(--strip-bg);
+  border-bottom: var(--hairline) solid var(--border);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.tab-strip::-webkit-scrollbar {
+  display: none;
+}
+
+/* a split view half's row: its tabs scroll, as wide as they are, and the end (App's grip and
+   close) takes the rest of the row */
+.tab-strip-row {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 0;
+  /* the strip's own surface (below), so the end around the close is no band of another colour */
+  --strip-bg: var(--bg-panel);
+  background: var(--strip-bg);
+  border-bottom: var(--hairline) solid var(--border);
+}
+
+.tab-strip-row > .tab-strip {
+  flex: 0 1 auto;
+  min-width: 0;
+  border-bottom: 0;
+}
+
+.tab-strip-end {
+  display: flex;
+  align-items: stretch;
+  flex: 1 0 auto;
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+}
+
+.tab-strip-item {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+}
+
+/* the underline spans the name and the optional touch menu */
+.tab-strip-item.is-active {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.tab-strip-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  background: transparent;
+  border: 0;
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tab-strip-tab:hover,
+.tab-strip-tab:focus-visible {
+  color: var(--text-strong);
+}
+
+.tab-strip-tab[aria-selected="true"] {
+  color: var(--text-strong);
+}
+
+/* the name being typed, in the tab's own place */
+.tab-strip-rename {
+  align-self: center;
+  width: auto;
+  min-width: 0;
+  height: var(--chip-h);
+  margin: 0 var(--space-2);
+  padding: 0 var(--space-1);
+  font-size: var(--fs-sm);
+}
+
+.tab-strip-dot {
+  flex: 0 0 auto;
+  width: var(--dot-size);
+  height: var(--dot-size);
+  border-radius: var(--radius-pill);
+}
+
+.tab-strip-dot[data-status="working"] { background: var(--status-working); }
+.tab-strip-dot[data-status="blocked"] { background: var(--status-blocked); }
+.tab-strip-dot[data-status="done"] { background: var(--status-done); }
+/* waiting on its background work: something still runs, the agent does not */
+.tab-strip-dot[data-status="waiting"] { background: transparent; box-shadow: inset 0 0 0 1.5px var(--status-working); }
+
+/* Settings -> Status indicators, Dots or Symbols: the sidebar's herdr glyph and color, held still
+   (Sidebar.css .sidebar-status-glyph). Same specificity as the dot's rules, so order wins. */
+.tab-strip-glyph {
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.tab-strip-glyph[data-status] { background: transparent; box-shadow: none; }
+.tab-strip-glyph[data-status="working"],
+.tab-strip-glyph[data-status="waiting"] { color: var(--indicator-working); }
+.tab-strip-glyph[data-status="blocked"] { color: var(--indicator-blocked); }
+.tab-strip-glyph[data-status="done"] { color: var(--indicator-done); }
+
+/* The touch menu and + share the strip's small square controls. */
+.tab-strip-menu,
+.tab-strip-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+/* Touch and narrow layouts keep the ellipsis in view; a mouse on a wide screen draws it on the
+   selected tab while the strip is hovered or the tab has keyboard focus (below). */
+.tab-strip-menu { display: none; }
+
+.tab-strip-error {
+  align-self: center;
+  flex: 0 0 auto;
+  margin-left: var(--space-2);
+  color: var(--status-blocked);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+
+/* the + stays at the strip's end while the tabs scroll under it: more tabs than fit must not
+   take it off the screen */
+.tab-strip-add {
+  position: sticky;
+  right: 0;
+  background: var(--strip-bg);
+  /* the strip's own end padding, in the strip's colour: no tab shows past the + */
+  box-shadow: var(--space-3) 0 0 var(--strip-bg);
+}
+
+/* over the shared hover below: the hover tint sits on the strip's colour, never on a tab */
+.tab-strip .tab-strip-add:hover,
+.tab-strip .tab-strip-add:focus-visible {
+  background: linear-gradient(var(--bg-hover), var(--bg-hover)) var(--strip-bg);
+}
+
+.tab-strip-menu:hover,
+.tab-strip-menu:focus-visible,
+.tab-strip-add:hover,
+.tab-strip-add:focus-visible {
+  background: var(--bg-hover);
+  color: var(--text-strong);
+}
+
+.tab-strip-menu svg,
+.tab-strip-add svg {
+  width: 16px;
+  height: 16px;
+}
+
+@media (pointer: coarse), (max-width: 768px) {
+  .tab-strip-menu,
+  .tab-strip-add {
+    width: var(--touch-target);
+    height: var(--touch-target);
+  }
+
+  /* a one- or two-character name (탭 1) is still a finger's width; the ⋯ beside it is its own */
+  .tab-strip-tab {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+  }
+  .tab-strip-menu { display: inline-flex; }
+  .tab-strip-item.is-active .tab-strip-tab { padding-right: var(--space-1); }
+}
+
+/* A mouse keeps its right-click and the keyboard its menu key; the ellipsis is the route in
+   plain sight. It holds its place at rest, hidden, so the strip never reflows under the pointer:
+   the pointer over the strip, the tab's keyboard focus, its own, or its open menu fade it in.
+   Hidden with visibility too: a Shift+Tab from the + lands on the tab, not on something unseen,
+   and nothing invisible takes a press. Between the tab's focus and the button's there is an
+   instant in which neither has it while the item still has it within, and a hidden button cannot
+   take the focus then: the fade's delay used to carry it over, reduced motion has no fade, so the
+   item's :focus-within without a focused child keeps the button in view through the handoff. */
+@media (hover: hover) and (pointer: fine) and (min-width: 769px) {
+  .tab-strip-menu {
+    display: inline-flex;
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      opacity var(--dur-fast) var(--ease-out),
+      visibility 0s linear var(--dur-fast);
+  }
+
+  .tab-strip:hover .tab-strip-menu,
+  .tab-strip-item:has(> .tab-strip-tab:focus-visible) .tab-strip-menu,
+  .tab-strip-item:focus-within:not(:has(:focus)) .tab-strip-menu,
+  .tab-strip-menu:focus-visible,
+  .tab-strip-menu[aria-expanded="true"] {
+    opacity: 1;
+    visibility: visible;
+    transition-delay: 0s;
+  }
+
+  .tab-strip-item.is-active .tab-strip-tab { padding-right: var(--space-1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-strip-menu { transition: none; }
+}
+
+/* From 769px the header over the pane is the pane's surface (styles.css), and the strip under
+   it is the same one, not a band of the panel's colour between the two: the terminal's colour,
+   or the chat's, where the header has no rule and the strip's hairline is the one line over the
+   transcript. Below that the header is the panel's bar and the strip stays with it. */
+@media (min-width: 769px) {
+  .tab-strip,
+  .tab-strip-row {
+    --strip-bg: var(--term-bg);
+  }
+
+  .pane-column.is-chat .tab-strip,
+  .pane-column.is-chat .tab-strip-row,
+  .pane-slot.is-chat .tab-strip,
+  .pane-slot.is-chat .tab-strip-row {
+    --strip-bg: var(--bg);
+  }
+}
+
+/* Only the insertion line moves before herdr acknowledges a drop. */
+.tab-strip-item.is-dragging { opacity: 0.55; }
+.tab-strip-item.is-drop-before::before,
+.tab-strip-item.is-drop-after::after {
+  content: "";
+  position: absolute;
+  top: var(--space-1);
+  bottom: var(--space-1);
+  width: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.tab-strip-item.is-drop-before::before { left: 0; }
+.tab-strip-item.is-drop-after::after { right: 0; }

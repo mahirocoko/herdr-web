@@ -1,0 +1,482 @@
+/* The Settings shortcut can open it while a file preview still holds its history entry: only
+   then is it raised, over the preview. On its own it stays on the layer every dialog shares, so
+   the file browser, later in the document, still opens above it; the palette has a layer of its own. */
+.settings-over-preview {
+  z-index: calc(var(--z-modal) + 2);
+}
+
+/* Two columns from 641px: the list of pages, and the page it opened. A phone shows one of the
+   two at a time, as a sheet of a fixed height so that turning a page never moves its edge. */
+.settings-dialog {
+  display: grid;
+  grid-template-columns: 13rem minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(100%, var(--content-w));
+  height: min(100%, 40rem);
+}
+
+.settings-dialog .icon-button svg {
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
+.settings-header {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.settings-nav {
+  display: flex;
+  grid-column: 1;
+  grid-row: 1 / 3;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+  padding: var(--space-4) var(--space-3);
+  overflow-y: auto;
+  background: var(--bg);
+  border-right: var(--hairline) solid var(--border);
+}
+
+.settings-nav-title {
+  margin: 0;
+  padding: var(--space-1) var(--space-3) 0;
+  color: var(--text-strong);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+}
+
+.settings-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-tab {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--control-h);
+  padding: 0 var(--space-3);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.settings-tab svg {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: var(--text-dim);
+}
+
+.settings-tab > span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* only a list that leads somewhere else points there: a phone's */
+.settings-tab-chevron {
+  display: none;
+}
+
+@media (hover: hover) {
+  .settings-tab:hover {
+    background: var(--bg-elevated);
+  }
+}
+
+.settings-tab[aria-selected="true"] {
+  background: var(--bg-hover);
+  color: var(--text-strong);
+}
+
+/* the open page carries the selection color on its glyph, as a chosen segment does */
+.settings-tab[aria-selected="true"] svg {
+  color: var(--accent);
+}
+
+.settings-body,
+.settings-key-bar-body {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding-bottom: var(--space-6);
+}
+
+.settings-body > * {
+  flex: 0 0 auto;
+}
+
+.settings-body[hidden] {
+  display: none;
+}
+
+/* a change the server refused to save (SettingsDialog.tsx SaveFailure), above whichever page is
+   open: the sentence in the blocked color, the server's own words behind its Details word, in the
+   interface face as every failure's folded line is (styles.css) */
+.settings-save-error > p,
+.settings-save-error > .settings-details > summary {
+  margin: 0;
+  color: var(--status-blocked);
+  font-size: var(--fs-xs);
+}
+
+.settings-save-error > .settings-details > code {
+  display: block;
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  overflow-wrap: anywhere;
+}
+
+.settings-keys {
+  display: inline-flex;
+  gap: var(--space-1);
+}
+
+.settings-shortcut-select {
+  width: 14rem;
+}
+
+.settings-shortcut-control {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settings-shortcut-record[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--text-strong);
+}
+
+.settings-shortcut-search {
+  width: 100%;
+}
+
+.settings-integration-check {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--status-done);
+}
+
+.settings-integration-command {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+.settings-link {
+  color: var(--accent);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+
+/* a column, not a grid: a grid's track is as wide as a text field asks to be, and on a phone
+   that pushed each row's Remove button out of the card */
+.quick-replies-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quick-replies-list:empty {
+  display: none;
+}
+
+.quick-replies-list li {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.quick-replies-list .input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Voice input: the key field and its buttons share a row, the notes stay dim */
+.voice-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.voice-key-input {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.voice-error {
+  display: block;
+  color: var(--danger-text);
+}
+
+/* Subscription usage: a row per account: mark, name, account, then move and show */
+.usage-accounts ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.usage-accounts-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--touch-target);
+  padding: 0 var(--space-2) 0 var(--space-4);
+}
+
+.usage-accounts-row + .usage-accounts-row {
+  border-top: var(--hairline) solid var(--border);
+}
+
+.usage-accounts-name {
+  flex: 0 0 auto;
+  color: var(--text-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+
+.usage-accounts-account {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-accounts-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.usage-accounts-actions .icon-button {
+  color: var(--text-dim);
+}
+
+/* the ends of the list cannot move further: that arrow keeps its place in the column, unseen */
+.usage-accounts-actions .icon-button:disabled {
+  visibility: hidden;
+}
+
+.usage-accounts-visibility[aria-checked="true"] {
+  color: var(--text);
+}
+
+/* a hidden account stays in the list, faded, so it can be shown again */
+.usage-accounts-row.is-hidden > :not(.usage-accounts-actions) {
+  opacity: 0.45;
+}
+
+@media (pointer: fine) {
+  .usage-accounts-actions .icon-button {
+    width: 28px;
+    height: 28px;
+  }
+
+  .usage-accounts-actions .icon-button svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .settings-dialog {
+    grid-template-columns: minmax(0, 1fr);
+    height: 92%;
+  }
+
+  .settings-header,
+  .settings-body,
+  .settings-key-bar-body {
+    grid-column: 1;
+  }
+
+  /* the list is the sheet's whole body here, drawn as one card of rows */
+  .settings-nav {
+    grid-column: 1;
+    grid-row: 2;
+    padding: var(--space-4);
+    background: transparent;
+    border-right: 0;
+  }
+
+  .settings-nav-title {
+    display: none;
+  }
+
+  .settings-tabs {
+    gap: 0;
+    background: var(--bg-elevated);
+    border: var(--hairline) solid var(--border);
+    border-radius: var(--radius-lg);
+  }
+
+  .settings-tab {
+    min-height: var(--keybar-h);
+    padding: 0 var(--space-3) 0 var(--space-4);
+    border-radius: 0;
+    font-size: var(--fs-md);
+  }
+
+  .settings-tab + .settings-tab {
+    border-top: var(--hairline) solid var(--border);
+  }
+
+  .settings-tab svg {
+    width: var(--icon-size);
+    height: var(--icon-size);
+  }
+
+  .settings-tab-chevron {
+    display: block;
+  }
+
+  .settings-shortcut-select {
+    width: 100%;
+  }
+
+  .settings-shortcut-control {
+    width: 100%;
+  }
+
+  .settings-shortcut-control .settings-shortcut-select {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* the key takes the line; Save and Remove share the next one */
+  .voice-key-input {
+    flex-basis: 100%;
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-tab {
+    transition: none;
+  }
+}
+
+/* a finger presses a page's row as an iPhone list row is pressed: it fills, it does not dim (styles.css) */
+@media (hover: none) and (pointer: coarse) {
+  .settings-tab:active {
+    opacity: 1;
+    background: var(--bg-elevated);
+  }
+}
+
+/* the font field: the typed list, and where the browser can list them a Browse button that opens the installed fonts under it */
+.settings-font-field {
+  display: flex;
+  flex: 0 1 18rem;
+  width: 18rem;
+  max-width: 100%;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* the installed fonts open under the field and make the row tall: its label stays at the top, beside the field */
+.settings-row:has(> .settings-font-field .settings-font-picker) {
+  align-items: flex-start;
+}
+
+.settings-font-line {
+  display: flex;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.settings-font-line > .settings-font-input {
+  flex: 1 1 0;
+}
+
+.settings-font-search {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.settings-font-browse {
+  flex: 0 0 auto;
+}
+
+.settings-font-picker {
+  box-sizing: border-box;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--bg-elevated);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.settings-font-list {
+  max-height: 14rem;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.settings-font-option {
+  display: block;
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  overflow: hidden;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-strong);
+  font-size: var(--fs-md);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.settings-font-option:hover,
+.settings-font-option:focus-visible {
+  background: var(--bg-hover);
+}
+
+.settings-font-note,
+.settings-font-empty {
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+  list-style: none;
+}
+
+@media (max-width: 640px) {
+  .settings-row.is-wide > .settings-font-field {
+    flex: 0 0 auto;
+  }
+}

@@ -1,0 +1,124 @@
+/*
+ * Touch key bar under the terminal (KeyBar.tsx): the keys a soft keyboard has
+ * no room for. Hidden on fine-pointer desktops, shown on coarse pointers and
+ * narrow viewports. A key never takes focus (KeyBar.tsx cancels pointerdown and
+ * mousedown), so the soft keyboard stays up and xterm's textarea keeps every
+ * keystroke; the row scrolls sideways when the keys outgrow the viewport, and the
+ * edge that hides more keys fades out (KeyBar.tsx sets data-overflow-start/end).
+ */
+
+.key-bar {
+  /* the fade's width at an edge with keys out of view */
+  --keybar-fade: var(--space-6);
+  --keybar-fade-start: 0px;
+  --keybar-fade-end: 0px;
+  display: none;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--keybar-h);
+  /* the keys stand off the pane's edges rather than against its border */
+  padding: 0 var(--space-2);
+  border-top: var(--hairline) solid var(--border);
+  background: var(--bg-panel);
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.key-bar::-webkit-scrollbar {
+  display: none;
+}
+
+/* a mask rather than a painted overlay: the fade is the bar's own colours in every palette, it
+   needs no element over the scroller, and it is static, so reduced motion has nothing to stop */
+.key-bar[data-overflow-start],
+.key-bar[data-overflow-end] {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    currentColor var(--keybar-fade-start),
+    currentColor calc(100% - var(--keybar-fade-end)),
+    transparent
+  );
+}
+
+.key-bar[data-overflow-start] {
+  --keybar-fade-start: var(--keybar-fade);
+}
+
+.key-bar[data-overflow-end] {
+  --keybar-fade-end: var(--keybar-fade);
+}
+
+/* the bar at the bottom of the screen (KeyBar.tsx) keeps clear of the home indicator, though
+   less than the whole safe area: the bar's own padding around its keys is part of that room,
+   as the composer's is (Composer.css) */
+.key-bar.is-at-screen-bottom {
+  height: calc(var(--keybar-h) + max(0px, env(safe-area-inset-bottom, 0px) - var(--space-2)));
+  padding-bottom: max(0px, calc(env(safe-area-inset-bottom, 0px) - var(--space-2)));
+}
+
+.key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  /* the touch target in both directions; a wider cap (Shift, Enter) grows the key, never shrinks it */
+  min-width: var(--touch-target);
+  height: var(--touch-target);
+  padding: 0 var(--space-1);
+  background: transparent;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.key svg {
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
+/* hover only where a pointer can hover: a tapped key must not stay lit */
+@media (hover: hover) {
+  .key:hover {
+    background: var(--bg-hover);
+  }
+}
+
+.key:active,
+.key.is-armed {
+  background: var(--bg-elevated);
+  border-color: var(--accent);
+  color: var(--text-strong);
+}
+
+/* a key shows its press in its own colours, not with the dim other buttons take (styles.css) */
+.key:active {
+  opacity: 1;
+}
+
+@media (pointer: coarse), (max-width: 768px) {
+  .key-bar {
+    display: flex;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .key {
+    transition: none;
+  }
+}

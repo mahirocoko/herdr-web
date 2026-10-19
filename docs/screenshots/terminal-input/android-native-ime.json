@@ -1,0 +1,1359 @@
+{
+  "android": "16",
+  "chrome": "133.0.6943.137",
+  "gboard": "15.1.08.726012951-preload-x86_64",
+  "results": [
+    {
+      "name": "input line",
+      "text": "한글 "
+    },
+    {
+      "name": "word commit",
+      "text": "한글 "
+    },
+    {
+      "name": "final consonant",
+      "text": "갑사 "
+    },
+    {
+      "name": "delete during composition",
+      "text": "한글 "
+    },
+    {
+      "name": "delete then compose 1",
+      "text": "가나다 한글\r"
+    },
+    {
+      "name": "delete then compose 2",
+      "text": "가나다 한글\r"
+    },
+    {
+      "name": "delete then compose 3",
+      "text": "가나다 한글\r"
+    }
+  ],
+  "events": [
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": false,
+      "value": ""
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": ""
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㅎ",
+      "value": ""
+    },
+    {
+      "type": "input",
+      "data": "ㅎ",
+      "composing": true,
+      "value": "ㅎ"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "ㅎ"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "하",
+      "value": "ㅎ"
+    },
+    {
+      "type": "input",
+      "data": "하",
+      "composing": true,
+      "value": "하"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "하"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한",
+      "value": "하"
+    },
+    {
+      "type": "input",
+      "data": "한",
+      "composing": true,
+      "value": "한"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한ㄱ",
+      "value": "한"
+    },
+    {
+      "type": "input",
+      "data": "한ㄱ",
+      "composing": true,
+      "value": "한ㄱ"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한ㄱ"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한그",
+      "value": "한ㄱ"
+    },
+    {
+      "type": "input",
+      "data": "한그",
+      "composing": true,
+      "value": "한그"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한그"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한글",
+      "value": "한그"
+    },
+    {
+      "type": "input",
+      "data": "한글",
+      "composing": true,
+      "value": "한글"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한글",
+      "value": "한글"
+    },
+    {
+      "type": "input",
+      "data": "한글",
+      "composing": true,
+      "value": "한글"
+    },
+    {
+      "type": "compositionend",
+      "data": "한글",
+      "value": "한글"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": false,
+      "value": "한글"
+    },
+    {
+      "type": "input",
+      "data": " ",
+      "composing": false,
+      "value": "한글 "
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": false,
+      "value": "한글 "
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "한글 "
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㄱ",
+      "value": "한글 "
+    },
+    {
+      "type": "input",
+      "data": "ㄱ",
+      "composing": true,
+      "value": "한글 ㄱ"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글 ㄱ"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "가",
+      "value": "한글 ㄱ"
+    },
+    {
+      "type": "input",
+      "data": "가",
+      "composing": true,
+      "value": "한글 가"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글 가"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "갑",
+      "value": "한글 가"
+    },
+    {
+      "type": "input",
+      "data": "갑",
+      "composing": true,
+      "value": "한글 갑"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글 갑"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "값",
+      "value": "한글 갑"
+    },
+    {
+      "type": "input",
+      "data": "값",
+      "composing": true,
+      "value": "한글 값"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글 값"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "갑사",
+      "value": "한글 값"
+    },
+    {
+      "type": "input",
+      "data": "갑사",
+      "composing": true,
+      "value": "한글 갑사"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글 갑사"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "갑사",
+      "value": "한글 갑사"
+    },
+    {
+      "type": "input",
+      "data": "갑사",
+      "composing": true,
+      "value": "한글 갑사"
+    },
+    {
+      "type": "compositionend",
+      "data": "갑사",
+      "value": "한글 갑사"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": false,
+      "value": "한글 갑사"
+    },
+    {
+      "type": "input",
+      "data": " ",
+      "composing": false,
+      "value": "한글 갑사 "
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": false,
+      "value": "한글 갑사 "
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "한글 갑사 "
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㅎ",
+      "value": "한글 갑사 "
+    },
+    {
+      "type": "input",
+      "data": "ㅎ",
+      "composing": true,
+      "value": "한글 갑사 ㅎ"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글 갑사 ㅎ"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "하",
+      "value": "한글 갑사 ㅎ"
+    },
+    {
+      "type": "input",
+      "data": "하",
+      "composing": true,
+      "value": "한글 갑사 하"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글 갑사 하"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한",
+      "value": "한글 갑사 하"
+    },
+    {
+      "type": "input",
+      "data": "한",
+      "composing": true,
+      "value": "한글 갑사 한"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글 갑사 한"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한ㄱ",
+      "value": "한글 갑사 한"
+    },
+    {
+      "type": "input",
+      "data": "한ㄱ",
+      "composing": true,
+      "value": "한글 갑사 한ㄱ"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글 갑사 한ㄱ"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한그",
+      "value": "한글 갑사 한ㄱ"
+    },
+    {
+      "type": "input",
+      "data": "한그",
+      "composing": true,
+      "value": "한글 갑사 한그"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글 갑사 한그"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한ㄱ",
+      "value": "한글 갑사 한그"
+    },
+    {
+      "type": "input",
+      "data": "한ㄱ",
+      "composing": true,
+      "value": "한글 갑사 한ㄱ"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글 갑사 한ㄱ"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한그",
+      "value": "한글 갑사 한ㄱ"
+    },
+    {
+      "type": "input",
+      "data": "한그",
+      "composing": true,
+      "value": "한글 갑사 한그"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글 갑사 한그"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한글",
+      "value": "한글 갑사 한그"
+    },
+    {
+      "type": "input",
+      "data": "한글",
+      "composing": true,
+      "value": "한글 갑사 한글"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글 갑사 한글"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한글",
+      "value": "한글 갑사 한글"
+    },
+    {
+      "type": "input",
+      "data": "한글",
+      "composing": true,
+      "value": "한글 갑사 한글"
+    },
+    {
+      "type": "compositionend",
+      "data": "한글",
+      "value": "한글 갑사 한글"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": false,
+      "value": "한글 갑사 한글"
+    },
+    {
+      "type": "input",
+      "data": " ",
+      "composing": false,
+      "value": "한글 갑사 한글 "
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": false,
+      "value": "한글 갑사 한글 "
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "한글 갑사 한글 "
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㄱ",
+      "value": "한글 갑사 한글 "
+    },
+    {
+      "type": "input",
+      "data": "ㄱ",
+      "composing": true,
+      "value": "한글 갑사 한글 ㄱ"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글 갑사 한글 ㄱ"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "가",
+      "value": "한글 갑사 한글 ㄱ"
+    },
+    {
+      "type": "input",
+      "data": "가",
+      "composing": true,
+      "value": "한글 갑사 한글 가"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글 갑사 한글 가"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "간",
+      "value": "한글 갑사 한글 가"
+    },
+    {
+      "type": "input",
+      "data": "간",
+      "composing": true,
+      "value": "한글 갑사 한글 간"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글 갑사 한글 간"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "가나",
+      "value": "한글 갑사 한글 간"
+    },
+    {
+      "type": "input",
+      "data": "가나",
+      "composing": true,
+      "value": "한글 갑사 한글 가나"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글 갑사 한글 가나"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "가낟",
+      "value": "한글 갑사 한글 가나"
+    },
+    {
+      "type": "input",
+      "data": "가낟",
+      "composing": true,
+      "value": "한글 갑사 한글 가낟"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글 갑사 한글 가낟"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "가나다",
+      "value": "한글 갑사 한글 가낟"
+    },
+    {
+      "type": "input",
+      "data": "가나다",
+      "composing": true,
+      "value": "한글 갑사 한글 가나다"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글 갑사 한글 가나다"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "가나다",
+      "value": "한글 갑사 한글 가나다"
+    },
+    {
+      "type": "input",
+      "data": "가나다",
+      "composing": true,
+      "value": "한글 갑사 한글 가나다"
+    },
+    {
+      "type": "compositionend",
+      "data": "가나다",
+      "value": "한글 갑사 한글 가나다"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": false,
+      "value": "한글 갑사 한글 가나다"
+    },
+    {
+      "type": "input",
+      "data": " ",
+      "composing": false,
+      "value": "한글 갑사 한글 가나다 "
+    },
+    {
+      "type": "keydown",
+      "key": "Backspace",
+      "composing": false,
+      "value": "한글 갑사 한글 가나다 "
+    },
+    {
+      "type": "keydown",
+      "key": "Backspace",
+      "composing": false,
+      "value": ""
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": false,
+      "value": ""
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": ""
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㅎ",
+      "value": ""
+    },
+    {
+      "type": "input",
+      "data": "ㅎ",
+      "composing": true,
+      "value": "ㅎ"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "ㅎ"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "하",
+      "value": "ㅎ"
+    },
+    {
+      "type": "input",
+      "data": "하",
+      "composing": true,
+      "value": "하"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "하"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한",
+      "value": "하"
+    },
+    {
+      "type": "input",
+      "data": "한",
+      "composing": true,
+      "value": "한"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한ㄱ",
+      "value": "한"
+    },
+    {
+      "type": "input",
+      "data": "한ㄱ",
+      "composing": true,
+      "value": "한ㄱ"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한ㄱ"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한그",
+      "value": "한ㄱ"
+    },
+    {
+      "type": "input",
+      "data": "한그",
+      "composing": true,
+      "value": "한그"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한그"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한글",
+      "value": "한그"
+    },
+    {
+      "type": "input",
+      "data": "한글",
+      "composing": true,
+      "value": "한글"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한글",
+      "value": "한글"
+    },
+    {
+      "type": "input",
+      "data": "한글",
+      "composing": true,
+      "value": "한글"
+    },
+    {
+      "type": "compositionend",
+      "data": "한글",
+      "value": "한글"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": false,
+      "value": "한글"
+    },
+    {
+      "type": "keydown",
+      "key": "Enter",
+      "composing": false,
+      "value": "한글"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": false,
+      "value": ""
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": ""
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㄱ",
+      "value": ""
+    },
+    {
+      "type": "input",
+      "data": "ㄱ",
+      "composing": true,
+      "value": "ㄱ"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "ㄱ"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "가",
+      "value": "ㄱ"
+    },
+    {
+      "type": "input",
+      "data": "가",
+      "composing": true,
+      "value": "가"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "가"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "간",
+      "value": "가"
+    },
+    {
+      "type": "input",
+      "data": "간",
+      "composing": true,
+      "value": "간"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "간"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "가나",
+      "value": "간"
+    },
+    {
+      "type": "input",
+      "data": "가나",
+      "composing": true,
+      "value": "가나"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "가나"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "가낟",
+      "value": "가나"
+    },
+    {
+      "type": "input",
+      "data": "가낟",
+      "composing": true,
+      "value": "가낟"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "가낟"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "가나다",
+      "value": "가낟"
+    },
+    {
+      "type": "input",
+      "data": "가나다",
+      "composing": true,
+      "value": "가나다"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "가나다"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "가나다",
+      "value": "가나다"
+    },
+    {
+      "type": "input",
+      "data": "가나다",
+      "composing": true,
+      "value": "가나다"
+    },
+    {
+      "type": "compositionend",
+      "data": "가나다",
+      "value": "가나다"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": false,
+      "value": "가나다"
+    },
+    {
+      "type": "input",
+      "data": " ",
+      "composing": false,
+      "value": "가나다 "
+    },
+    {
+      "type": "keydown",
+      "key": "Backspace",
+      "composing": false,
+      "value": "가나다 "
+    },
+    {
+      "type": "keydown",
+      "key": "Backspace",
+      "composing": false,
+      "value": ""
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": false,
+      "value": ""
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": ""
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㅎ",
+      "value": ""
+    },
+    {
+      "type": "input",
+      "data": "ㅎ",
+      "composing": true,
+      "value": "ㅎ"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "ㅎ"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "하",
+      "value": "ㅎ"
+    },
+    {
+      "type": "input",
+      "data": "하",
+      "composing": true,
+      "value": "하"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "하"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한",
+      "value": "하"
+    },
+    {
+      "type": "input",
+      "data": "한",
+      "composing": true,
+      "value": "한"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한ㄱ",
+      "value": "한"
+    },
+    {
+      "type": "input",
+      "data": "한ㄱ",
+      "composing": true,
+      "value": "한ㄱ"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한ㄱ"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한그",
+      "value": "한ㄱ"
+    },
+    {
+      "type": "input",
+      "data": "한그",
+      "composing": true,
+      "value": "한그"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한그"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한글",
+      "value": "한그"
+    },
+    {
+      "type": "input",
+      "data": "한글",
+      "composing": true,
+      "value": "한글"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한글",
+      "value": "한글"
+    },
+    {
+      "type": "input",
+      "data": "한글",
+      "composing": true,
+      "value": "한글"
+    },
+    {
+      "type": "compositionend",
+      "data": "한글",
+      "value": "한글"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": false,
+      "value": "한글"
+    },
+    {
+      "type": "keydown",
+      "key": "Enter",
+      "composing": false,
+      "value": "한글"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": false,
+      "value": ""
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": ""
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㄱ",
+      "value": ""
+    },
+    {
+      "type": "input",
+      "data": "ㄱ",
+      "composing": true,
+      "value": "ㄱ"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "ㄱ"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "가",
+      "value": "ㄱ"
+    },
+    {
+      "type": "input",
+      "data": "가",
+      "composing": true,
+      "value": "가"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "가"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "간",
+      "value": "가"
+    },
+    {
+      "type": "input",
+      "data": "간",
+      "composing": true,
+      "value": "간"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "간"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "가나",
+      "value": "간"
+    },
+    {
+      "type": "input",
+      "data": "가나",
+      "composing": true,
+      "value": "가나"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "가나"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "가낟",
+      "value": "가나"
+    },
+    {
+      "type": "input",
+      "data": "가낟",
+      "composing": true,
+      "value": "가낟"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "가낟"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "가나다",
+      "value": "가낟"
+    },
+    {
+      "type": "input",
+      "data": "가나다",
+      "composing": true,
+      "value": "가나다"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "가나다"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "가나다",
+      "value": "가나다"
+    },
+    {
+      "type": "input",
+      "data": "가나다",
+      "composing": true,
+      "value": "가나다"
+    },
+    {
+      "type": "compositionend",
+      "data": "가나다",
+      "value": "가나다"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": false,
+      "value": "가나다"
+    },
+    {
+      "type": "input",
+      "data": " ",
+      "composing": false,
+      "value": "가나다 "
+    },
+    {
+      "type": "keydown",
+      "key": "Backspace",
+      "composing": false,
+      "value": "가나다 "
+    },
+    {
+      "type": "keydown",
+      "key": "Backspace",
+      "composing": false,
+      "value": ""
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": false,
+      "value": ""
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": ""
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㅎ",
+      "value": ""
+    },
+    {
+      "type": "input",
+      "data": "ㅎ",
+      "composing": true,
+      "value": "ㅎ"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "ㅎ"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "하",
+      "value": "ㅎ"
+    },
+    {
+      "type": "input",
+      "data": "하",
+      "composing": true,
+      "value": "하"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "하"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한",
+      "value": "하"
+    },
+    {
+      "type": "input",
+      "data": "한",
+      "composing": true,
+      "value": "한"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한ㄱ",
+      "value": "한"
+    },
+    {
+      "type": "input",
+      "data": "한ㄱ",
+      "composing": true,
+      "value": "한ㄱ"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한ㄱ"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한그",
+      "value": "한ㄱ"
+    },
+    {
+      "type": "input",
+      "data": "한그",
+      "composing": true,
+      "value": "한그"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한그"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한글",
+      "value": "한그"
+    },
+    {
+      "type": "input",
+      "data": "한글",
+      "composing": true,
+      "value": "한글"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": true,
+      "value": "한글"
+    },
+    {
+      "type": "compositionupdate",
+      "data": "한글",
+      "value": "한글"
+    },
+    {
+      "type": "input",
+      "data": "한글",
+      "composing": true,
+      "value": "한글"
+    },
+    {
+      "type": "compositionend",
+      "data": "한글",
+      "value": "한글"
+    },
+    {
+      "type": "keydown",
+      "key": "Unidentified",
+      "composing": false,
+      "value": "한글"
+    },
+    {
+      "type": "keydown",
+      "key": "Enter",
+      "composing": false,
+      "value": "한글"
+    }
+  ]
+}

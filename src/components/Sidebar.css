@@ -1,0 +1,711 @@
+.sidebar-shell {
+  /* One grid for every row: a leading cell that says who or what the row is, the title, and a
+     trailing cell that says how it is. The two cells are the columns of the header zone's own
+     buttons above the list. Aliases of existing tokens only. */
+  --side-gutter: var(--space-3);
+  --side-box: var(--control-h);
+  --side-row: var(--control-h);
+  --side-row-2: calc(var(--control-h) + var(--space-3));
+  --side-action: var(--space-6);
+  --side-hover: color-mix(in srgb, var(--bg-hover) 50%, var(--bg-panel));
+  --side-selected: var(--bg-hover);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg-panel);
+}
+
+.sidebar-list {
+  padding: 0 var(--side-gutter);
+}
+
+/* a section head (Agents): quiet words, never a rule */
+.sidebar-section-label {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: var(--side-row);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-regular);
+  border-radius: var(--radius-md);
+  line-height: var(--lh-tight);
+  text-align: left;
+}
+
+button.sidebar-section-label:focus-visible { outline-offset: calc(var(--ring-offset) * -1); }
+
+@media (hover: hover) {
+  button.sidebar-section-label:hover { color: var(--text); }
+}
+
+/* the leading cell: a coding agent's brand mark, else the place's own glyph */
+.sidebar-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 var(--side-box);
+  width: var(--side-box);
+  color: var(--text-dim);
+}
+
+.sidebar-mark svg {
+  display: block;
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
+/* the project's own icon, in the folder glyph's cell */
+.workspace-favicon img {
+  display: block;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+}
+
+/* the marks that ride currentColor (codex, cursor, pi) read as the title does */
+.sidebar-mark .agent-mark {
+  display: inline-flex;
+  color: var(--text);
+}
+
+/* also the connecting shell's one line, which sits outside the grid */
+.tree-state {
+  margin: 0;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--side-box, var(--space-2));
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+}
+
+/* an empty PC: the words, and the one thing to do about them */
+.tree-state-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-2) 0;
+  padding: var(--space-4);
+  border: var(--hairline) dashed var(--border);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.tree-state-empty .tree-state { padding: 0; }
+
+.workspace-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Pinned rows, agents and workspaces alike, stand first in a card: an edge, not a fill, so a row's
+   hover and selection read inside it as anywhere else, its corner the rows' own plus its padding.
+   The list under it follows a gap below. */
+/* Pinned rows stand first in a card whose top edge carries "── Pinned ──", like a fieldset's
+   legend: the caption sits on the line, masked by the sidebar's own background. The list carries the
+   name for screen readers, so the caption is hidden from them. */
+.sidebar-pinned {
+  padding: var(--space-2) var(--space-1) var(--space-1);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.sidebar-pinned + ul { margin-top: var(--space-2); }
+
+.sidebar-pinned-label {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* half the caption's height above the card's edge, half below it */
+  margin: var(--space-1) 0 calc(var(--fs-2xs) * var(--lh-tight) / -2);
+  color: var(--text-dim);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-caps);
+  line-height: var(--lh-tight);
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.sidebar-pinned-label > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding-inline: var(--space-2);
+  background: var(--bg-panel);
+}
+
+.sidebar-pinned-label svg {
+  flex: none;
+  width: 1em;
+  height: 1em;
+}
+
+.workspace {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-md);
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.pane-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pane-item {
+  position: relative;
+  border-radius: var(--radius-md);
+}
+
+/* the trailing padding keeps the status cell, which the selector draws at the row's right edge */
+.workspace-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: var(--side-row);
+  padding-right: var(--side-box);
+  border-radius: var(--radius-md);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.pane-select {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  align-self: stretch;
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-md);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+/* One indent level. A linked worktree keeps herdr's repository workspace as its parent and sits
+   under that row's mark, clear of the folder column. The fill stays as wide as the list and the
+   row's content moves. */
+.worktree-children .workspace-header { padding-left: var(--side-box); }
+
+/* herdr's tree: a worktree hangs from its repository's folder on a dim branch, a tee for each
+   but the last and an elbow for the last, drawn in the indent and never in the way of a click */
+.worktree-children .workspace-group > .workspace-header::before,
+.worktree-children .workspace-group > .workspace-header::after {
+  position: absolute;
+  left: calc(var(--side-box) / 2);
+  content: "";
+  background: var(--border-strong);
+  pointer-events: none;
+}
+
+.worktree-children .workspace-group > .workspace-header::before {
+  top: 0;
+  bottom: 0;
+  width: var(--hairline);
+}
+
+.worktree-children .workspace-group:last-child > .workspace-header::before { bottom: 50%; }
+
+.worktree-children .workspace-group > .workspace-header::after {
+  top: 50%;
+  width: calc(var(--side-box) / 2 - var(--space-1));
+  height: var(--hairline);
+}
+
+/* The face that leads a workspace row is also the fold when linked worktrees sit under it: under a
+   pointer or keyboard focus it turns to the folder that says so, open while the worktrees show and
+   closed while they are folded; on touch, where nothing hovers, the folder always shows. */
+.sidebar-row-action.workspace-toggle {
+  position: relative;
+  flex: 0 0 var(--side-box);
+  width: var(--side-box);
+  align-self: stretch;
+  height: auto;
+  border-radius: var(--radius-md);
+  color: var(--text);
+}
+
+.workspace-toggle .sidebar-mark { flex-basis: auto; width: auto; }
+
+.workspace-toggle-fold {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-row-action.workspace-toggle svg {
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
+@media (hover: hover) {
+  .workspace-header:hover .workspace-toggle .sidebar-mark { visibility: hidden; }
+  .workspace-header:hover .workspace-toggle-fold { display: flex; }
+}
+
+.workspace-toggle:focus-visible .sidebar-mark { visibility: hidden; }
+.workspace-toggle:focus-visible .workspace-toggle-fold { display: flex; }
+
+@media (hover: none) {
+  .workspace-toggle .sidebar-mark { visibility: hidden; }
+  .workspace-toggle-fold { display: flex; }
+}
+
+/* how many worktrees a folded group holds: the face alone looks like any workspace's */
+.workspace-fold-count {
+  flex: none;
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--lh-tight);
+}
+
+/* hover first, selection after it: one neutral fill at two strengths */
+@media (hover: hover) {
+  .workspace-header:hover {
+    background: var(--side-hover);
+  }
+}
+
+.workspace-group.is-selected > .workspace-header {
+  background: var(--side-selected);
+}
+
+/* keyboard focus draws the ring on the whole row and no fill */
+@supports selector(:has(*)) {
+  .workspace-header:has(> .workspace-select:focus-visible) {
+    outline: var(--ring);
+    outline-offset: calc(var(--ring-offset) * -1);
+  }
+
+  .workspace-select:focus-visible { outline: none; }
+}
+
+.workspace-copy {
+  display: flex;
+  align-items: baseline;
+  flex: 1 1 auto;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.workspace-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-name { flex: 0 1 auto; }
+
+/* Settings → Sidebar rows → Two lines: a row says what its pane is doing, and where under it,
+   on the height and in the type of an agent's row. */
+.machine-workspaces.is-two-line .workspace-header { min-height: var(--side-row-2); }
+
+/* One line: as in herdr's sidebar, a top-level git workspace says its branch under its name, on
+   the same height as a two-line row; worktrees and folders outside git stay one line. */
+.workspace-header:has(.workspace-copy.is-branch-line) { min-height: var(--side-row-2); }
+
+.workspace-copy.is-two-line,
+.workspace-copy.is-branch-line {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: var(--space-1);
+}
+
+.workspace-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.workspace-place {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* a worktree workspace's own name follows its branch on the same line, and gives way first */
+.worktree-workspace-label {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-group.is-selected > .workspace-header .workspace-name {
+  color: var(--text-strong);
+}
+
+.workspace-group.is-selected > .workspace-header .sidebar-mark {
+  color: var(--text);
+}
+
+.workspace.is-dragging {
+  opacity: 0.55;
+}
+
+/* a finger's drag (lib/touchReorder.ts): the held row rises over the list and follows the finger */
+.workspace.is-lifted {
+  position: relative;
+  z-index: 2;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-card);
+}
+
+/* where the held row lands: a line at the edge of the row, or of a group's worktrees, it goes past */
+.workspace-group[data-drop="before"],
+.worktree-children[data-drop="before"] {
+  box-shadow: inset 0 calc(2 * var(--hairline)) 0 var(--accent);
+}
+
+.workspace-group[data-drop="after"],
+.worktree-children[data-drop="after"] {
+  box-shadow: inset 0 calc(-2 * var(--hairline)) 0 var(--accent);
+}
+
+/* the field's text stays where the title was, and its edge clear of the mark */
+.workspace-rename-input,
+.pane-rename-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: calc(var(--control-h) - var(--space-2));
+  margin-left: calc(-1 * var(--space-1));
+  padding: 0 var(--space-2) 0 calc(var(--space-1) - var(--hairline));
+}
+
+.sidebar-row-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--side-action);
+  height: var(--side-row);
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.sidebar-row-action svg {
+  width: var(--space-4);
+  height: var(--space-4);
+}
+
+.sidebar-row-action:focus-visible {
+  outline-offset: calc(var(--ring-offset) * -1);
+  color: var(--text-strong);
+}
+
+.sidebar-row-action:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+@media (hover: hover) {
+  .sidebar-row-action:hover:not(:disabled) { color: var(--text-strong); }
+}
+
+/* A row's menu button is for touch and narrow layouts, where it takes no room until the row is
+   hovered, focused, selected or its menu is open; only the name gives way to it. A desktop draws
+   none: a right-click or the context-menu key opens the same menu at the row, and hands the
+   focus back where it was. */
+.workspace-actions {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  width: 0;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.workspace-header:focus-within > .workspace-actions,
+.workspace-group.is-selected > .workspace-header > .workspace-actions,
+.workspace-actions:has([aria-expanded="true"]) {
+  width: auto;
+  overflow: visible;
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .workspace-header:hover > .workspace-actions {
+    width: auto;
+    overflow: visible;
+    opacity: 1;
+  }
+}
+
+/* as the tab strip's (TabStrip.css): no "..." button where there is a mouse and room for a right-click */
+@media (pointer: fine) and (min-width: 769px) {
+  .workspace-actions { display: none; }
+}
+
+/* The status cell belongs to the selector (a click or a drag on it is the row's) and is drawn at
+   the row's right edge, after the menu button and a worktree group's chevron. */
+.sidebar-pane-meta {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.workspace-select > .sidebar-pane-meta {
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  justify-content: center;
+  width: var(--side-box);
+}
+
+/* Compact states keep the label and tooltip the badges have on the other surfaces. The cell is
+   a box for every state, also when ready or unknown draw nothing in it. */
+.sidebar-status {
+  justify-content: center;
+  flex: 0 0 var(--side-box);
+  width: var(--side-box);
+  height: var(--chip-h);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.sidebar-status::before { display: none; }
+
+.sidebar-status svg {
+  width: var(--space-4);
+  height: var(--space-4);
+}
+
+/* A question mark asks for an answer; a dot, as an unread mark is, has finished and was not
+   looked at; a working-coloured dot runs and a ring of it waits on background work. Every state
+   keeps the color it has on every other surface. */
+
+/* Running breathes rather than spins: the dot holds full for most of the cycle and dims in a few
+   steps, so it reads as alive at a glance without tugging at the eye, and the browser draws only
+   those steps. Every dot shares one phase (alignBreath), so several runs breathe together. */
+.sidebar-status[data-status="working"] .sidebar-status-dot {
+  animation: sidebar-breathe var(--dur-breathe) steps(6) infinite;
+}
+
+.sidebar-status[data-status="waiting"] .sidebar-status-dot {
+  border: calc(var(--hairline) * 2) solid currentColor;
+  background: transparent;
+}
+
+.sidebar-status-mark {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.sidebar-status-dot {
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: currentColor;
+}
+
+/* Settings -> Status indicators, Dots or Symbols: herdr's TUI glyph for every state
+   (lib/status.ts indicatorGlyph) in the color herdr gives it (the --indicator-* tokens): yellow
+   runs, red asks for an answer, teal has finished, green is ready, grey is unknown. BG, which herdr
+   does not have, holds RUN's glyph still; RUN breathes as the dot does. */
+.sidebar-status-glyph {
+  color: var(--indicator-unknown);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.sidebar-status[data-status="idle"] .sidebar-status-glyph { color: var(--indicator-idle); }
+.sidebar-status[data-status="working"] .sidebar-status-glyph,
+.sidebar-status[data-status="waiting"] .sidebar-status-glyph { color: var(--indicator-working); }
+.sidebar-status[data-status="blocked"] .sidebar-status-glyph { color: var(--indicator-blocked); }
+.sidebar-status[data-status="done"] .sidebar-status-glyph { color: var(--indicator-done); }
+
+.sidebar-status[data-status="working"] .sidebar-status-glyph {
+  animation: sidebar-breathe var(--dur-breathe) steps(6) infinite;
+}
+
+.sidebar-status.badge-restore-error { color: var(--status-blocked); }
+
+@keyframes sidebar-breathe {
+  0%,
+  40% { opacity: 1; }
+  50%,
+  90% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+/* background tasks still running, and a pane's plan: a number beside the state, quieter than it */
+.background-count,
+.plan-count {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: var(--space-1);
+  margin-left: var(--space-2);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.background-count svg,
+.plan-count svg {
+  width: var(--space-3);
+  height: var(--space-3);
+}
+
+.sidebar-inline-error {
+  margin: 0;
+  padding: var(--space-1) var(--space-2) var(--space-2) var(--side-box);
+  color: var(--status-blocked);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+
+/* the footer's actions are rows on the same grid */
+.sidebar-footer {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  padding: var(--space-2) var(--side-gutter) calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
+}
+
+/* Keep the footer at the bottom when both lists are short after the upper section folds. */
+.sidebar-shell:not(:has(.machine-list .machine-workspaces)) .sidebar-footer {
+  margin-top: auto;
+}
+
+.sidebar-footer-action {
+  justify-content: flex-start;
+  gap: 0;
+  width: 100%;
+  padding: 0 var(--space-2) 0 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-regular);
+}
+
+.sidebar-footer-action svg {
+  flex: 0 0 auto;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  margin-inline: calc((var(--side-box) - var(--icon-size)) / 2);
+  color: var(--text-dim);
+}
+
+@media (hover: hover) {
+  .sidebar-footer-action:hover:not(:disabled) { background: var(--side-hover); }
+}
+
+/* the gear first, the plan meters filling the rest */
+.sidebar-footer-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* Settings is its gear alone, so the plan meters beside it get the rest of the row */
+.sidebar-footer-row > .sidebar-footer-settings {
+  flex: 0 0 auto;
+  width: var(--side-box);
+  padding: 0;
+}
+
+.sidebar-footer-settings svg { margin-inline: auto; }
+
+.sidebar-install-help {
+  margin: 0;
+  padding: 0 var(--space-2) var(--space-1) var(--side-box);
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+}
+
+@media (pointer: coarse) {
+  .sidebar-shell {
+    --side-row: var(--touch-target);
+    --side-action: var(--touch-target);
+  }
+
+  /* The folder that folds a worktree group takes a finger's width, centered on its column so the
+     marks beside it do not move; it lies over the row it would otherwise hand the tap to. */
+  .sidebar-row-action.workspace-toggle {
+    position: relative;
+    z-index: 1;
+    flex-basis: var(--touch-target);
+    width: var(--touch-target);
+    margin-inline: calc((var(--side-box) - var(--touch-target)) / 2);
+  }
+
+  /* Row menus stay visible on touch. */
+  .workspace-actions {
+    width: auto;
+    overflow: visible;
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace,
+  .workspace-header {
+    transition: none;
+  }
+}
+
+/* a finger presses a row as an iPhone list row is pressed: it fills, it does not dim (styles.css) */
+@media (hover: none) and (pointer: coarse) {
+  .workspace-header:has(> .pane-select:active),
+  .sidebar-footer-action:active {
+    background: var(--side-hover);
+  }
+
+  .pane-select:active,
+  .sidebar-footer-action:active {
+    opacity: 1;
+  }
+}
+
+/* a pane's plan: its glyph in the working color until every step is done */
+.plan-count svg {
+  color: var(--status-working);
+}
+
+.plan-count.is-done svg {
+  color: var(--status-done);
+}

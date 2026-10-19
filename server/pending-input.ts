@@ -1,0 +1,267 @@
+import type { AgentStatus, PendingMessage } from "../shared/protocol.ts";
+
+export interface PendingIdentity {
+  agent: string | null;
+  terminalId: string;
+  session: string | null;
+  processPid?: number | null;
+  processBirth?: number | null;
+  omoSession?: string | null;
+  /** the session Claude's PID record names: it changes with /clear and /resume in the same process, hook or not */
+  claudeSession?: string | null;
+}
+
+/** An identity learned after enqueue is not a replacement; only mutually known parts disagree. */
+export function samePendingIdentity(before: PendingIdentity, after: PendingIdentity, platform: NodeJS.Platform = process.platform): boolean {
+  const changed = <T>(a: T | null | undefined, b: T | null | undefined) => a != null && b != null && a !== b;
+  return before.agent === after.agent && before.terminalId === after.terminalId
+    && !changed(before.session, after.session) && !changed(before.omoSession, after.omoSession)
+    && !changed(before.claudeSession, after.claudeSession)
+    && !changed(before.processPid, after.processPid)
+    // macOS derives birth from whole elapsed seconds; reads of one PID drift by up to a second.
+    && (before.processBirth == null || after.processBirth == null
+      || (platform === "darwin" ? Math.abs(before.processBirth - after.processBirth) <= 1000 : before.processBirth === after.processBirth));
+}
+export interface PendingRecord<Owner, Lease> {
+  owner: Owner;
+  paneId: string;
+  lease: Lease;
+  identity: PendingIdentity;
+  message: PendingMessage;
+  inFlight: boolean;
+}
+type Fault = { code: string; message: string };
+interface HeldCopyReply { ok: boolean; code?: string; message?: string }
+type Removed = { id: string; outcome: "sent" | "discarded" };
+/** `by`: the message whose send opened the gate */
+interface TurnGate { by: string; committed: boolean; sawWorking: boolean; completed: boolean; deadline: number | null; restart?: "interruption" | "working" }
+const ready = (status: AgentStatus | undefined) => status === "idle" || status === "done";
+export const PENDING_START_TIMEOUT_MS = 10_000;
+export const MAX_PENDING_PER_OWNER = 32;
+const MAX_PENDING_TOTAL = 256;
+const MAX_PENDING_CHARS = 20_000;
+const CLOSED_RETENTION_MS = 60_000;
+
+export class PendingInputError extends Error {
+  constructor(readonly code: string, message: string) { super(message); }
+}
+
+/** One authoritative record per message. Both automatic sends and explicit steering claim it here. */
+export class PendingInputs<Owner, Lease> {
+  private readonly records = new Map<string, PendingRecord<Owner, Lease>>();
+  private readonly statuses = new Map<string, AgentStatus>();
+  /** how many status events each pane has had: orders a snapshot read against them (mark, observe) */
+  private readonly events = new Map<string, number>();
+  private readonly gates = new Map<string, TurnGate>();
+  private readonly closed = new Map<Owner, number>();
+  private readonly removed = new Map<string, { owner: Owner; paneId: string; outcome: Removed["outcome"] }>();
+  private readonly resends = new Map<string, { id: string; fingerprint: string; reply: Promise<HeldCopyReply>; settledAt: number | null; sent: boolean }>();
+
+  constructor(
+    private readonly changed: (owner: Owner, paneId: string, messages: PendingMessage[], removed?: Removed[]) => void,
+    private readonly now: () => number = Date.now,
+    private readonly startTimeoutMs = PENDING_START_TIMEOUT_MS,
+    private readonly newId: () => string = () => crypto.randomUUID(),
+  ) {}
+
+  /** Cross-connection held copies share one outcome; never evict an in-flight send. */
+  resend(paneId: string, id: string, fingerprint: string, task: () => Promise<HeldCopyReply>, generation = 0): Promise<HeldCopyReply> {
+    const key = JSON.stringify([paneId, id, generation]);
+    this.expireResends();
+    const previous = this.resends.get(key);
+    if (previous) {
+      if (previous.fingerprint !== fingerprint) throw new PendingInputError("invalid_submit_id", "This resend id already belongs to another message");
+      return previous.reply;
+    }
+    if (this.resends.size >= MAX_PENDING_TOTAL) throw new PendingInputError("pending_limit", "Too many held-copy sends are still retained; try again later");
+    const entry: { id: string; fingerprint: string; settledAt: number | null; sent: boolean; reply: Promise<HeldCopyReply> } = { id, fingerprint, settledAt: null, sent: false, reply: Promise.resolve().then(task) };
+    this.resends.set(key, entry);
+    entry.reply.then((reply) => { entry.sent = reply.ok; entry.settledAt = this.now(); }, () => { entry.settledAt = this.now(); });
+    return entry.reply;
+  }
+
+  private expireResends(): void {
+    for (const [key, entry] of this.resends) {
+      if (entry.settledAt !== null && !(entry.sent && this.records.has(entry.id)) && this.now() - entry.settledAt >= CLOSED_RETENTION_MS) this.resends.delete(key);
+    }
+  }
+
+  list(owner: Owner, paneId: string): PendingMessage[] {
+    return [...this.records.values()].filter((item) => item.owner === owner && item.paneId === paneId).map((item) => ({ ...item.message, ...(item.message.error ? { error: { ...item.message.error } } : {}) }));
+  }
+
+  private publish(owner: Owner, paneId: string, removed?: Removed[]): void { this.changed(owner, paneId, this.list(owner, paneId), removed); }
+
+  private remember(item: PendingRecord<Owner, Lease>, outcome: Removed["outcome"]): void {
+    this.removed.set(item.message.id, { owner: item.owner, paneId: item.paneId, outcome });
+    if (this.removed.size > 1024) this.removed.delete(this.removed.keys().next().value!);
+  }
+
+  outcome(owner: Owner, paneId: string, id: string): Removed["outcome"] | undefined {
+    const receipt = this.removed.get(id);
+    return receipt?.owner === owner && receipt.paneId === paneId ? receipt.outcome : undefined;
+  }
+
+  /** `held`: the message waits for an explicit send; `next` never offers it to automatic delivery. */
+  enqueue(owner: Owner, paneId: string, requestId: number, text: string, lease: Lease, identity: PendingIdentity, held = false): PendingRecord<Owner, Lease> {
+    const previous = [...this.records.values()].find((item) => item.owner === owner && item.message.request_id === requestId);
+    if (previous) {
+      if (previous.paneId !== paneId || previous.message.text !== text) throw new PendingInputError("invalid_submit_id", "This submit id already belongs to another message");
+      return previous;
+    }
+    if (!text.trim() || text.length > MAX_PENDING_CHARS) throw new PendingInputError("invalid_submit_text", "A pending message must contain text and be at most 20000 characters");
+    if (this.records.size >= MAX_PENDING_TOTAL || [...this.records.values()].filter((item) => item.owner === owner).length >= MAX_PENDING_PER_OWNER) {
+      throw new PendingInputError("pending_limit", "The pending-message list is full; send or discard a message first");
+    }
+    if ([...this.records.values()].some((item) => item.paneId === paneId && item.message.state === "uncertain")) throw new PendingInputError("pending_uncertain", "Check the terminal before sending more pending messages");
+    const item: PendingRecord<Owner, Lease> = {
+      owner, paneId, lease, identity, inFlight: false,
+      message: { id: this.newId(), request_id: requestId, text, state: held ? "held" : "queued", created_at: new Date(this.now()).toISOString() },
+    };
+    this.records.set(item.message.id, item);
+    this.publish(owner, paneId);
+    return item;
+  }
+
+  get(owner: Owner, paneId: string, id: string): PendingRecord<Owner, Lease> | undefined {
+    const item = this.records.get(id);
+    return item?.owner === owner && item.paneId === paneId ? item : undefined;
+  }
+
+  retains(owner: Owner, id: string): boolean { return this.records.get(id)?.owner === owner; }
+
+  next(paneId: string): PendingRecord<Owner, Lease> | null {
+    if (!ready(this.statuses.get(paneId)) || this.gates.has(paneId)
+      || [...this.records.values()].some((item) => item.paneId === paneId && (item.inFlight || item.message.state === "uncertain"))) return null;
+    return [...this.records.values()].find((item) => item.paneId === paneId && item.message.state === "queued") ?? null;
+  }
+
+  claim(item: PendingRecord<Owner, Lease>, automatic: boolean): boolean {
+    if (this.records.get(item.message.id) !== item || item.inFlight || item.message.state === "uncertain"
+      || [...this.records.values()].some((other) => other.paneId === item.paneId && other.inFlight)
+      || (automatic ? this.next(item.paneId) !== item : !["queued", "held"].includes(item.message.state))) return false;
+    item.message.state = "sending"; delete item.message.error; item.inFlight = true;
+    // An explicit send can start while an earlier send's turn is not confirmed yet. That gate keeps
+    // watching the turn until this message commits its own key: a refusal before it frees nothing.
+    if (!this.gates.get(item.paneId)?.committed) this.gates.set(item.paneId, { by: item.message.id, committed: false, sawWorking: false, completed: false, deadline: null });
+    this.publish(item.owner, item.paneId);
+    return true;
+  }
+
+  /** Status cycles before the committing key belong to earlier work, never this submission. */
+  committing(item: PendingRecord<Owner, Lease>, steeringWorkingTurn = false, restartingWorkingTurn = false): void {
+    if (this.records.get(item.message.id) !== item || !item.inFlight) return;
+    this.gates.set(item.paneId, { by: item.message.id, committed: true, sawWorking: steeringWorkingTurn && !restartingWorkingTurn, completed: false,
+      deadline: steeringWorkingTurn && !restartingWorkingTurn ? null : this.now() + this.startTimeoutMs,
+      ...(restartingWorkingTurn ? { restart: "interruption" as const } : {}),
+    });
+  }
+
+  settle(item: PendingRecord<Owner, Lease>, fault?: Fault, uncertain = false, retryWhenReady = false): void {
+    if (this.records.get(item.message.id) !== item || !item.inFlight) return;
+    item.inFlight = false;
+    if (!fault) {
+      this.records.delete(item.message.id);
+      this.remember(item, "sent");
+      this.publish(item.owner, item.paneId, [{ id: item.message.id, outcome: "sent" }]);
+      const gate = this.gates.get(item.paneId);
+      if (gate?.completed || (gate?.by === item.message.id && !gate.committed)) this.gates.delete(item.paneId);
+      return;
+    }
+    item.message.state = uncertain ? "uncertain" : retryWhenReady ? "queued" : "held";
+    if (retryWhenReady && !uncertain) delete item.message.error; else item.message.error = fault;
+    const gate = this.gates.get(item.paneId);
+    if (uncertain || gate?.by === item.message.id || gate?.completed) this.gates.delete(item.paneId);
+    if (uncertain) this.holdPane(item.paneId, fault);
+    this.publish(item.owner, item.paneId);
+  }
+
+  discard(item: PendingRecord<Owner, Lease>): boolean {
+    if (this.records.get(item.message.id) !== item || item.inFlight) return false;
+    this.records.delete(item.message.id);
+    this.remember(item, "discarded");
+    this.publish(item.owner, item.paneId, [{ id: item.message.id, outcome: "discarded" }]);
+    return true;
+  }
+
+  /** The pane's status events so far. A snapshot read after this point is applied with it (observe). */
+  mark(paneId: string): number { return this.events.get(paneId) ?? 0; }
+
+  /** The pane's last applied status, from an event or an observed snapshot. */
+  current(paneId: string): AgentStatus | undefined { return this.statuses.get(paneId); }
+
+  /** A status event from the collector. */
+  status(paneId: string, status: AgentStatus): void {
+    this.events.set(paneId, this.mark(paneId) + 1);
+    this.apply(paneId, status);
+  }
+
+  /** A status read from a snapshot taken after `mark`: an event that came since is newer, and stands. */
+  observe(paneId: string, status: AgentStatus, mark: number): void {
+    if (this.mark(paneId) === mark) this.apply(paneId, status);
+  }
+
+  /** Whether a message of any connection still waits its turn on the pane. */
+  waiting(paneId: string): boolean {
+    return [...this.records.values()].some((item) => item.paneId === paneId && (item.inFlight || item.message.state === "queued"));
+  }
+
+  /** The pane ended: its held messages stay with their owners, its status and turn gate go. */
+  forget(paneId: string): void { this.statuses.delete(paneId); this.events.delete(paneId); this.gates.delete(paneId); }
+
+  private apply(paneId: string, status: AgentStatus): void {
+    this.statuses.set(paneId, status);
+    const gate = this.gates.get(paneId);
+    if (!gate?.committed) return;
+    // Escape may expose ready before the submitted steering starts its replacement turn.
+    // Neither that readiness nor another old-working snapshot can drain the next message.
+    if (gate.restart === "interruption") {
+      if (ready(status)) gate.restart = "working";
+      return;
+    }
+    if (gate.restart === "working") {
+      if (status !== "working") return;
+      delete gate.restart;
+    }
+    if (status === "working") { gate.sawWorking = true; gate.deadline = null; }
+    if (ready(status) && gate.sawWorking) {
+      gate.completed = true;
+      if (![...this.records.values()].some((item) => item.paneId === paneId && item.inFlight)) this.gates.delete(paneId);
+    }
+  }
+
+  hold(owner: Owner, paneId?: string, fault: Fault = { code: "pending_lease_lost", message: "The pane connection changed; send this message explicitly after reviewing it" }): void {
+    const panes = new Set<string>();
+    for (const item of this.records.values()) {
+      if (item.owner !== owner || (paneId !== undefined && item.paneId !== paneId)) continue;
+      if (item.message.state === "queued" || item.inFlight) {
+        item.message.state = item.inFlight ? "uncertain" : "held"; item.message.error = fault;
+        panes.add(item.paneId);
+      }
+    }
+    for (const pane of panes) this.publish(owner, pane);
+  }
+
+  holdPane(paneId: string, fault: Fault): void {
+    for (const owner of new Set([...this.records.values()].filter((item) => item.paneId === paneId).map((item) => item.owner))) this.hold(owner, paneId, fault);
+  }
+
+  close(owner: Owner): void { this.hold(owner); this.closed.set(owner, this.now()); }
+
+  expire(): void {
+    this.expireResends();
+    for (const [paneId, gate] of this.gates) {
+      if (gate.deadline !== null && this.now() >= gate.deadline && ![...this.records.values()].some((item) => item.paneId === paneId && item.inFlight)) {
+        this.holdPane(paneId, { code: "pending_turn_unconfirmed", message: "The next turn did not start in time; review and send the remaining messages explicitly" });
+        this.gates.delete(paneId);
+      }
+    }
+    for (const [owner, closedAt] of this.closed) if (this.now() - closedAt >= CLOSED_RETENTION_MS) {
+      for (const [id, item] of this.records) if (item.owner === owner && !item.inFlight) this.records.delete(id);
+      if (![...this.records.values()].some((item) => item.owner === owner)) {
+        this.closed.delete(owner);
+        for (const [id, receipt] of this.removed) if (receipt.owner === owner) this.removed.delete(id);
+      }
+    }
+  }
+}

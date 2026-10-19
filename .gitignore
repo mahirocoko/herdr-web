@@ -8,3 +8,7 @@ coverage/
 .DS_Store
 *.local
 *.log
+.preview/
+_site/
+.ci/
+.herdr-web-ui/

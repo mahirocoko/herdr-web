@@ -1,0 +1,83 @@
+.pending-messages {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: var(--pending-max-h);
+  width: min(calc(100% - 2 * var(--space-4)), var(--chat-w));
+  margin: 0 auto;
+  padding: var(--space-2) 0;
+  list-style: none;
+  overflow-y: auto;
+  font-family: var(--font-chat, var(--font-ui));
+  font-size: calc(var(--fs-md) * var(--chat-scale, 1));
+}
+
+.pending-message {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-top: var(--space-2);
+}
+
+.pending-message:first-child {
+  margin-top: 0;
+}
+
+.pending-message-bubble {
+  display: block;
+  max-width: 80%;
+  min-height: var(--control-h);
+  padding: var(--space-3) var(--space-4);
+  border: var(--hairline) solid var(--bubble-border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  color: var(--text-strong);
+  font: inherit;
+  line-height: var(--lh-prose);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-align: start;
+  cursor: text;
+  user-select: text;
+}
+
+.pending-message-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  max-width: 100%;
+}
+
+.pending-message-note {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+
+.pending-message-action {
+  color: var(--text-dim);
+}
+
+.pending-message-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  width: auto;
+  padding: 0 var(--space-2);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-xs);
+}
+
+@media (max-width: 480px) {
+  .pending-messages {
+    width: calc(100% - 2 * var(--space-2));
+  }
+
+  .pending-message-action {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+  }
+}

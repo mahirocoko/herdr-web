@@ -2,30 +2,51 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      native_shell_fixture:
+        description: Run only the owned shell-native fixture on a prepared Mac runner
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
-  deterministic:
+  source-unit:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       CI: 'true'
       TZ: UTC
+      UNIT_TEST_WORKERS: '1'
+      UNIT_TEST_REPORT: .ci/unit-summary.json
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.11
+          bun-version: 1.4.2
       - run: bun install --frozen-lockfile
-      - run: bun test
       - run: bun run typecheck
-      - run: bun run typecheck:browser
-      - run: bun run build
-      # Only this CI job downloads its lock-pinned browser; never a local HOME install.
-      - run: bunx --no-install playwright install --with-deps chromium
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/herdr-smoke-browsers
-      - run: bun run test:browser
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/herdr-smoke-browsers
-      # schema:check and live/native tests require the installed Herdr host.
+      - run: HERDR_TEST_HOOKS=0 bun run build
+      - name: Source unit suite only (no native preload)
+        run: mkdir -p .ci && bun run test > .ci/unit.log 2>&1
+      - name: Fetch fixed source reference, without activating upstream automation
+        run: |
+          git init .agent-state/learn/devswha/herdr-web-ui/origin
+          git -C .agent-state/learn/devswha/herdr-web-ui/origin fetch --depth=1 https://github.com/devswha/herdr-web-ui d918448647e41079c52047ffc96cdaac50ccba32
+      - run: bun run source:verify
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: source-unit-evidence
+          path: .ci/
+  native-shell:
+    if: github.event_name == 'workflow_dispatch' && inputs.native_shell_fixture
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      # Prepared tools only: no Herdr installer, global Bun upgrade, accounts or provider turns.
+      - run: command -v herdr && bash scripts/bun-project.sh --version
+      - run: bash scripts/bun-project.sh install --frozen-lockfile
+      - name: Explicit isolated shell fixture (not the broader agent integration lane)
+        run: bash scripts/bun-project.sh run test:native

@@ -1,0 +1,171 @@
+.key-bar-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.key-bar-settings-list {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.key-bar-settings-list:empty {
+  display: none;
+}
+
+.key-bar-settings-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--touch-target);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+}
+
+.key-bar-settings-row + .key-bar-settings-row {
+  border-top: var(--hairline) solid var(--border);
+}
+
+.key-bar-settings-cap {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-strong);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.key-bar-settings-kind {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+}
+
+.key-bar-settings-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.key-bar-settings-actions .icon-button {
+  width: var(--touch-target);
+  height: var(--touch-target);
+  color: var(--text-dim);
+}
+
+.key-bar-settings-actions .icon-button:disabled {
+  visibility: hidden;
+}
+
+.key-bar-settings-field {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.key-bar-settings-field .input {
+  width: 100%;
+  min-width: 0;
+}
+
+.key-bar-settings-add,
+.key-bar-settings-combo-key {
+  display: flex;
+  align-items: end;
+  gap: var(--space-2);
+}
+
+.key-bar-settings-add .btn,
+.key-bar-settings-combo-actions .btn {
+  flex: 0 0 auto;
+  min-height: var(--touch-target);
+}
+
+.key-bar-settings-modifiers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.key-bar-settings-modifier-label {
+  flex-basis: 100%;
+}
+
+.key-bar-settings-modifier {
+  min-width: var(--touch-target);
+  height: var(--touch-target);
+  padding: 0 var(--space-2);
+  background: transparent;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.key-bar-settings-modifier[aria-pressed="true"] {
+  background: var(--bg-elevated);
+  border-color: var(--accent);
+  color: var(--text-strong);
+}
+
+.key-bar-settings-combo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.key-bar-settings-combo-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.key-bar-settings-preview {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-strong);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+}
+
+.key-bar-settings-restore {
+  align-self: start;
+}
+
+@media (hover: hover) {
+  .key-bar-settings-modifier:hover {
+    background: var(--bg-hover);
+  }
+}
+
+@media (max-width: 480px) {
+  .key-bar-settings-row {
+    flex-wrap: wrap;
+  }
+
+  .key-bar-settings-cap {
+    flex: 1 1 auto;
+  }
+
+  .key-bar-settings-kind {
+    display: none;
+  }
+
+  .key-bar-settings-combo-actions {
+    flex-wrap: wrap;
+  }
+}

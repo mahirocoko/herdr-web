@@ -1,0 +1,262 @@
+/** Replay the native iPadOS Safari + hardware keyboard and iPhone on-screen keyboard traces (Korean 2-set), not a claim to automate the OS IME. */
+import assert from "node:assert/strict";
+import { EventEmitter, once } from "node:events";
+import { mkdirSync } from "node:fs";
+import type { Browser } from "playwright-core";
+
+/**
+ * iPadOS 27 Safari with a Magic Keyboard sends each jamo as a printable keydown (its own keyCode,
+ * not 229, isComposing false), then a keypress, then composes in the editor: a new syllable is an
+ * insertText, a changed one is deleteContentBackward followed by insertText of the whole result.
+ * There are no composition events. Recorded with scripts/terminal-ime-diagnostic.ts on 2026-10-13.
+ * The iPhone's on-screen Korean keyboard (iOS 27 simulator, Safari, 2026-10-18) edits the same way,
+ * with keyCode 0 on each jamo's keydown.
+ */
+export async function checkIpadIme(browser: Browser, origin: string, pane: string, otherPane: string): Promise<void> {
+  // one context for both iPad platforms: the page, not the context, carries the platform it reports
+  const context = await browser.newContext({
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Safari/605.1.15",
+    viewport: { width: 1100, height: 700 },
+  });
+  // an iPhone's user agent: the terminal also keeps a space in its field there (#862)
+  const iphone = await browser.newContext({
+    userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Mobile/15E148 Safari/604.1",
+    viewport: { width: 1100, height: 700 },
+  });
+  try {
+  // the platform iPadOS Safari reports by default (desktop site), the one it reports otherwise,
+  // and an iPhone's
+  for (const platform of ["MacIntel", "iPad", "iPhone"]) {
+    const page = await (platform === "iPhone" ? iphone : context).newPage();
+    await page.addInitScript(({ pane, platform }) => {
+      Object.defineProperty(navigator, "platform", { get: () => platform });
+      Object.defineProperty(navigator, "maxTouchPoints", { get: () => 5 });
+      localStorage.setItem("herdr-web-ui:settings", JSON.stringify({ language: "en", terminalInputMode: "direct" }));
+      localStorage.setItem(`herdr-web-ui:view:${pane}`, "terminal");
+    }, { pane, platform });
+    const sent: Array<{ pane_id: string; text: string }> = [];
+    const signals = new EventEmitter();
+    const signal = (name: string) => once(signals, name, { signal: AbortSignal.timeout(10_000) });
+    // output for the page as if the pane wrote it: input here never reaches the pane to echo
+    let toPage = (_data: string): void => {};
+    await page.routeWebSocket(/\/ws(?:\?|$)/, (socket) => {
+      const server = socket.connectToServer();
+      toPage = (data) => socket.send(JSON.stringify({ type: "pty-data", pane_id: pane, data }));
+      server.onMessage((raw) => {
+        const frame = JSON.parse(String(raw));
+        if (frame.type === "input-ready" && frame.ready !== false) signals.emit("ready");
+        socket.send(raw);
+      });
+      socket.onMessage((raw) => {
+        const frame = JSON.parse(String(raw));
+        if (frame.type === "input") { sent.push(frame); signals.emit(`input:${frame.text}`); }
+        else server.send(raw);
+      });
+    });
+    const input = page.locator(".xterm-helper-textarea:visible");
+    const reset = async () => {
+      const ready = signal("ready");
+      await page.goto(`${origin}/?pane=${encodeURIComponent(pane)}`);
+      await ready;
+      await input.focus();
+      assert.equal(await input.inputValue(), " ", "touch devices keep the Backspace repeat space");
+      sent.length = 0;
+    };
+    // One key of the recorded order: keydown (jamo, real keyCode), keypress, then the editor's
+    // edits. A cancelled keydown means a browser makes no edit, which is the failure this guards.
+    const KEYCODES: Record<string, number> = { "ㅎ": 71, "ㅏ": 75, "ㄴ": 83, "ㄱ": 82, "ㅡ": 77, "ㄹ": 70, "ㅇ": 68, "ㅁ": 65 };
+    const key = async (jamo: string, edits: Array<["delete"] | ["insert", string]>, moveCaret = false) => {
+      return input.evaluate(async (element, { jamo, keyCode, edits, moveCaret }) => {
+        const box = element as HTMLTextAreaElement;
+        if (moveCaret) box.setSelectionRange(0, 0);
+        const down = box.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: jamo, code: "", keyCode, isComposing: false }));
+        const press = down && box.dispatchEvent(new KeyboardEvent("keypress", { bubbles: true, cancelable: true, key: jamo, keyCode: jamo.charCodeAt(0), charCode: jamo.charCodeAt(0) }));
+        if (down && press) {
+          for (const edit of edits) {
+            if (edit[0] === "delete") {
+              const end = box.selectionEnd;
+              const start = box.selectionStart === end ? Math.max(0, end - 1) : box.selectionStart;
+              box.dispatchEvent(new InputEvent("beforeinput", { bubbles: true, composed: true, inputType: "deleteContentBackward", isComposing: false }));
+              box.setRangeText("", start, end, "end");
+              box.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true, inputType: "deleteContentBackward", isComposing: false }));
+            } else {
+              box.dispatchEvent(new InputEvent("beforeinput", { bubbles: true, composed: true, inputType: "insertText", data: edit[1], isComposing: false }));
+              box.setRangeText(edit[1], box.selectionStart, box.selectionEnd, "end");
+              box.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true, inputType: "insertText", data: edit[1], isComposing: false }));
+            }
+          }
+        }
+        box.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key: jamo, keyCode, isComposing: false }));
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        return down;
+      }, { jamo, keyCode: platform === "iPhone" ? 0 : KEYCODES[jamo] ?? 65, edits, moveCaret });
+    };
+    const fresh = (jamo: string) => key(jamo, [["insert", jamo]]);
+    const replace = (jamo: string, result: string) => key(jamo, [["delete"], ["insert", result]]);
+    const check = async (expected: string, label: string) => {
+      const received = signal("input:\x07");
+      await input.press("Control+g");
+      await received;
+      assert.equal(sent.map((frame) => frame.text).join(""), expected + "\x07", `${label} (platform ${platform})`);
+      assert(sent.every((frame) => frame.pane_id === pane), "input stays with its pane");
+    };
+    try {
+      await reset();
+      await key("ㅎ", [["insert", "ㅎ"]], true);
+      await check("ㅎ", "the first Hangul jamo after caret 0 is sent instead of the kept space");
+      console.log(`  ok ${platform}: caret 0 then first Hangul jamo sent ${JSON.stringify(sent.map((frame) => frame.text).join(""))}`);
+
+      await reset();
+      await key("ㅎ", [["insert", "ㅎ"]], true);
+      await replace("ㅏ", "하"); await replace("ㄴ", "한");
+      await check("한", "Hangul after moving before the kept space sends the syllable, not the space");
+      console.log(`  ok ${platform}: caret 0 then Hangul sent ${JSON.stringify(sent.map((frame) => frame.text).join(""))}`);
+
+      await reset();
+      const compositionCaret = await input.evaluate(async (element) => {
+        const box = element as HTMLTextAreaElement;
+        box.setSelectionRange(0, 0);
+        box.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Process", keyCode: 229 }));
+        const caret = [box.selectionStart, box.selectionEnd];
+        box.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true, data: "" }));
+        box.setRangeText("日本", box.selectionStart, box.selectionEnd, "end");
+        box.dispatchEvent(new CompositionEvent("compositionupdate", { bubbles: true, data: "日本" }));
+        box.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertCompositionText", data: "日本", isComposing: true }));
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        box.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "日本" }));
+        return caret;
+      });
+      assert.deepEqual(compositionCaret, [1, 1], "keydown 229 restores the caret before composition starts");
+      await check("日本", "keydown 229 restores the caret before Japanese composition");
+      console.log(`  ok ${platform}: caret 0 then Japanese sent ${JSON.stringify(sent.map((frame) => frame.text).join(""))}`);
+
+      await reset();
+      await input.evaluate((element) => {
+        const box = element as HTMLTextAreaElement;
+        box.blur();
+        box.value = " ";
+        box.setSelectionRange(0, 0);
+        box.focus();
+      });
+      assert.deepEqual(await input.evaluate((box) => [(box as HTMLTextAreaElement).selectionStart, (box as HTMLTextAreaElement).selectionEnd]), [1, 1], "focus restores the caret after the kept space");
+      await input.evaluate((element) => {
+        const box = element as HTMLTextAreaElement;
+        box.setSelectionRange(0, 0);
+        for (const repeat of [false, true, true]) {
+          box.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Backspace", keyCode: 8, repeat }));
+        }
+      });
+      await check("\x7f\x7f\x7f", "held Backspace still sends every repeat after moving the caret");
+      console.log(`  ok ${platform}: focus and held Backspace restore the kept-space caret`);
+
+      await reset();
+      await input.press("a"); await input.press("b"); await input.press("c");
+      assert.equal(await fresh("ㅎ"), true, `a Hangul keydown is left to the editor (platform ${platform})`);
+      await replace("ㅏ", "하"); await replace("ㄴ", "한");
+      assert.equal(sent.map((frame) => frame.text).join(""), "abc", "provisional Hangul stays local, no jamo is sent");
+      await fresh("ㄱ"); await replace("ㅡ", "그"); await replace("ㄹ", "글");
+      await input.press("Space");
+      await check("abc한글 ", "English then iPad Hangul commits each syllable once, in order");
+      // the syllable being typed is drawn at the size its row gives the committed ones
+      // (terminalGlyphs enlarges a two-cell glyph that leaves its cells half empty)
+      toPage("\r\n한 ");
+      await page.waitForFunction(() => [...document.querySelectorAll(".xterm-rows span")].some((span) => span.textContent?.includes("한")));
+      await fresh("ㄱ"); await replace("ㅡ", "그");
+      const sizes = await page.evaluate(() => {
+        const row = [...document.querySelectorAll<HTMLElement>(".xterm-rows span")].find((span) => span.textContent?.includes("한"))!;
+        const view = document.querySelector<HTMLElement>(".composition-view")!;
+        return { row: getComputedStyle(row).fontSize, view: getComputedStyle(view).fontSize, pending: view.classList.contains("active") ? view.textContent : null };
+      });
+      assert.equal(sizes.pending, "그", "a syllable is pending");
+      assert(Math.abs(Number.parseFloat(sizes.view) - Number.parseFloat(sizes.row)) < 0.01,
+        `the pending syllable is drawn at its row's size: ${sizes.view} against ${sizes.row} (platform ${platform})`);
+
+      await reset();
+      // 망 then ㅏ: the final ㅇ moves on and the editor puts back two syllables at once
+      await fresh("ㅁ"); await replace("ㅏ", "마"); await replace("ㅇ", "망"); await replace("ㅏ", "마아");
+      await input.press("Space");
+      await check("마아 ", "a two-syllable replacement commits both");
+
+      for (const [press, expected] of [["Enter", "\r"], ["Control+c", "\x03"], ["Tab", "\t"]]) {
+        await reset(); await fresh("ㅎ"); await replace("ㅏ", "하"); await replace("ㄴ", "한");
+        await input.press(press!);
+        await check("한" + expected, `iPad commit precedes ${press}`);
+      }
+
+      // the key bar's keys reach xterm through term.input, not a keydown: they follow the syllable too
+      await reset(); await fresh("ㅎ"); await replace("ㅏ", "하"); await replace("ㄴ", "한");
+      const escape = page.locator('.key-bar .key[data-key="Escape"]');
+      await page.waitForFunction(() => document.querySelector<HTMLButtonElement>('.key-bar .key[data-key="Escape"]')?.disabled === false);
+      await escape.evaluate((node: HTMLElement) => node.click());
+      await check("한\x1b", "the pending syllable precedes a key-bar key");
+
+      await reset(); await fresh("ㅎ"); await replace("ㅏ", "하"); await replace("ㄴ", "한");
+      const blurred = signal("input:한");
+      await input.evaluate((box) => (box as HTMLTextAreaElement).blur());
+      await blurred;
+      await input.focus();
+      await check("한", "blur commits the pending syllable once");
+
+      if (process.env.UI_EVIDENCE_DIR) {
+        mkdirSync(process.env.UI_EVIDENCE_DIR, { recursive: true });
+        toPage("\r\nCaret replay passed: 한 日本\r\n");
+        await page.waitForFunction(() => [...document.querySelectorAll(".xterm-rows span")].some((span) => span.textContent?.includes("Caret replay passed")));
+        for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+          await page.setViewportSize(viewport);
+          await page.locator('.view-switch button[title^="Live terminal"]').click();
+          await page.waitForFunction(() => {
+            const terminal = document.querySelector(".terminal-host");
+            return terminal && terminal.getBoundingClientRect().width > Math.min(innerWidth - 40, 600);
+          });
+          await page.screenshot({ path: `${process.env.UI_EVIDENCE_DIR}/${platform}-${viewport.width}x${viewport.height}.png`, animations: "disabled" });
+        }
+        await page.setViewportSize({ width: 1100, height: 700 });
+      }
+
+      await reset(); await fresh("ㅎ"); await replace("ㅏ", "하");
+      const switched = signal("ready");
+      await page.locator(`.pane-select[title^="${otherPane} —"]`).first().evaluate((node: HTMLElement) => node.click());
+      await page.waitForFunction((pane) => JSON.parse(localStorage.getItem("herdr-web-ui:selection")!).pane_id === pane, otherPane);
+      await switched;
+      const received = signal("input:\x07");
+      await input.press("Control+g");
+      await received;
+      assert.equal(sent.map((frame) => frame.text).join(""), "\x07", "pending iPad text cannot enter another pane");
+      console.log(`  ok navigator.platform ${platform}`);
+    } finally {
+      // left open until the context closes: closing a page whose WebSocket is routed took the
+      // whole headless browser down on macOS
+      await page.goto("about:blank").catch(() => {});
+    }
+  }
+  } finally { await context.close(); await iphone.close(); }
+  console.log("PASS iPad hardware-keyboard and iPhone keyboard replay: jamo keys composed in the editor, pending syllable at its row's size, commit keys, two-syllable replacement, blur and pane reset");
+}
+
+if (import.meta.main) {
+  await import("./test-herdr.ts");
+  const { createServer } = await import("../server/index.ts");
+  const { workspaceCreate, workspaceClose } = await import("../server/herdr/client.ts");
+  const { chromium } = await import("playwright-core");
+  const { mkdtempSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const root = mkdtempSync(join(tmpdir(), "herdr-ipad-replay-"));
+  const server = createServer({ port: 0, hostname: "127.0.0.1", stateDir: root, token: "" });
+  console.log(`QA resources: pid=${process.pid} port=${server.port} state=${root}`);
+  const owned: string[] = [];
+  let browser: Browser | undefined;
+  try {
+    browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? "/opt/google/chrome/chrome", headless: true });
+    const panes: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      const made = await workspaceCreate({ cwd: root, label: "herdr-web-ui-test-ipad-replay" });
+      owned.push(made.workspace.workspace_id); panes.push(made.root_pane.pane_id);
+    }
+    await checkIpadIme(browser, `http://127.0.0.1:${server.port}`, panes[0]!, panes[1]!);
+  } finally {
+    await browser?.close(); server.stop();
+    for (const workspace of owned) await workspaceClose(workspace);
+    rmSync(root, { recursive: true, force: true });
+  }
+}

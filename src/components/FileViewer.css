@@ -1,0 +1,594 @@
+.file-viewer-scrim {
+  /* above the file browser it may open from */
+  z-index: calc(var(--z-modal) + 1);
+}
+
+.file-viewer {
+  width: min(96vw, 1100px);
+  max-width: 100%;
+  min-width: 0;
+  max-height: min(92vh, 100%);
+  display: flex;
+  flex-direction: column;
+}
+
+.file-viewer-header {
+  /* Only the body may shrink/scroll: large media must not collapse the controls. */
+  flex: none;
+  min-width: 0;
+  /* name, actions and Close: the groups stand apart by space alone, no dividers */
+  gap: var(--space-4);
+}
+
+.file-viewer-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* the extension never gives way: a long name is cut inside its stem ("2026-10-04-file-vie….md") */
+.file-viewer-title .modal-title {
+  display: flex;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.file-viewer-stem {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-viewer-meta {
+  margin: 0;
+  display: flex;
+  gap: var(--space-2);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+
+.file-viewer-size { flex: none; }
+
+.file-viewer-dot { margin-inline-end: var(--space-2); }
+
+/* a partial view (cut short, left plain) in place of the bare size: the warning color with an icon,
+   so it is not missed and not told by color alone; the notes themselves are its tooltip. It never
+   yields to the folder. */
+.file-viewer-notice {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  cursor: help;
+  color: var(--notice);
+  font-weight: var(--fw-medium);
+}
+
+.file-viewer-notice svg {
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+}
+
+/* the folder (the name is the title already) gets only the room left, so it gives way first, from its start */
+.file-viewer-path {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  direction: rtl;
+  text-align: left;
+  text-overflow: ellipsis;
+}
+
+/* a folder cut to a letter or two says nothing: below that it is left out (the full path is the tooltip) */
+.file-viewer-path { container-type: inline-size; }
+
+@container (max-width: 64px) {
+  .file-viewer-path > span { visibility: hidden; }
+}
+
+/* the header's actions stay quiet beside the name: dim until pointed at, pressed or on. One class
+   over the .icon-button primitive, which comes first, so its :active still shows a press */
+.file-viewer-action {
+  flex: none;
+  color: var(--text-dim);
+}
+
+@media (hover: hover) {
+  .file-viewer-action:hover {
+    color: var(--text-strong);
+  }
+}
+
+.file-viewer-actions,
+.file-viewer-group {
+  display: flex;
+  align-items: center;
+}
+
+.file-viewer-actions {
+  flex: none;
+  gap: var(--space-4);
+}
+
+.file-viewer-group { gap: var(--space-1); }
+
+/* a phone's More menu (new tab, raw, download): a small list under its button, inside the viewer */
+.file-viewer-more {
+  display: none;
+  position: relative;
+}
+
+.file-viewer-more-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: max-content;
+  margin-top: var(--space-1);
+  padding: var(--space-1);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+}
+
+.file-viewer-more-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--touch-target);
+  padding-inline: var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  text-decoration: none;
+}
+
+.file-viewer-more-item:focus-visible { background: var(--bg-hover); }
+
+@media (hover: hover) {
+  .file-viewer-more-item:hover { background: var(--bg-hover); }
+}
+
+.file-viewer-more-item svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+/* an "on" toggle (Show source) carries the accent on its glyph */
+.file-viewer-action[aria-pressed="true"] {
+  background: var(--bg-hover);
+  color: var(--accent);
+}
+
+.file-viewer-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-3);
+  background: var(--bg);
+}
+/* the popup's opening focus: the content as a whole, the dialog itself already outlined by its frame */
+.file-viewer-body:focus { outline: none; }
+
+.file-viewer-media {
+  /* auto margins: media sits in the middle of a full-height viewer, text starts at the top */
+  flex: none;
+  min-width: 0;
+  margin-block: auto;
+  max-width: 100%;
+  max-height: 78vh;
+  border-radius: var(--radius-md);
+  object-fit: contain;
+}
+
+.file-viewer-audio {
+  margin-block: auto;
+  width: min(100%, 480px);
+}
+
+.file-viewer-pdf {
+  width: 100%;
+  height: 78vh;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--pdf-page);
+}
+
+/* an HTML page as it draws: on the page colour the PDF viewer uses, as pages assume white */
+.file-viewer-page {
+  flex: none;
+  width: 100%;
+  height: 78vh;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--pdf-page);
+}
+
+/* Page | Source above an HTML file */
+.file-viewer-modes {
+  flex: none;
+  align-self: flex-start;
+  margin-bottom: var(--space-2);
+}
+.file-viewer-text {
+  align-self: stretch;
+  margin: 0;
+  padding: var(--space-3);
+  overflow: auto;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-base);
+}
+
+/* wrapping follows the Wrap setting (data-wrap in HighlightedCode.css); the gutter sits in the code's own padding, inside this one */
+.file-viewer-content {
+  align-self: stretch;
+  min-width: 0;
+}
+
+/*
+ * A virtualized source (VirtualSource) is a window of rows, scrolled inside its own root: the
+ * dialog takes its full height, so the body and the content have a definite height for that root
+ * to fill, and the body itself no longer scrolls (one scroll owner per region).
+ */
+.file-viewer-virtual {
+  height: min(92vh, 100%);
+}
+
+.file-viewer-body-virtual {
+  overflow: hidden;
+}
+
+.file-viewer-content-virtual {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* the virtualized source as one text, selected for a copy by hand when the clipboard is out of reach */
+.file-viewer-select-source {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  margin: 0;
+  padding: var(--space-3);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-base);
+  white-space: pre;
+  resize: none;
+}
+
+/*
+ * A rendered document reads on the viewer's own background, like a page: no panel around it. Its
+ * size and font are the chat's (ChatView.css). The Markdown width setting keeps it to the chat's
+ * lane (--chat-w, whatever Settings → Chat width makes it: the Default lane that follows the pane
+ * is measured from the pane that opened the viewer and written on it, lib/chatLane.ts), centered as an image or a PDF is and narrower
+ * with the viewer, or lets it fill the viewer (then its text starts on the title's edge).
+ */
+.file-viewer-markdown {
+  align-self: stretch;
+  min-width: 0;
+  margin-inline: auto;
+  padding: var(--space-2);
+}
+
+.file-viewer-markdown-readable { max-width: var(--chat-w); }
+
+/*
+ * On a narrow screen the header is one row, so the file keeps the screen: the name (cut inside its
+ * stem) gives way to the actions and Close beside it. The size and folder are left out there; a
+ * partial-view notice is not, since it says the file is not all shown.
+ */
+@media (max-width: 600px) {
+  .file-viewer-header-stacked {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "title actions close";
+    align-items: center;
+    column-gap: var(--space-1);
+  }
+
+  .file-viewer-header-stacked .file-viewer-title { grid-area: title; }
+  .file-viewer-header-stacked .file-viewer-meta:not(:has(.file-viewer-notice)) { display: none; }
+  .file-viewer-header-stacked .file-viewer-close { grid-area: close; }
+  .file-viewer-header-stacked .file-viewer-actions {
+    grid-area: actions;
+    gap: 0;
+  }
+  .file-viewer-header-stacked .file-viewer-group { gap: 0; }
+  /* new tab, raw and download move into More, so the name keeps room beside Show source and Copy */
+  .file-viewer-header-stacked .file-viewer-wide { display: none; }
+  .file-viewer-header-stacked .file-viewer-more { display: block; }
+
+  /* the reader's page: a reload line (ChunkFailureNotice) above the document when a part failed to load */
+.file-reader-frame {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.file-reader-frame > .file-reader {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
+
+.file-reader-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "title actions";
+  }
+}
+
+.file-viewer-note {
+  margin: var(--space-3) 0 0;
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+
+/* the file's type and size under the sentence that says it cannot be previewed */
+.file-viewer-note-meta {
+  display: block;
+  margin-top: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+}
+
+/* a Preview that could not be drawn: the note, and its source a button below it */
+.file-viewer-note > p {
+  margin: 0 0 var(--space-2);
+}
+
+@media (pointer: coarse) {
+  /* Override the shared desktop scrim padding even on a landscape phone. */
+  .file-viewer-scrim {
+    padding: 0;
+    bottom: auto;
+    height: var(--app-height, 100dvh);
+    align-items: stretch;
+  }
+
+  .file-viewer-scrim .file-viewer {
+    width: 100%;
+    max-height: 100%;
+    height: 100%;
+    border-radius: 0;
+    /* The modal owns all insets; its header/body remain inside the usable screen. */
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+      env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  }
+
+  .file-viewer-action {
+    width: max(44px, var(--touch-target));
+    height: max(44px, var(--touch-target));
+  }
+
+  .file-viewer-media { max-height: max(0px, calc(var(--app-height, 100dvh) - 120px)); }
+  .file-viewer-pdf { height: max(0px, calc(var(--app-height, 100dvh) - 120px)); }
+  .file-viewer-page { height: max(0px, calc(var(--app-height, 100dvh) - 170px)); }
+}
+
+/*
+ * Docked (a wide window): the viewer is a column beside the pane, not a dialog over it. Its width
+ * is the app's (--file-panel-shown-w, styles.css), dragged from its left edge; the viewer fills
+ * it, and media, PDFs and pages fill its height rather than a share of the window's. It is a
+ * split of the workspace, on the pane's own background behind one hairline, not a raised card.
+ */
+.file-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: var(--file-panel-shown-w, min(42vw, 560px));
+  flex: 0 0 var(--file-panel-shown-w, min(42vw, 560px));
+  min-width: 0;
+  min-height: 0;
+  border-left: var(--hairline) solid var(--border);
+  background: var(--bg);
+  /* the header yields by the panel's width, not the window's */
+  container: file-panel / inline-size;
+}
+
+.file-viewer-docked {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * The docked header is one row, a little over the control height, on a hairline (t3code's file
+ * surface subheader): the file's glyph and name, then its actions as small ghost buttons. It
+ * never stacks: the panel is never as narrow as a phone.
+ */
+.file-viewer-header-docked {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: calc(var(--control-h) + var(--space-2));
+  padding: 0 var(--space-2) 0 var(--space-3);
+  border-bottom: var(--hairline) solid var(--border);
+}
+
+.file-viewer-glyph {
+  flex: none;
+  width: calc(var(--icon-size) - 2px);
+  height: calc(var(--icon-size) - 2px);
+  color: var(--text-dim);
+}
+
+/* the name, small and medium: it is a row's title, not a dialog's */
+.file-viewer-name {
+  flex: 1 1 auto;
+  display: flex;
+  min-width: 0;
+  margin: 0;
+  white-space: nowrap;
+  color: var(--text-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-tight);
+}
+
+/* one run of ghost buttons, Close at its end */
+.file-viewer-header-docked .file-viewer-actions { gap: var(--space-1); }
+
+.file-viewer-header-docked .file-viewer-action {
+  width: calc(var(--control-h) - 6px);
+  height: calc(var(--control-h) - 6px);
+  border-radius: var(--radius-sm);
+}
+
+.file-viewer-header-docked .file-viewer-action svg {
+  width: calc(var(--icon-size) - 2px);
+  height: calc(var(--icon-size) - 2px);
+}
+
+/* The narrowest panel (a 980px window with the sidebar at its widest, 320px kept for the pane) has
+   no row for every action. The name keeps its type and the ways out stay, the popup and Close; the
+   file's own actions (new tab, raw, download, copy) wait for a wider panel, as does the glyph. */
+@container file-panel (max-width: 300px) {
+  .file-viewer-header-docked .file-viewer-glyph,
+  .file-viewer-header-docked .file-viewer-actions > :not(:first-child) { display: none; }
+}
+
+/*
+ * The toolbar under it, thinner, on its own hairline (paseo's file panel bar): the meta (size,
+ * folder, a partial view's notice) whispers on the left and the file's view modes sit on the right.
+ */
+.file-viewer-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: calc(var(--control-h) - var(--space-1));
+  padding: 0 var(--space-2) 0 var(--space-3);
+  border-bottom: var(--hairline) solid var(--border);
+}
+
+.file-viewer-toolbar .file-viewer-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* the modes, compact: the track is the toolbar itself inside a hairline, so the one chosen
+   segment is the only filled thing in the row and reads at a glance */
+.file-viewer-toolbar .file-viewer-modes {
+  align-self: center;
+  margin: 0;
+  padding: 1px;
+  background: transparent;
+}
+
+.file-viewer-toolbar .file-viewer-modes > button {
+  height: calc(var(--control-h) - var(--space-4));
+  padding: 0 var(--space-2);
+  font-size: var(--fs-xs);
+}
+
+@media (hover: hover) {
+  .file-viewer-toolbar .file-viewer-modes > button:hover { color: var(--text-strong); }
+}
+
+/* the content fills the panel edge to edge; text keeps its own small inset */
+.file-viewer-docked .file-viewer-body { padding: 0; }
+
+.file-viewer-docked .file-viewer-media {
+  max-height: 100%;
+  border-radius: 0;
+}
+
+/* a video takes the panel's width, as a player does; a picture keeps its own size under it */
+.file-viewer-docked video.file-viewer-media { width: 100%; }
+
+.file-viewer-docked .file-viewer-pdf,
+.file-viewer-docked .file-viewer-page {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  border-radius: 0;
+}
+
+.file-viewer-docked .file-viewer-audio { width: min(calc(100% - var(--space-6)), 480px); }
+
+.file-viewer-docked .file-viewer-markdown { padding: var(--space-3); }
+
+.file-viewer-docked .file-viewer-select-source {
+  border: 0;
+  border-radius: 0;
+}
+
+.file-viewer-docked .file-viewer-note,
+.file-viewer-docked .file-viewer-choices { padding-inline: var(--space-3); }
+
+/* a touch screen wide enough for the panel keeps its targets */
+@media (pointer: coarse) {
+  .file-viewer-header-docked .file-viewer-action {
+    width: var(--touch-target);
+    height: var(--touch-target);
+  }
+
+  .file-viewer-toolbar .file-viewer-modes > button { height: calc(var(--control-h) - 6px); }
+}
+
+.file-viewer-choices ul {
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.file-viewer-choices .btn {
+  max-width: 100%;
+  height: auto;
+  min-height: var(--control-h);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+/* a markdown file in a tab of its own (FileReader): the document is the page */
+.file-reader {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.file-reader-header {
+  /* lined up with the document under it: its column, then the body's own padding */
+  padding-inline: max(var(--space-3), calc((100% - 980px) / 2 + var(--space-3)));
+  border-bottom: var(--hairline) solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.file-reader-header .modal-title {
+  margin: 0;
+  font-size: var(--fs-lg);
+}
+
+.file-reader-body .file-viewer-markdown {
+  width: min(100%, 980px);
+  align-self: center;
+}
