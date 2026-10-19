@@ -20,8 +20,79 @@ const MAX_FILES = 32
 const MAX_STORE_BYTES = 64 * 1024 * 1024
 const MAX_MANIFEST_BYTES = 64 * 1024
 const ID = /^[a-f0-9]{64}$/
-const FILE = /^[a-f0-9]{64}\.(png|jpg)$/
+const FILE = /^[a-f0-9]{64}\.(png|jpg|pdf|txt)$/
+const extensions: Record<string, string> = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'application/pdf': '.pdf',
+  'text/plain': '.txt'
+}
+// MIME is derived from bounded bytes. Hints may narrow, never override validation.
+export const validateUploadFile = (data: Buffer, hint: string) => {
+  if (!data.length || data.length > MAX_UPLOAD_BYTES)
+    throw new Error('Invalid file size')
+  if (
+    data.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+  ) {
+    if (hint !== 'image/png' && hint !== 'application/octet-stream')
+      throw new Error('Invalid file MIME hint')
+    return {
+      ...validateUploadImage(data, 'image/png'),
+      fileKind: 'image' as const
+    }
+  }
+  if (data[0] === 255 && data[1] === 216) {
+    if (hint !== 'image/jpeg' && hint !== 'application/octet-stream')
+      throw new Error('Invalid file MIME hint')
+    return {
+      ...validateUploadImage(data, 'image/jpeg'),
+      fileKind: 'image' as const
+    }
+  }
+  if (
+    /^%PDF-1\.[0-7][\r\n]|^%PDF-2\.0[\r\n]/.test(
+      data.subarray(0, 10).toString('ascii')
+    )
+  ) {
+    if (
+      !['application/pdf', 'application/octet-stream'].includes(hint) ||
+      !/%%EOF\s*$/.test(data.subarray(-1024).toString('latin1'))
+    )
+      throw new Error('Invalid PDF file')
+    return { ext: '.pdf', mime: 'application/pdf', fileKind: 'pdf' as const }
+  }
+  if (
+    ![
+      'text/plain',
+      'application/json',
+      'application/octet-stream',
+      'text/markdown',
+      'text/csv',
+      'application/javascript',
+      'text/javascript',
+      'text/x-python',
+      'application/xml',
+      'text/xml',
+      'text/x-log'
+    ].includes(hint)
+  )
+    throw new Error('Unsupported file MIME hint')
+  let text: string
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(data)
+  } catch {
+    throw new Error('Invalid UTF-8 file')
+  }
+  // HTML/SVG are intentionally excluded, even as text in this initial allowlist.
+  if (
+    /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(text) ||
+    /<\s*(?:!doctype\s+html|html|svg|script)\b/i.test(text)
+  )
+    throw new Error('Unsupported file contents')
+  return { ext: '.txt', mime: 'text/plain', fileKind: 'text' as const }
+}
 export interface IUploadScope {
+  provider?: string
   paneId: string
   terminalId: string
   agentSessionId: string
@@ -298,9 +369,8 @@ export class ImageUploadStore {
           !record ||
           !ID.test(record.id) ||
           !FILE.test(record.file) ||
-          record.file !==
-            `${record.id}.${record.mime === 'image/png' ? 'png' : 'jpg'}` ||
-          !['image/png', 'image/jpeg'].includes(record.mime) ||
+          record.file !== `${record.id}${extensions[record.mime]}` ||
+          !extensions[record.mime] ||
           !validScope(record.scope) ||
           !Number.isSafeInteger(record.size) ||
           record.size < 1 ||
@@ -373,7 +443,8 @@ export class ImageUploadStore {
   ) => {
     if (!validScope(scope)) throw new Error('Exact upload scope required')
     if (this.pendingUploads >= 8) throw new Error('Upload queue full')
-    const image = validateUploadImage(data, mime)
+    const image = validateUploadFile(data, mime)
+    mime = image.mime
     // Freeze caller-owned bytes and scope before entering an asynchronous queue.
     data = Buffer.from(data)
     scope = { ...scope }
@@ -419,6 +490,7 @@ export class ImageUploadStore {
           this.active.add(id)
           return {
             imageId: id,
+            fileKind: image.fileKind,
             mime,
             size: record.size,
             expiresAt: record.expiresAt
@@ -452,17 +524,13 @@ export class ImageUploadStore {
       const record = this.lookup(id, scope)
       const data = await this.readFile(record.file, MAX_UPLOAD_BYTES)
       if (data.length !== record.size) throw new Error('Image unavailable')
-      validateUploadImage(data, record.mime)
+      validateUploadFile(data, record.mime)
       return { data, mime: record.mime }
     })
   // Server-only canonical filename; never serialize this return value to HTTP.
   contextPath = (id: string, mime: string) => {
-    if (!ID.test(id) || !['image/png', 'image/jpeg'].includes(mime))
-      throw new Error('Image unavailable')
-    return path.join(
-      this.directory,
-      `${id}.${mime === 'image/png' ? 'png' : 'jpg'}`
-    )
+    if (!ID.test(id) || !extensions[mime]) throw new Error('Image unavailable')
+    return path.join(this.directory, `${id}${extensions[mime]}`)
   }
   consume = (id: string, scope: IUploadScope) =>
     this.serial(async () => {
@@ -473,7 +541,7 @@ export class ImageUploadStore {
         )
       const data = await this.readFile(record.file, MAX_UPLOAD_BYTES)
       if (data.length !== record.size) throw new Error('Image unavailable')
-      validateUploadImage(data, record.mime)
+      validateUploadFile(data, record.mime)
       this.consumed.add(id) // one-shot before any possible native write; unknown cannot resend
       return this.contextPath(id, record.mime)
     })

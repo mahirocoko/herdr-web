@@ -141,6 +141,20 @@ describe('pane-drawer: pure helpers', () => {
   })
 
   describe('lifecycle source and accessibility guards', () => {
+    it('offers exactly the five approved canonical native launch kinds in the existing Select', async () => {
+      const source = await Bun.file(
+        new URL('../pane-drawer.tsx', import.meta.url)
+      ).text()
+      const launchSelect = source.slice(
+        source.indexOf('id="launch-kind"'),
+        source.indexOf('<p>', source.indexOf('id="launch-kind"'))
+      )
+      expect(
+        [...launchSelect.matchAll(/value: '([^']+)'/g)].map((match) => match[1])
+      ).toEqual(['letta', 'pi', 'codex', 'agy', 'cursor'])
+      expect(launchSelect).toContain('setLaunchKind(value)')
+      expect(source).toContain('nativeLaunchKindLabel(launchKind)')
+    })
     it('uses bounded source choices without arbitrary cwd, env, or focus inputs', async () => {
       const spaceSource = await Bun.file(
         new URL('../space-drawer.tsx', import.meta.url)

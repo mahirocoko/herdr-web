@@ -61,6 +61,43 @@ describe('server conversation reader', () => {
     }))
   })
 
+  test('injected Cursor snapshots reject before any production authority fallback', async () => {
+    const previous = {
+      transport: process.env.HERDR_TRANSPORT,
+      socket: process.env.HERDR_SOCKET_PATH
+    }
+    // Even a regression must never reach Mahiro's real socket or CLI.
+    process.env.HERDR_TRANSPORT = 'socket'
+    process.env.HERDR_SOCKET_PATH = path.join(tempDir, 'must-not-open.sock')
+    try {
+      await expect(
+        readPaneConversation('p-cursor-fixture', {
+          deps: {
+            fetchSnapshot: async () =>
+              mockSnapshot([
+                {
+                  id: 'p-cursor-fixture',
+                  terminal_id: 'fixture-terminal',
+                  agent: 'cursor',
+                  agent_status: 'idle'
+                }
+              ])
+          }
+        })
+      ).rejects.toThrow(
+        'Injected Cursor snapshots require injected native authority'
+      )
+    } finally {
+      for (const [key, value] of Object.entries({
+        HERDR_TRANSPORT: previous.transport,
+        HERDR_SOCKET_PATH: previous.socket
+      })) {
+        if (value === undefined) delete process.env[key]
+        else process.env[key] = value
+      }
+    }
+  })
+
   test('fails closed with 404 when pane is not in snapshot', async () => {
     const snapshot = mockSnapshot([])
     await expect(

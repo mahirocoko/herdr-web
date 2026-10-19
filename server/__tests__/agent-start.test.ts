@@ -9,9 +9,12 @@ import {
 } from '../operation-coordinator.ts'
 import type { IAgentStartAction, ISnapshotResult } from '../types.ts'
 
-describe.each(['letta', 'pi'] as const)('%s native launch', (kind) => {
+const launchKinds = ['letta', 'pi', 'codex', 'agy', 'cursor'] as const
+
+describe.each([...launchKinds])('%s native launch', (kind) => {
   const newArgs = kind === 'letta' ? ['--new'] : []
-  const expectedArgv = [kind, ...newArgs]
+  const expectedProgram = kind === 'cursor' ? 'cursor-agent' : kind
+  const expectedArgv = [expectedProgram, ...newArgs]
   const action: IAgentStartAction = {
     type: 'agent-start',
     operationId: 'start-1',
@@ -57,7 +60,7 @@ describe.each(['letta', 'pi'] as const)('%s native launch', (kind) => {
       agent,
       argv: [...expectedArgv]
     },
-    post = launched
+    post: ISnapshotResult = launched
   ) => {
     let reads = 0
     const calls: unknown[][] = []
@@ -253,19 +256,76 @@ describe.each(['letta', 'pi'] as const)('%s native launch', (kind) => {
     })
     it('allows only trusted kind intent without client launch overrides', () => {
       expect(validateActionRequest(action).valid).toBe(true)
+      expect(
+        validateActionRequest({ ...action, name: 'a'.repeat(32) }).valid
+      ).toBe(true)
       for (const override of [
         { args: [] },
         { args: ['--new'] },
         { backend: 'local' },
         { unexpected: true },
         { model: 'x' },
-        { kind: 'agy' },
+        { kind: 'claude' },
+        { kind: 'gemini' },
+        { kind: 'custom' },
+        { kind: 'cursor-agent' },
+        { env: {} },
+        { cwd: '/tmp' },
+        { program: 'codex' },
+        { effort: 'high' },
+        { permissions: 'allow' },
+        { resume: true },
+        { initialPrompt: 'hello' },
         { name: 'x;sh' },
+        { name: 'Uppercase' },
+        { name: 'a'.repeat(33) },
+        { name: 'agent\n' },
+        { name: 'agent\r' },
         { target: { ...action.target, agentSessionId: 'old' } }
       ])
         expect(validateActionRequest({ ...action, ...override }).valid).toBe(
           false
         )
+    })
+    it('rejects unsupported adapter kinds without any native reads or dispatch', async () => {
+      for (const unsupported of [
+        'claude',
+        'gemini',
+        'custom',
+        'cursor-agent',
+        '__proto__'
+      ]) {
+        const fixture = setup()
+        let reads = 0
+        const result = await executeAgentStart(
+          { ...action, kind: unsupported } as unknown as IAgentStartAction,
+          {
+            deps: {
+              ...fixture.deps,
+              fetchSnapshot: async () => {
+                reads++
+                return shell
+              }
+            }
+          }
+        )
+        expect(result.outcome).toBe('rejected')
+        expect(reads).toBe(0)
+        expect(fixture.calls).toHaveLength(0)
+      }
+    })
+    it('isolates fixed recipe args from previously dispatched request mutation', async () => {
+      const first = setup()
+      expect((await executeAgentStart(action, first)).outcome).toBe(
+        'acknowledged'
+      )
+      const dispatched = first.calls[0][1] as { args: string[] }
+      dispatched.args.push('--resume')
+      const second = setup()
+      expect((await executeAgentStart(action, second)).outcome).toBe(
+        'acknowledged'
+      )
+      expect((second.calls[0][1] as { args: string[] }).args).toEqual(newArgs)
     })
     it('sends server-owned new-conversation args and correlates fresh session/status, not argv to browser', async () => {
       const { deps, calls } = setup()
@@ -322,7 +382,10 @@ describe.each(['letta', 'pi'] as const)('%s native launch', (kind) => {
         [{ ...agent, pane_id: undefined }, 'missing_identity'],
         [{ ...agent, terminal_id: 'other' }, 'identity_mismatch'],
         [{ ...agent, pane_id: 'other' }, 'identity_mismatch'],
-        [{ ...agent, agent: 'codex' }, 'identity_mismatch'],
+        [
+          { ...agent, agent: kind === 'codex' ? 'pi' : 'codex' },
+          'identity_mismatch'
+        ],
         [{ ...agent, name: 'other' }, 'identity_mismatch'],
         [{ ...agent, name: '' }, 'identity_mismatch']
       ] as const) {
@@ -338,6 +401,47 @@ describe.each(['letta', 'pi'] as const)('%s native launch', (kind) => {
         })
         expect(fixture.calls.length).toBe(1)
       }
+    })
+    it('waits for transient prompt children without relaxing the idle predicate', async () => {
+      const fixture = setup()
+      let processReads = 0
+      fixture.deps.fetchProcessInfo = async () => ({
+        pane_id: 'pane:test',
+        shell_pid: 123,
+        foreground_process_group_id: 123,
+        foreground_processes:
+          ++processReads === 1 ? [{ pid: 123 }, { pid: 456 }] : [{ pid: 123 }]
+      })
+      expect(await executeAgentStart(action, fixture)).toMatchObject({
+        ok: true,
+        outcome: 'acknowledged'
+      })
+      expect(processReads).toBe(2)
+      expect(fixture.calls).toHaveLength(1)
+    })
+    it('rechecks target identity after the shell settles before dispatch', async () => {
+      const fixture = setup()
+      let processReads = 0
+      let snapshots = 0
+      fixture.deps.fetchProcessInfo = async () => ({
+        pane_id: 'pane:test',
+        shell_pid: 123,
+        foreground_process_group_id: 123,
+        foreground_processes:
+          ++processReads === 1 ? [{ pid: 123 }, { pid: 456 }] : [{ pid: 123 }]
+      })
+      fixture.deps.fetchSnapshot = async () =>
+        ++snapshots === 1
+          ? shell
+          : {
+              ...shell,
+              panes: [{ ...shell.panes[0], terminal_id: 'replaced' }]
+            }
+      expect((await executeAgentStart(action, fixture)).outcome).toBe(
+        'rejected'
+      )
+      expect(processReads).toBe(2)
+      expect(fixture.calls).toHaveLength(0)
     })
     it('rejects replaced terminals and busy foreground without dispatch', async () => {
       const first = setup()
@@ -374,6 +478,18 @@ describe.each(['letta', 'pi'] as const)('%s native launch', (kind) => {
         expect(fixture.calls.length).toBe(1)
       }
     })
+    it('keeps correlated native pre-write refusals rejected without redispatch', async () => {
+      for (const [code, status] of [
+        ['agent_pane_busy', 409],
+        ['invalid_agent_name', 400]
+      ] as const) {
+        const fixture = setup(new HerdrSocketError(code, 'secret/path/token'))
+        const result = await executeAgentStart(action, fixture)
+        expect(result).toMatchObject({ ok: false, outcome: 'rejected', status })
+        expect(JSON.stringify(result)).not.toContain('secret')
+        expect(fixture.calls).toHaveLength(1)
+      }
+    })
     it('returns bounded diagnostic phases without raw native details or redispatch', async () => {
       const cases = [
         [
@@ -388,11 +504,17 @@ describe.each(['letta', 'pi'] as const)('%s native launch', (kind) => {
           'native_timeout'
         ],
         [
-          new HerdrSocketError('agent_pane_busy', 'secret/path/token'),
+          new HerdrSocketError(
+            'unclassified_native_error',
+            'secret/path/token'
+          ),
           'native_rejection'
         ],
         [{ type: 'ok' }, 'malformed_reply'],
-        [{ type: 'agent_started', agent, argv: ['letta'] }, 'argv_mismatch'],
+        [
+          { type: 'agent_started', agent, argv: [kind, '--unexpected'] },
+          'argv_mismatch'
+        ],
         [
           {
             type: 'agent_started',
@@ -426,11 +548,11 @@ describe.each(['letta', 'pi'] as const)('%s native launch', (kind) => {
       for (const argv of [
         [],
         [''],
-        [kind, ''],
-        [kind, '--continue'],
-        [kind, '--resume'],
-        [kind, '--session', 'old'],
-        [kind, '--new', '--extra'],
+        [expectedProgram, ''],
+        [expectedProgram, '--continue'],
+        [expectedProgram, '--resume'],
+        [expectedProgram, '--session', 'old'],
+        [expectedProgram, '--new', '--extra'],
         [kind === 'pi' ? 'letta' : 'pi', ...newArgs]
       ]) {
         const fixture = setup({ type: 'agent_started', agent, argv })
@@ -441,6 +563,22 @@ describe.each(['letta', 'pi'] as const)('%s native launch', (kind) => {
         expect(fixture.calls).toHaveLength(1)
       }
     })
+    if (kind === 'cursor') {
+      it('refuses guessed Cursor executable aliases despite matching intent metadata', async () => {
+        for (const program of ['cursor', 'agent', '/usr/bin/cursor-agent']) {
+          const fixture = setup({
+            type: 'agent_started',
+            agent,
+            argv: [program]
+          })
+          expect(await executeAgentStart(action, fixture)).toMatchObject({
+            outcome: 'unknown',
+            diagnostic: 'argv_mismatch'
+          })
+          expect(fixture.calls).toHaveLength(1)
+        }
+      })
+    }
     it('keeps initializing native ACK not ready', async () => {
       for (const flags of [
         { interactive_ready: false },
@@ -456,9 +594,13 @@ describe.each(['letta', 'pi'] as const)('%s native launch', (kind) => {
         )
       }
     })
-    it('never calls ACK alone ready on session replacement or unknown status', async () => {
+    it('never calls ACK alone ready on provider/session replacement or unknown status', async () => {
       for (const pane of [
-        { ...agent, agent_session: { ...agent.agent_session, value: 'other' } },
+        { ...agent, agent: kind === 'codex' ? 'pi' : 'codex' },
+        {
+          ...agent,
+          agent_session: { ...agent.agent_session, value: 'other' }
+        },
         { ...agent, agent_status: 'unknown' }
       ]) {
         const fixture = setup(undefined, { ...shell, panes: [pane] })

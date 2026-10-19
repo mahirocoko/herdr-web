@@ -10,6 +10,7 @@ import type {
 
 import { validatePromptAnswerIntent } from '../src/types/interactive-prompt.ts'
 import { CANONICAL_TERMINAL_KEYS } from '../src/utils/terminal-keys.ts'
+import { NATIVE_AGENT_NAME_REGEX } from '../src/constants/native-agent-start.ts'
 
 export const ALLOWED_KEYS = new Set<string>(CANONICAL_TERMINAL_KEYS)
 
@@ -477,9 +478,13 @@ export const validateActionRequest = (
         (key) =>
           !['type', 'operationId', 'target', 'kind', 'name'].includes(key)
       ) ||
-      (raw.kind !== 'letta' && raw.kind !== 'pi') ||
+      (raw.kind !== 'letta' &&
+        raw.kind !== 'pi' &&
+        raw.kind !== 'codex' &&
+        raw.kind !== 'agy' &&
+        raw.kind !== 'cursor') ||
       typeof raw.name !== 'string' ||
-      !/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(raw.name) ||
+      !NATIVE_AGENT_NAME_REGEX.test(raw.name) ||
       !target ||
       typeof target !== 'object' ||
       Array.isArray(target) ||
@@ -495,7 +500,7 @@ export const validateActionRequest = (
       return {
         valid: false,
         error:
-          'Invalid native agent start: exact pane/terminal, safe name and Letta or Pi kind required; no launch overrides allowed'
+          'Invalid native agent start: exact pane/terminal, safe name and Letta, Pi, Codex, Agy or Cursor kind required; no launch overrides allowed'
       }
     return {
       valid: true,

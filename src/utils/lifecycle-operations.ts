@@ -12,9 +12,26 @@ export const LIFECYCLE_CLOSE_UNKNOWN_COPY =
   'Outcome unknown. This may already have closed. Refresh and inspect before another action.'
 export const LIFECYCLE_CREATE_UNKNOWN_COPY =
   'Outcome unknown. This Space may already have been created. Refresh and inspect before another action.'
+export const nativeLaunchKindLabel = (kind: unknown): string => {
+  switch (kind) {
+    case 'letta':
+      return 'Letta'
+    case 'pi':
+      return 'Pi'
+    case 'codex':
+      return 'Codex'
+    case 'agy':
+      return 'Agy'
+    case 'cursor':
+      return 'Cursor'
+    default:
+      return 'agent'
+  }
+}
+
 export const nativeLaunchStatusCopy = (ticket: ILifecycleTicket): string => {
   if (ticket.phase === 'pending')
-    return `Starting ${ticket.target.kind === 'pi' ? 'Pi' : 'Letta'} in the exact shell pane. Dismissing this sheet does not cancel launch.`
+    return `Starting ${nativeLaunchKindLabel(ticket.target.kind)} in the exact shell pane. Dismissing this sheet does not cancel launch.`
   if (ticket.phase === 'acknowledged')
     return ticket.result?.ready === true
       ? 'Launch acknowledged. Native idle readiness was corroborated for the returned terminal and session at the server snapshot; inspect current state before input.'

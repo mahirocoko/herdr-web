@@ -14,18 +14,38 @@ const checked = async (response: Response) => {
   return response
 }
 export const decodeUploadImage = async (file: File) => {
-  if (
-    !['image/png', 'image/jpeg'].includes(file.type) ||
-    !file.size ||
-    file.size > 8 * 1024 * 1024
-  )
-    throw new Error('Choose one PNG or JPEG image, up to 8 MiB.')
+  if (!file.size || file.size > 8 * 1024 * 1024)
+    throw new Error('Choose one image, PDF or UTF-8 text file, up to 8 MiB.')
   const data = new Uint8Array(await file.arrayBuffer())
+  const png =
+    data.length >= 8 &&
+    [137, 80, 78, 71, 13, 10, 26, 10].every(
+      (value, index) => data[index] === value
+    )
+  const jpeg = data[0] === 255 && data[1] === 216
+  // General files are never browser-rendered. Server remains the final byte/MIME authority.
+  if (!png && !jpeg) {
+    if (file.type === 'image/png' || file.type === 'image/jpeg')
+      throw new Error('Image header is invalid.')
+    if (new TextDecoder().decode(data.subarray(0, 5)) === '%PDF-') return
+    let text: string
+    try {
+      text = new TextDecoder('utf-8', { fatal: true }).decode(data)
+    } catch {
+      throw new Error('Choose PNG or JPEG, PDF or a valid UTF-8 text file.')
+    }
+    if (
+      /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(text) ||
+      /<\s*(?:!doctype\s+html|html|svg|script)\b/i.test(text)
+    )
+      throw new Error('Choose PNG or JPEG, PDF or a plain UTF-8 text file.')
+    return
+  }
   const view = new DataView(data.buffer)
   let width = 0,
     height = 0
   if (
-    file.type === 'image/png' &&
+    png &&
     data.length >= 33 &&
     [137, 80, 78, 71, 13, 10, 26, 10].every(
       (value, index) => data[index] === value
@@ -33,7 +53,7 @@ export const decodeUploadImage = async (file: File) => {
   ) {
     width = view.getUint32(16)
     height = view.getUint32(20)
-  } else if (file.type === 'image/jpeg' && data[0] === 255 && data[1] === 216) {
+  } else if (jpeg) {
     let offset = 2
     while (offset + 4 <= data.length) {
       if (data[offset++] !== 255) break
@@ -91,7 +111,14 @@ export const uploadImage = async (
   const response = await checked(
     await fetch('/api/media/uploads', {
       method: 'POST',
-      headers: { ...headers(target), 'content-type': file.type },
+      headers: {
+        ...headers(target),
+        'content-type': ['image/png', 'image/jpeg', 'application/pdf'].includes(
+          file.type
+        )
+          ? file.type
+          : 'application/octet-stream'
+      },
       body: file,
       signal,
       cache: 'no-store'
@@ -101,7 +128,16 @@ export const uploadImage = async (
   if (
     !value.ok ||
     !/^[a-f0-9]{64}$/.test(value.imageId) ||
-    !['image/png', 'image/jpeg'].includes(value.mime) ||
+    !['image/png', 'image/jpeg', 'application/pdf', 'text/plain'].includes(
+      value.mime
+    ) ||
+    (value.fileKind !== undefined &&
+      value.fileKind !==
+        (value.mime.startsWith('image/')
+          ? 'image'
+          : value.mime === 'application/pdf'
+            ? 'pdf'
+            : 'text')) ||
     !Number.isSafeInteger(value.imageContextBytes) ||
     value.imageContextBytes < 0 ||
     value.imageContextBytes > 4096 ||

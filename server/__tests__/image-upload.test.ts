@@ -43,6 +43,40 @@ afterEach(async () => {
 })
 
 describe('bounded upload storage checkpoint', () => {
+  test('text/PDF use derived extensions, same nofollow fencing and restart/TTL manifest lifecycle', async () => {
+    for (const [body, hint, ext, mime] of [
+      [
+        Buffer.from('ข้อมูล log'),
+        'application/octet-stream',
+        '.txt',
+        'text/plain'
+      ],
+      [
+        Buffer.from('%PDF-1.7\n%%EOF\n'),
+        'application/pdf',
+        '.pdf',
+        'application/pdf'
+      ]
+    ] as const) {
+      const record = await store.upload(body, hint, scope)
+      expect(record.mime).toBe(mime)
+      expect(
+        await readFile(path.join(directory, record.imageId + ext))
+      ).toEqual(body)
+      expect((await store.preview(record.imageId, scope)).data).toEqual(body)
+    }
+    const records = JSON.parse(
+      await readFile(path.join(directory, 'manifest.json'), 'utf8')
+    )
+    const restarted = new ImageUploadStore(directory, () => now)
+    await restarted.startup()
+    for (const record of records)
+      await expect(restarted.preview(record.id, scope)).rejects.toThrow()
+    now += UPLOAD_TTL_MS
+    await restarted.startup()
+    for (const record of records)
+      await expect(lstat(path.join(directory, record.file))).rejects.toThrow()
+  })
   test('opaque ID, private permissions and exact scope preview/remove', async () => {
     const result = await store.upload(png, 'image/png', scope)
     expect(result.imageId).toMatch(/^[a-f0-9]{64}$/)

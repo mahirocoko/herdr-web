@@ -477,7 +477,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
   const nativeImageKind =
     selectedPane?.agent ?? selectedPane?.agent_session?.agent
   const imageEligible =
-    nativeImageKind?.toLowerCase() === 'letta' &&
+    ['letta', 'codex', 'agy', 'cursor'].includes(nativeImageKind ?? '') &&
     targetResult.target?.expectedMode === 'agent' &&
     viewMode === 'chat' &&
     controlOwnership === 'idle' &&
@@ -607,7 +607,7 @@ export const SpaceDashboard: FC<ISpaceDashboardProps> = ({ workspaceId }) => {
       (!imageEligible || !canSendComposerImage(selectedImage, text))
     ) {
       setActionError(
-        'Image is not ready or the combined prompt exceeds 4096 UTF-8 bytes. Remove or retry the image.'
+        'Image/file context is not ready or the combined prompt exceeds 4096 UTF-8 bytes. Remove or retry the image.'
       )
       return 'skipped_busy'
     }

@@ -57,6 +57,7 @@ import {
   isFamilyClear
 } from './pi-family-parser.ts'
 import { projectFamilyHistory } from './pi-family-history.ts'
+import { readCursorReplay } from './cursor-acp.ts'
 
 const WINDOW_BYTES = 256 * 1024
 /** Whole recorded output is finite and measured in JS UTF-16 code units. */
@@ -299,7 +300,7 @@ const readRowBytes = (file: IOpenedFile, start: number, end: number) => {
 const validateAppendedRecords = (
   file: IOpenedFile,
   start: number,
-  source: IConversationRead['source'],
+  source: Exclude<IConversationRead['source'], 'cursor-acp-replay'>,
   original: { id: string; callId?: string; kind?: 'image' }
 ) => {
   const end = file.stat.size
@@ -630,7 +631,7 @@ const snapshotIdentity = (snapshot: ISnapshotResult, pane: IPane) => {
 const readWindow = (
   file: IOpenedFile,
   endByte: number,
-  source: IConversationRead['source'],
+  source: Exclude<IConversationRead['source'], 'cursor-acp-replay'>,
   issueOutputRef: (
     position: number,
     end: number,
@@ -908,10 +909,35 @@ const readInternal = async (
   if (!isAgentPane(pane, snapshot.agents))
     throw new ConversationError(400, `Pane '${paneId}' is not an agent pane`)
   const identity = snapshotIdentity(snapshot, pane)
+  if (identity.provider === 'cursor') {
+    if (options.before || outputRequest) throw changed()
+    if (
+      options.deps?.fetchSnapshot &&
+      options.deps.fetchSnapshot !== getHerdrSnapshot &&
+      !options.deps.nativeRpc
+    )
+      throw new ConversationError(
+        404,
+        'Injected Cursor snapshots require injected native authority'
+      )
+    try {
+      return await readCursorReplay(
+        snapshot,
+        paneId,
+        () => fetchSnapshot(5000),
+        options.deps
+      )
+    } catch {
+      throw new ConversationError(
+        404,
+        'Cursor text replay unavailable; inspect Terminal'
+      )
+    }
+  }
   const home = process.env.HOME || os.homedir()
   let root: string
   let nativePath: string
-  let source: IConversationRead['source']
+  let source: Exclude<IConversationRead['source'], 'cursor-acp-replay'>
   let metadataSignature = ''
   let session: string
   let pairResolution: IPairResolution | undefined

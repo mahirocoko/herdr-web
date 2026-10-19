@@ -356,6 +356,7 @@ export interface IConversationRead {
     | 'omo-transcript'
     | 'gjc-transcript'
     | 'pi-transcript'
+    | 'cursor-acp-replay'
   /** Opaque identity changes when the selected native conversation changes. */
   sessionKey: string
   turns: IConversationTurn[]

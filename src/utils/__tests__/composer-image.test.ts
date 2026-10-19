@@ -47,6 +47,29 @@ const deferred = <T>() => {
 }
 
 describe('memory-only image intent owner', () => {
+  test('general file is ready without Blob preview; Thai byte boundary and old ACK remain fenced', async () => {
+    const f = fixture({
+      upload: async () => ({
+        ...uploaded('a'),
+        mime: 'text/plain',
+        fileKind: 'text'
+      }),
+      preview: async () => {
+        throw new Error('General files must never be previewed')
+      }
+    })
+    await f.owner.choose(new File(['ข้อมูล'], 'บันทึก.txt'), target, 'A:0')
+    const selected = f.owner.read('A:0')!
+    expect(selected.phase).toBe('ready')
+    expect(selected.preview).toBeUndefined()
+    expect(canSendComposerImage(selected, 'ก'.repeat(1298) + 'xx')).toBe(true)
+    expect(canSendComposerImage(selected, 'ก'.repeat(1299))).toBe(false)
+    const ticket = f.owner.beginSend(selected)
+    await f.owner.choose(new File(['new'], 'new.txt'), target, 'A:0')
+    const newer = f.owner.read('A:0')
+    f.owner.settle(ticket, true)
+    expect(f.owner.read('A:0')).toBe(newer)
+  })
   test('late upload after A-B-A cannot attach and deletes eventual captured upload', async () => {
     const upload = deferred<ReturnType<typeof uploaded>>()
     const f = fixture({ upload: async () => upload.promise })

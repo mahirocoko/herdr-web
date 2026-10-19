@@ -26,6 +26,10 @@ import type {
 import type { ILifecycleOperations } from '@/hooks/use-lifecycle-operations.ts'
 import { fetchAgentExplain, sendAction } from '@/services/api-client.ts'
 import {
+  NATIVE_AGENT_NAME_MAX_LENGTH,
+  NATIVE_AGENT_NAME_PATTERN
+} from '@/constants/native-agent-start.ts'
+import {
   canSubmitNewTab,
   deriveTabCreateSourcePanes
 } from '@/utils/action-target.ts'
@@ -35,6 +39,7 @@ import {
   resolveInspectPaneListAction
 } from '@/utils/new-tab-state.ts'
 import {
+  nativeLaunchKindLabel,
   nativeLaunchStatusCopy,
   freezeTabCloseConfirmation,
   tabConfirmationChanged,
@@ -170,7 +175,10 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
     terminalId: string
   } | null>(null)
   const [launchName, setLaunchName] = useState('')
-  const [launchKind, setLaunchKind] = useState<'letta' | 'pi'>('letta')
+  const [launchKind, setLaunchKind] =
+    useState<Extract<IStrictActionRequest, { type: 'agent-start' }>['kind']>(
+      'letta'
+    )
   const launchPane = launchTarget
     ? panes.find(
         (pane) =>
@@ -1092,15 +1100,24 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                   value={launchKind}
                   options={[
                     { value: 'letta', label: 'Letta' },
-                    { value: 'pi', label: 'Pi' }
+                    { value: 'pi', label: 'Pi' },
+                    { value: 'codex', label: 'Codex' },
+                    { value: 'agy', label: 'Agy' },
+                    { value: 'cursor', label: 'Cursor' }
                   ]}
                   onValueChange={(value) => {
-                    if (value === 'letta' || value === 'pi')
+                    if (
+                      value === 'letta' ||
+                      value === 'pi' ||
+                      value === 'codex' ||
+                      value === 'agy' ||
+                      value === 'cursor'
+                    )
                       setLaunchKind(value)
                   }}
                 />
                 <p>
-                  {launchKind === 'pi' ? 'Pi' : 'Letta'} · new conversation;
+                  {nativeLaunchKindLabel(launchKind)} · new conversation;
                   configured model/permissions unchanged. No effort override or
                   initial prompt.
                 </p>
@@ -1121,8 +1138,9 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                   value={launchName}
                   onChange={(event) => setLaunchName(event.target.value)}
                   required
-                  maxLength={64}
-                  pattern={'[a-zA-Z][a-zA-Z0-9_\\-]{0,63}'}
+                  maxLength={NATIVE_AGENT_NAME_MAX_LENGTH}
+                  pattern={NATIVE_AGENT_NAME_PATTERN}
+                  title="Start with a lowercase letter; use lowercase letters, digits, - or _ (1–32 characters)."
                   autoComplete="off"
                   autoCapitalize="none"
                   autoCorrect="off"
@@ -1156,7 +1174,7 @@ const PaneDrawer: FC<IPaneDrawerProps> = ({
                     newTabState.outcome === 'unknown'
                   }
                 >
-                  Start {launchKind === 'pi' ? 'Pi' : 'Letta'}
+                  Start {nativeLaunchKindLabel(launchKind)}
                 </Button>
               </div>
             </form>

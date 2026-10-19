@@ -88,7 +88,7 @@ it('escaped native name pattern compiles under v semantics and matches server AS
     expect(htmlPattern.test(value)).toBe(serverPattern.test(value))
 })
 
-it.each(['letta', 'pi'])(
+it.each(['letta', 'pi', 'codex', 'agy', 'cursor'])(
   'keeps %s launch ACK distinct, gates duplicate intent and clears only explicit inspection',
   (kind) => {
     const ticket = {
@@ -111,7 +111,7 @@ it.each(['letta', 'pi'])(
       ticket
     })
     expect(nativeLaunchStatusCopy(ticket)).toContain(
-      kind === 'pi' ? 'Starting Pi' : 'Starting Letta'
+      `Starting ${{ letta: 'Letta', pi: 'Pi', codex: 'Codex', agy: 'Agy', cursor: 'Cursor' }[kind]}`
     )
     expect(getLifecycleUnknownCopy('agent-start')).not.toContain('Letta')
     expect(

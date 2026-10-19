@@ -6,7 +6,7 @@ import {
   FolderGit2,
   GitBranch,
   Loader2,
-  ImagePlus,
+  Paperclip,
   X,
   RotateCcw,
   SquareTerminal
@@ -396,19 +396,21 @@ const PromptComposer: FC<IPromptComposerProps> = ({
         {image && (
           <div
             className="prompt-composer__image"
-            aria-label="Image context attachment"
+            aria-label="Supplied image/file context attachment"
           >
-            {image.preview && (
-              <img src={image.preview} alt="Selected image preview" />
-            )}
+            {image.preview &&
+              ['image/png', 'image/jpeg'].includes(
+                image.uploaded?.mime ?? image.file.type
+              ) && <img src={image.preview} alt="Selected image preview" />}
             <div className="prompt-composer__image-copy">
               <strong>{image.file.name}</strong>
               <span>
+                {image.uploaded?.mime ?? 'File'} ·{' '}
                 {Math.ceil(image.file.size / 1024)} KiB ·{' '}
                 {image.phase === 'ready'
                   ? 'Ready'
                   : image.phase === 'decoding'
-                    ? 'Checking image…'
+                    ? 'Checking file…'
                     : image.phase === 'uploading'
                       ? 'Uploading…'
                       : image.phase === 'sending'
@@ -418,8 +420,8 @@ const PromptComposer: FC<IPromptComposerProps> = ({
               <span role="status">
                 {image.error ??
                   (image.uploaded && image.uploaded.expiresAt <= Date.now()
-                    ? 'Image expired. Remove it and upload again.'
-                    : '24-hour local-file context. Send ACK is not image-read proof.')}
+                    ? 'File expired. Remove it and upload again.'
+                    : '24-hour local-file context. Send ACK is not file-read proof.')}
               </span>
               {image.phase === 'error' && (
                 <Button
@@ -429,7 +431,7 @@ const PromptComposer: FC<IPromptComposerProps> = ({
                   onClick={imageAttachment?.onRetry}
                   disabled={!imageAttachment?.allowed}
                 >
-                  <RotateCcw size={16} aria-hidden="true" /> Retry image
+                  <RotateCcw size={16} aria-hidden="true" /> Retry file
                 </Button>
               )}
               {image.phase === 'handled' && imageAttachment?.onInspect && (
@@ -451,8 +453,8 @@ const PromptComposer: FC<IPromptComposerProps> = ({
               onClick={imageAttachment?.onRemove}
               aria-label={
                 ['uploading', 'decoding'].includes(image.phase)
-                  ? 'Cancel image upload'
-                  : 'Remove image from draft'
+                  ? 'Cancel file upload'
+                  : 'Remove file from draft'
               }
             >
               <X size={18} aria-hidden="true" />
@@ -528,8 +530,8 @@ const PromptComposer: FC<IPromptComposerProps> = ({
                   ref={imageInput}
                   className="prompt-composer__image-input"
                   type="file"
-                  accept="image/png,image/jpeg"
-                  aria-label="Choose PNG or JPEG image context"
+                  accept="image/png,image/jpeg,application/pdf,text/plain,.txt,.md,.csv,.json,.jsonl,.log,.ts,.tsx,.js,.jsx,.py,.rs,.go,.c,.h,.css,.yaml,.yml,.toml"
+                  aria-label="Choose image, PDF or UTF-8 text file context"
                   disabled={!imageAttachment.allowed || isControlActive}
                   onChange={(event) => {
                     const file = event.currentTarget.files?.[0]
@@ -543,10 +545,10 @@ const PromptComposer: FC<IPromptComposerProps> = ({
                   size="icon"
                   disabled={!imageAttachment.allowed || isControlActive}
                   onClick={() => imageInput.current?.click()}
-                  aria-label="Attach image context"
-                  title="One PNG/JPEG, up to 8 MiB; local file expires in 24 hours"
+                  aria-label="Attach image/file context"
+                  title="One PNG/JPEG, PDF or UTF-8 text file, up to 8 MiB; expires in 24 hours"
                 >
-                  <ImagePlus size={18} aria-hidden="true" />
+                  <Paperclip size={18} aria-hidden="true" />
                 </Button>
               </>
             )}
@@ -663,11 +665,11 @@ const PromptComposer: FC<IPromptComposerProps> = ({
         role="status"
       >
         {draftInputError ??
-          `${combinedBytes} / ${MAX_DRAFT_BYTES} UTF-8 bytes${image?.uploaded ? ' including image context' : image ? ' (text only; image context not ready)' : ''}`}
+          `${combinedBytes} / ${MAX_DRAFT_BYTES} UTF-8 bytes${image?.uploaded ? ' including file context' : image ? ' (text only; file context not ready)' : ''}`}
       </p>
       {image && onQueueText && (
         <p className="prompt-composer__byte-limit">
-          Images cannot be held in Web. Use Send or remove the image.
+          Files cannot be held in Web. Use Send or remove the file.
         </p>
       )}
       {imageAttachment?.notice && (

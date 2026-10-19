@@ -17,7 +17,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch
 })
 
-describe.each(['letta', 'pi'] as const)(
+describe.each(['letta', 'pi', 'codex', 'agy', 'cursor'] as const)(
   '%s launch response contract',
   (kind) => {
     const launch: IActionRequest = {

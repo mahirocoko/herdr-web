@@ -114,6 +114,10 @@ export class ComposerImageOwner {
         return
       }
       update({ uploaded })
+      if (!['image/png', 'image/jpeg'].includes(uploaded.mime)) {
+        update({ phase: 'ready' })
+        return
+      }
       const preview = await this.deps.preview(
         uploaded.imageId,
         image.target,
@@ -129,7 +133,7 @@ export class ComposerImageOwner {
       if (!current()) return
       update({
         phase: 'error',
-        error: error instanceof Error ? error.message : 'Image upload failed'
+        error: error instanceof Error ? error.message : 'File upload failed'
       })
     }
   }
@@ -145,9 +149,7 @@ export class ComposerImageOwner {
       !expected.uploaded ||
       expected.uploaded.expiresAt <= Date.now()
     )
-      throw new Error(
-        'Image changed, expired or is not ready. Upload it again.'
-      )
+      throw new Error('File changed, expired or is not ready. Upload it again.')
     this.image = { ...expected, protected: true, phase: 'sending' }
     this.emit()
     return this.image
@@ -162,7 +164,7 @@ export class ComposerImageOwner {
         ...this.image,
         phase: 'handled',
         error:
-          'Send did not confirm image context. Inspect Terminal before uploading again; no automatic resend.'
+          'Send did not confirm image/file context. Inspect Terminal before uploading again; no automatic resend.'
       }
     this.emit()
   }

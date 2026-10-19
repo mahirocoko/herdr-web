@@ -167,7 +167,7 @@ export interface IAgentStartAction {
   type: 'agent-start'
   operationId: string
   target: { paneId: string; terminalId: string }
-  kind: 'letta' | 'pi'
+  kind: 'letta' | 'pi' | 'codex' | 'agy' | 'cursor'
   name: string
 }
 

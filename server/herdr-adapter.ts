@@ -703,10 +703,13 @@ const isPaneInfoShape = (value: unknown): value is Record<string, unknown> => {
   )
 }
 
-// Pi 1.3.0 creates a fresh session by default (resume/continue are opt-in).
+// Pi, Codex, Agy and Cursor create fresh sessions by default; resume is opt-in.
 const NEW_CONVERSATION_ARGS = {
   letta: ['--new'],
-  pi: []
+  pi: [],
+  codex: [],
+  agy: [],
+  cursor: []
 } as const
 
 // Called under the route's exclusive topology + exact pane claim, after fit retirement.
@@ -731,7 +734,13 @@ export const executeAgentStart = async (
   })
   if (getTransportMode() !== 'socket')
     return rejected('Native agent start requires socket transport')
-  if (action.kind !== 'letta' && action.kind !== 'pi')
+  if (
+    action.kind !== 'letta' &&
+    action.kind !== 'pi' &&
+    action.kind !== 'codex' &&
+    action.kind !== 'agy' &&
+    action.kind !== 'cursor'
+  )
     return rejected('Unsupported native agent kind')
   const launchArgs = NEW_CONVERSATION_ARGS[action.kind]
   const fetchSnapshot = options.deps?.fetchSnapshot ?? getHerdrSnapshot
@@ -762,10 +771,24 @@ export const executeAgentStart = async (
     )
   )
     return rejected('Agent name is already in use')
-  const idle = await preflightShellPane(action.target.paneId, {
+  const idleDeps = {
     fetchSnapshot: async () => before,
     fetchProcessInfo: options.deps?.fetchProcessInfo
-  })
+  }
+  let idle = await preflightShellPane(action.target.paneId, idleDeps)
+  // Startup and PTY restoration can briefly spawn prompt-rendering children.
+  // Re-read the unchanged strict predicate; never retry a native start/write.
+  const settleDeadline = Date.now() + 1000
+  while (
+    !idle.ok &&
+    idle.code === 'busy_shell_refusal' &&
+    Date.now() < settleDeadline
+  ) {
+    await Bun.sleep(100)
+    const remaining = settleDeadline - Date.now()
+    if (remaining <= 0) break
+    idle = await preflightShellPane(action.target.paneId, idleDeps, remaining)
+  }
   if (!idle.ok)
     return rejected(
       'Native launch requires a verified idle shell',
@@ -817,6 +840,19 @@ export const executeAgentStart = async (
       { timeoutMs: 35000 }
     )
   } catch (error) {
+    // These correlated native errors attest rejection before shell input.
+    // Keep every other native/transport failure unknown; never redispatch.
+    if (error instanceof HerdrSocketError) {
+      if (error.code === 'agent_pane_busy')
+        return rejected(
+          'Native shell is not ready; no launch was dispatched. Wait for its prompt before a new explicit start.'
+        )
+      if (error.code === 'invalid_agent_name')
+        return rejected(
+          'Native agent name was rejected; no launch was dispatched',
+          400
+        )
+    }
     // Fixed phase codes only: never return native messages, argv, paths or tokens.
     if (error instanceof HerdrSocketError)
       return unknown(
@@ -831,10 +867,13 @@ export const executeAgentStart = async (
     )
   }
   if (response?.type !== 'agent_started') return unknown('malformed_reply')
+  // Native kind is `cursor`; installed Herdr launches the `cursor-agent` bin.
+  const expectedProgram =
+    action.kind === 'cursor' ? 'cursor-agent' : action.kind
   if (
     !Array.isArray(response.argv) ||
     response.argv.length !== launchArgs.length + 1 ||
-    response.argv[0] !== action.kind ||
+    response.argv[0] !== expectedProgram ||
     launchArgs.some((arg, index) => response.argv[index + 1] !== arg)
   )
     return unknown('argv_mismatch')

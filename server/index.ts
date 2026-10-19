@@ -42,6 +42,7 @@ import {
 } from './conversation/conversation-reader.ts'
 import { handleConversationOutputRequest } from './conversation/output-route.ts'
 import { handleConversationImageRequest } from './conversation/image-route.ts'
+import { closeCursorReplayHelpers } from './conversation/cursor-acp.ts'
 import { handleFileViewerRequest } from './file-viewer.ts'
 import { handleRepoDiffRequest } from './repo-diff.ts'
 import { getSharedPushService } from './push/service.ts'
@@ -836,6 +837,49 @@ export const createServer = (
                 status,
                 headers: { 'content-type': 'application/json' }
               })
+            }
+          }
+
+          if (
+            action.type === 'prompt' ||
+            action.type === 'prompt-answer' ||
+            action.type === 'terminal-input' ||
+            action.type === 'keys'
+          ) {
+            const inputPane = snapshot.panes.find(
+              (pane) => pane.pane_id === action.target.paneId
+            )
+            const inputOwners = (snapshot.agents ?? []).filter(
+              (agent) =>
+                agent.target === action.target.paneId ||
+                agent.pane_id === action.target.paneId
+            )
+            const providers = [
+              inputPane?.agent,
+              inputPane?.agent_session?.agent,
+              ...inputOwners.flatMap((agent) => [
+                agent.agent,
+                agent.agent_session?.agent
+              ])
+            ]
+            if (
+              providers.some(
+                (provider) =>
+                  typeof provider === 'string' &&
+                  ['cursor', 'cursor-agent'].includes(provider.toLowerCase())
+              ) ||
+              [inputPane, ...inputOwners].some(
+                (record) => record?.agent_session?.source === 'herdr:cursor'
+              )
+            ) {
+              const body = {
+                ok: false,
+                outcome: 'rejected',
+                error:
+                  'Cursor is read-only in Web until native input focus can be verified'
+              }
+              safeComplete(409, body)
+              return Response.json(body, { status: 409 })
             }
           }
 
@@ -3255,6 +3299,13 @@ export const createServer = (
 // Start server if executed directly
 if (import.meta.main) {
   const server = createServer()
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    process.once(signal, () => {
+      closeCursorReplayHelpers(true)
+      // Preserve the default signal exit; imports/tests install no handlers.
+      if (process.listenerCount(signal) === 0) process.kill(process.pid, signal)
+    })
+  }
   console.log(
     `[herdr-web] server listening on http://${server.hostname}:${server.port}`
   )
