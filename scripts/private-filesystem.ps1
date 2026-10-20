@@ -202,5 +202,6 @@ try {
 }
 catch {
     [Console]::Error.WriteLine('Private filesystem refused: ' + $_.Exception.Message)
+    [Console]::Error.WriteLine($_.ScriptStackTrace)
     exit 1
 }
