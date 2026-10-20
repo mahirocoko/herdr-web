@@ -21,7 +21,7 @@ function Assert-Descriptor([string] $Path, [bool] $Private, [bool] $Directory) {
     if ($Directory) { $security = [IO.Directory]::GetAccessControl($Path) }
     else { $security = [IO.File]::GetAccessControl($Path) }
     $raw = [Security.AccessControl.RawSecurityDescriptor]::new($security.GetSecurityDescriptorBinaryForm(), 0)
-    if ($null -eq $raw.Owner -or $trusted -notcontains $raw.Owner.Value) { throw 'Unrecognized protected path owner; no ACL repair attempted' }
+    if ($null -eq $raw.Owner -or $trusted -notcontains $raw.Owner.Value) { throw ('Unrecognized protected path owner ' + $raw.Owner + ' at ' + $Path + '; no ACL repair attempted') }
     if (($raw.ControlFlags -band [Security.AccessControl.ControlFlags]::DiscretionaryAclPresent) -eq 0 -or $null -eq $raw.DiscretionaryAcl) { throw 'Null or missing DACL refused' }
     foreach ($ace in $raw.DiscretionaryAcl) {
         if ($ace -isnot [Security.AccessControl.CommonAce] -or $ace.IsCallback -or $ace.AceType -ne [Security.AccessControl.AceType]::AccessAllowed -or (([int]$ace.AceFlags -band (-bnot 31)) -ne 0)) { throw 'Deny or unsupported ACE refused' }
