@@ -8,6 +8,25 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-10-20
+
+### Fixed
+
+- Dispatch package commands through the shared Bun-native bootstrap without
+  requiring Bash or WSL; retain exact runtime selection and Unix compatibility.
+- Prepare and validate private Windows NTFS state with native descriptors,
+  inheritance checks and reparse refusal, without repairing existing ACLs or
+  replacing legacy Push bytes and keys. Handle DOS short-name expansion,
+  TrustedInstaller-owned volume roots and PowerShell 5.1 ACE flag casts.
+
+### Boundaries
+
+- Windows bootstrap is experimental: native Windows CI passed focused privacy
+  fixtures, cmd/PowerShell help and an isolated build, but startup against a real
+  Windows Herdr host, desktop, Letta history reader and physical Push remain
+  unverified. This is a source-only release, not a packaged Windows installer or
+  a declaration of complete Windows support.
+
 ## [0.10.1] - 2026-10-20
 
 ### Fixed
@@ -4965,7 +4984,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.10.1...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.10.2...HEAD
+[0.10.2]: https://github.com/mahirocoko/herdr-web/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/mahirocoko/herdr-web/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/mahirocoko/herdr-web/compare/v0.9.1...v0.10.0
 [0.4.12]: https://github.com/devswha/herdr-web-ui/compare/v0.4.11...v0.4.12

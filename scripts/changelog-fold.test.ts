@@ -143,7 +143,12 @@ describe("changelog.d", () => {
     const folded = foldChangelog(text, [...fragments, fragment("zz-probe.md", "### Fixed\n- Probe.\n")], "999.0.0", "2099-01-01");
     expect(folded).toContain("## [Unreleased]\n\n## [999.0.0] - 2099-01-01\n");
     expect(folded).toContain("[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v999.0.0...HEAD");
-    expect(folded).toContain("[999.0.0]: https://github.com/mahirocoko/herdr-web/compare/v0.10.1...v999.0.0");
+    const currentVersion = JSON.parse(
+      readFileSync(join(root, "package.json"), "utf8"),
+    ).version;
+    expect(folded).toContain(
+      `[999.0.0]: https://github.com/mahirocoko/herdr-web/compare/v${currentVersion}...v999.0.0`,
+    );
     // Adopted upstream release history is reference material, not rewritten fork lineage.
     expect(folded).toContain("[0.4.12]: https://github.com/devswha/herdr-web-ui/compare/v0.4.11...v0.4.12");
   });

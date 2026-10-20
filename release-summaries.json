@@ -1,4 +1,42 @@
 {
+  "0.10.2": {
+    "en": {
+      "fixed": [
+        "Run package commands without requiring Bash or WSL.",
+        "Validate native Windows private state while preserving existing ACLs and Push keys."
+      ],
+      "improved": [
+        "Experimental Windows bootstrap; startup against a real Herdr host remains unverified."
+      ]
+    },
+    "ko": {
+      "fixed": [
+        "Bash나 WSL 없이 패키지 명령을 실행합니다.",
+        "기존 ACL과 Push 키를 보존하면서 Windows의 비공개 상태를 검증합니다."
+      ],
+      "improved": [
+        "Windows 시작 지원은 실험 단계이며 실제 Herdr 호스트와의 실행은 아직 검증되지 않았습니다."
+      ]
+    },
+    "ja": {
+      "fixed": [
+        "BashやWSLを必要とせずにパッケージコマンドを実行します。",
+        "既存のACLとPushキーを保持しながらWindowsの非公開状態を検証します。"
+      ],
+      "improved": [
+        "Windowsの起動対応は実験段階であり、実際のHerdrホストとの起動は未検証です。"
+      ]
+    },
+    "zh": {
+      "fixed": [
+        "无需 Bash 或 WSL 即可运行软件包命令。",
+        "验证 Windows 原生私有状态，同时保留现有 ACL 和 Push 密钥。"
+      ],
+      "improved": [
+        "Windows 启动支持仍处于实验阶段，尚未验证与实际 Herdr 主机的启动流程。"
+      ]
+    }
+  },
   "0.10.1": {
     "en": {
       "fixed": [
