@@ -8,7 +8,19 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-10-20
+
+### Fixed
+
+- Preserve exact `App.tsx` and `Markdown.tsx` casing in the Git tree so clean
+  Linux checkouts resolve the existing source imports. macOS's case-insensitive
+  filesystem had concealed the old lowercase tracked names.
+- Includes the source-native migration and startup improvements described below.
+
 ## [0.10.0] - 2026-10-20
+
+Unpublished candidate: Linux CI found the tracked-name casing issue corrected in
+0.10.1. The original tag is retained without rewriting published Git history.
 
 ### Changed
 

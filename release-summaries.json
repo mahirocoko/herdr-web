@@ -1,4 +1,24 @@
 {
+  "0.10.1": {
+    "en": {
+      "fixed": [
+        "Preserve source filename casing so clean Linux checkouts resolve imports."
+      ]
+    },
+    "ko": {
+      "fixed": [
+        "소스 파일 이름의 대소문자를 보존해 새 Linux 체크아웃에서 가져오기 경로를 찾습니다."
+      ]
+    },
+    "ja": {
+      "fixed": [
+        "ソースのファイル名の大小文字を保持し、Linuxでの新規チェックアウトのimportを修正。"
+      ]
+    },
+    "zh": {
+      "fixed": ["保留源码文件名的大小写，使全新 Linux 检出能够解析导入路径。"]
+    }
+  },
   "0.10.0": {
     "en": {
       "new": [

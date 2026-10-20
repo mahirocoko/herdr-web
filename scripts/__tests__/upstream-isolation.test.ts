@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 import {
+  existsSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -10,6 +11,28 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { copyPreviewRootAssets, preparePreviewHtml } from '../preview-build.ts'
+
+test.skipIf(!existsSync(join(import.meta.dir, '../../.git')))(
+  'Git checkouts track exact source filename casing even on macOS',
+  () => {
+    const result = spawnSync(
+      'git',
+      [
+        'ls-files',
+        '--error-unmatch',
+        '--',
+        'src/App.tsx',
+        'src/components/Markdown.tsx'
+      ],
+      { cwd: join(import.meta.dir, '../..'), encoding: 'utf8' }
+    )
+    expect(result.status).toBe(0)
+    expect(result.stdout.trim().split('\n')).toEqual([
+      'src/App.tsx',
+      'src/components/Markdown.tsx'
+    ])
+  }
+)
 
 test('supported ignore flag preserves legacy discovery and excludes native candidate tests', () => {
   const cwd = mkdtempSync(join(tmpdir(), 'herdr-discovery-'))
