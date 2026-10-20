@@ -6,6 +6,7 @@ import {
   mkdirSync,
   readFileSync,
 } from "node:fs";
+import { homedir } from "node:os";
 import { resolve, win32 } from "node:path";
 
 /** Cooperative local privacy, not protection against the same user or administrators.
@@ -62,6 +63,82 @@ export function decodePrivacyResponse(
   throw new Error("Invalid native privacy response");
 }
 
+const wellKnownSids: Record<string, string> = {
+  "S-1-1-0": "Everyone",
+  "S-1-5-11": "Authenticated Users",
+  "S-1-5-32-545": "Users",
+};
+
+function win32Within(parent: string, child: string): boolean {
+  const relative = win32.relative(parent, child);
+  return (
+    relative !== ".." &&
+    !relative.startsWith("..\\") &&
+    !win32.isAbsolute(relative)
+  );
+}
+
+/** Recovery guidance for the worker's structured ancestor refusal only.
+ * Runtime state lives inside the checkout, so a blocked ancestor outside the
+ * profile is avoided by a fresh checkout under it; the policy never relaxes.
+ */
+function windowsAncestorRecovery(
+  diagnostic: string,
+  operation: Operation,
+  requested: string,
+  profile: string | undefined,
+): string {
+  if (operation !== "prepare" || !profile || !/^[A-Za-z]:\\/.test(profile))
+    return "";
+  const match =
+    /Untrusted ancestor replacement or ACL authority; path=([A-Za-z]:\\[^\r\n"]*?); sid=(S-1(?:-\d+)+); mask=0x[0-9A-F]{8}; blocked=0x[0-9A-F]{8}; flags=0x[0-9A-F]{2}; volumeRoot=(?:True|False)\. No ACL repair attempted; runtime preparation stopped\./.exec(
+      diagnostic,
+    );
+  if (!match) return "";
+  const ancestor = match[1] as string;
+  const sid = match[2] as string;
+  const who = wellKnownSids[sid] ? `${wellKnownSids[sid]} (${sid})` : sid;
+  const lead = `\nRecovery: the ACL grants ${who} access bits blocked by the privacy policy on ${ancestor}. Runtime preparation was refused; no rename or permission change was demonstrated. Nothing was created and no ACL was changed. Inspect read-only: icacls "${ancestor}"`;
+  if (win32Within(ancestor, profile) || win32Within(profile, ancestor))
+    return `${lead}\nThis folder is ${win32Within(profile, ancestor) ? "inside" : "above"} your profile ${profile}, so moving the checkout under the profile is not suggested. Review that folder's permissions yourself; the launcher will not change them.`;
+  const marker = requested.toLowerCase().lastIndexOf("\\.agent-state\\");
+  const checkout = marker > 0 ? requested.slice(0, marker) : undefined;
+  const destination = win32.join(
+    profile,
+    "src",
+    checkout ? win32.basename(checkout) : "herdr-web",
+  );
+  const source = checkout
+    ? [
+        `  git -C "${checkout}" status --short`,
+        `  git -C "${checkout}" remote get-url origin`,
+      ]
+    : [];
+  return [
+    `${lead}\nThis is common on non-system drives. Try a fresh clone in a new folder under your profile (not OneDrive-synced; do not copy this folder with permission-preserving tools). Uncommitted changes are not carried over. These are CMD instructions: replace REPLACE_WITH_YOUR_ORIGIN_URL with the origin URL before running git clone. Do not continue if clone or install fails. Profile-path startup is not guaranteed:`,
+    ...source,
+    `  git clone "REPLACE_WITH_YOUR_ORIGIN_URL" "${destination}"`,
+    `  pushd "${destination}"`,
+    "  bun scripts/bun-project.mjs install --frozen-lockfile",
+    "  bun run start",
+  ].join("\n");
+}
+
+export function describeWindowsPrivacyFailure(
+  error: unknown,
+  operation: Operation,
+  requested: string,
+  profile: string | undefined,
+): string {
+  const detail = error instanceof Error ? error.message : "unknown failure";
+  // Never include stdout (which may contain legacy secret bytes) in errors.
+  const stderr = (error as { stderr?: Buffer | string } | null)?.stderr;
+  const native = stderr
+    ? String(stderr).slice(0, 1024)
+    : (detail.split("\n")[0] ?? "");
+  return `Native Windows privacy check failed; no POSIX fallback: ${native}${windowsAncestorRecovery(native, operation, requested, profile)}`;
+}
+
 function windowsPrivacy(operation: Operation, path: string): string | null {
   // Do not search PATH for a user-installed PowerShell. SystemRoot is the OS
   // environment inherited by this process; a hostile launch environment is not
@@ -82,6 +159,7 @@ function windowsPrivacy(operation: Operation, path: string): string | null {
     new URL("./private-filesystem.ps1", import.meta.url),
     "utf8",
   );
+  const requested = resolve(path);
   try {
     const output = execFileSync(
       executable,
@@ -93,7 +171,7 @@ function windowsPrivacy(operation: Operation, path: string): string | null {
         Buffer.from(source, "utf16le").toString("base64"),
       ],
       {
-        input: JSON.stringify({ version: 1, operation, path: resolve(path) }),
+        input: JSON.stringify({ version: 1, operation, path: requested }),
         encoding: "utf8",
         timeout: 15_000,
         maxBuffer: 128 * 1024,
@@ -103,11 +181,8 @@ function windowsPrivacy(operation: Operation, path: string): string | null {
     );
     return decodePrivacyResponse(output.trim(), operation);
   } catch (error) {
-    const detail = error instanceof Error ? error.message : "unknown failure";
-    // Never include stdout (which may contain legacy secret bytes) in errors.
-    const stderr = (error as { stderr?: Buffer | string }).stderr;
     throw new Error(
-      `Native Windows privacy check failed; no POSIX fallback: ${stderr ? String(stderr).slice(0, 1024) : detail.split("\n")[0]}`,
+      describeWindowsPrivacyFailure(error, operation, requested, homedir()),
     );
   }
 }

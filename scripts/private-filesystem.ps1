@@ -1,5 +1,5 @@
-# Fixed fork-owned worker. Paths arrive only as JSON on stdin, never as code.
-# Windows PowerShell 5.1 / .NET Framework only; no policy or elevation changes.
+# Fixed fork worker: JSON stdin paths, never code.
+# PowerShell 5.1/.NET only; no policy/elevation changes.
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -14,7 +14,7 @@ function Attributes-OrAbsent([string] $Path) {
 }
 
 function Descriptor-Principals([string] $Path, [bool] $Private, [bool] $Directory) {
-    # Windows servicing authority at a volume ancestor, NEVER a private grant.
+    # Servicing SID: volume-root authority only, NEVER a private grant.
     if (!$Private -and $Directory -and $Path -match '^[A-Za-z]:\\$' -and [String]::Equals([IO.Path]::GetFullPath($Path), [IO.Path]::GetPathRoot($Path), [StringComparison]::OrdinalIgnoreCase)) {
         return $trusted + @('S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
     }
@@ -36,11 +36,13 @@ function Assert-Descriptor([string] $Path, [bool] $Private, [bool] $Directory) {
         if ($ace -isnot [Security.AccessControl.CommonAce] -or $ace.IsCallback -or $ace.AceType -ne [Security.AccessControl.AceType]::AccessAllowed -or (([int]$ace.AceFlags -band (-bnot 31)) -ne 0)) { throw 'Deny or unsupported ACE refused' }
         if ($principals -contains $ace.SecurityIdentifier.Value) { continue }
         if ($Private) { throw 'Untrusted Allow ACE on private path' }
-        # Ancestors may be readable/traversable. Reject effective replacement,
-        # deletion and security-descriptor authority, not harmless read access.
+        # Allow ancestor reads, not replacement/deletion or descriptor authority.
         if (([int]$ace.AceFlags -band [int][Security.AccessControl.AceFlags]::InheritOnly) -ne 0) { continue }
         $replacement = 0x00010000 -bor 0x00040000 -bor 0x00080000 -bor 0x00000040 -bor 0x10000000
-        if (($ace.AccessMask -band $replacement) -ne 0) { throw 'Untrusted ancestor replacement or ACL authority' }
+        if (($ace.AccessMask -band $replacement) -ne 0) {
+            $volumeRoot = $Directory -and ($Path -eq [IO.Path]::GetPathRoot($Path))
+            throw ('Untrusted ancestor replacement or ACL authority; path={0}; sid={1}; mask=0x{2:X8}; blocked=0x{3:X8}; flags=0x{4:X2}; volumeRoot={5}. No ACL repair attempted; runtime preparation stopped.' -f $Path, $ace.SecurityIdentifier.Value, $ace.AccessMask, ($ace.AccessMask -band $replacement), ([int]$ace.AceFlags), $volumeRoot)
+        }
     }
     return $security
 }
@@ -190,7 +192,7 @@ try {
         }
     }
     else {
-        # Inspect existing content BEFORE creating witnesses; never repair ACLs.
+        # Inspect before witnesses; never repair existing ACLs.
         if ($null -ne (Attributes-OrAbsent $path)) { Assert-Tree $path }
         Ensure-PrivateDirectory $path
         $security = Assert-Descriptor $path $true $true

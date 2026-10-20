@@ -63,13 +63,21 @@ foreach ($id in @($sid.Value, 'S-1-5-18', 'S-1-5-32-544')) {
   else { $rule = [Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new($id), 'FullControl', 'Allow') }
   $acl.AddAccessRule($rule)
 }
-if ($r.operation -notin @('private', 'noinherit')) {
+if ($r.operation -eq 'datadrive') {
+  # Owned TEMP stand-in for a default non-system drive root, not a measured host ACL.
+  $au = [Security.Principal.SecurityIdentifier]::new('S-1-5-11')
+  $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($au, 'Modify', 'ContainerInherit, ObjectInherit', 'InheritOnly', 'Allow'))
+  $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($au, 'AppendData', 'None', 'None', 'Allow'))
+  $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-5-32-545'), 'ReadAndExecute', 'ContainerInherit, ObjectInherit', 'None', 'Allow'))
+}
+elseif ($r.operation -notin @('private', 'noinherit')) {
   $who = 'S-1-1-0'
   if ($r.operation -eq 'users') { $who = 'S-1-5-32-545' }
   $kind = 'Allow'
   if ($r.operation -eq 'deny') { $kind = 'Deny' }
   $rights = 'Read'
   if ($r.operation -eq 'replace') { $rights = 'DeleteSubdirectoriesAndFiles' }
+  if ($r.operation -eq 'delete') { $rights = 'Delete' }
   if ($r.operation -eq 'deny') { $rights = 'WriteData' }
   if ($directory) { $rule = [Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new($who), $rights, 'ContainerInherit, ObjectInherit', 'None', $kind) }
   else { $rule = [Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new($who), $rights, $kind) }
@@ -203,6 +211,142 @@ test.if(process.platform === "win32")(
       fixtureAcl(root, "replace");
       expect(() => readPrivateConfiguration(config)).toThrow("ancestor");
       fixtureAcl(root, "private");
+    }),
+  120_000,
+);
+
+test.if(process.platform === "win32")(
+  "ancestor DELETE and DELETE_CHILD diagnostics preserve ACLs and bytes and stop before creation",
+  () =>
+    fixture((root, state) => {
+      const config = join(state, "kept.json");
+      const bytes = '{"kept":true}';
+      writeFileSync(config, bytes);
+      const canonical = JSON.parse(fixtureAcl(root, "canonical")) as {
+        canonicalPath: string;
+      };
+      for (const [operation, blocked] of [
+        ["delete", "00010000"],
+        ["replace", "00000040"],
+      ] as const) {
+        fixtureAcl(root, operation);
+        const before = fixtureAcl(root, "sddl");
+        const requested = join(root, `not-created-${operation}`);
+        let message = "";
+        try {
+          preparePrivateRuntimeTree(requested);
+        } catch (error) {
+          message = (error as Error).message;
+        }
+        expect(message).toContain(
+          "Untrusted ancestor replacement or ACL authority",
+        );
+        expect(message).toContain(`path=${canonical.canonicalPath};`);
+        expect(message).toContain("sid=S-1-1-0;");
+        expect(message).toMatch(/mask=0x[0-9A-F]{8};/);
+        expect(message).toContain(`blocked=0x${blocked};`);
+        expect(message).toMatch(/flags=0x[0-9A-F]{2};/);
+        expect(message).toContain("volumeRoot=False");
+        expect(message).toContain(
+          "No ACL repair attempted; runtime preparation stopped.",
+        );
+        expect(message).toContain(`icacls "${canonical.canonicalPath}"`);
+        expect(message).not.toContain(bytes);
+        expect(existsSync(requested)).toBe(false);
+        expect(fixtureAcl(root, "sddl")).toBe(before);
+        expect(readFileSync(config, "utf8")).toBe(bytes);
+        fixtureAcl(root, "private");
+      }
+    }),
+  120_000,
+);
+
+test.if(process.platform === "win32")(
+  "read-only ancestor access remains allowed without descriptor repair",
+  () =>
+    fixture((root, state) => {
+      const config = join(state, "kept.json");
+      writeFileSync(config, '{"kept":true}');
+      fixtureAcl(root, "everyone");
+      const before = fixtureAcl(root, "sddl");
+      preparePrivateRuntimeTree(state);
+      expect(readPrivateConfiguration(config)).toEqual({ kept: true });
+      expect(fixtureAcl(root, "sddl")).toBe(before);
+    }),
+  120_000,
+);
+
+test.if(process.platform === "win32")(
+  "data-drive-like inherited Authenticated Users Modify refuses a checkout runtime at the first shared ancestor",
+  () =>
+    fixture((root, state) => {
+      const kept = join(state, "kept.json");
+      writeFileSync(kept, '{"kept":true}');
+      fixtureAcl(root, "datadrive");
+      // Inherit-only, this-folder AppendData and read grants are not authority.
+      preparePrivateRuntimeTree(state);
+      preparePrivateRuntimeTree(join(root, "beside-checkout"));
+      const works = join(root, "works");
+      const checkout = join(works, "herdr-web");
+      mkdirSync(checkout, { recursive: true });
+      const sentinel = '{"sentinel":"checkout-config-not-a-secret"}';
+      const config = join(checkout, "config.json");
+      writeFileSync(config, sentinel);
+      const canonical = JSON.parse(fixtureAcl(works, "canonical")) as {
+        canonicalPath: string;
+      };
+      const before = [root, works, checkout].map((path) =>
+        fixtureAcl(path, "sddl"),
+      );
+      const runtime = join(checkout, ".agent-state", "runtime", "upstream");
+      let message = "";
+      try {
+        preparePrivateRuntimeTree(runtime);
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).toContain(
+        `Untrusted ancestor replacement or ACL authority; path=${canonical.canonicalPath}; sid=S-1-5-11;`,
+      );
+      expect(message).toContain("blocked=0x00010000; flags=0x13;");
+      expect(message).toContain("volumeRoot=False");
+      expect(message).toContain(
+        `Recovery: the ACL grants Authenticated Users (S-1-5-11) access bits blocked by the privacy policy on ${canonical.canonicalPath}.`,
+      );
+      expect(message).not.toContain(sentinel);
+      expect(() => readPrivateConfiguration(config)).toThrow(
+        `path=${canonical.canonicalPath};`,
+      );
+      try {
+        readPrivateConfiguration(config);
+      } catch (error) {
+        expect((error as Error).message).not.toContain(sentinel);
+        expect((error as Error).message).not.toContain("Recovery:");
+      }
+      expect(existsSync(join(checkout, ".agent-state"))).toBe(false);
+      expect(
+        [root, works, checkout].map((path) => fixtureAcl(path, "sddl")),
+      ).toEqual(before);
+      expect(readFileSync(config, "utf8")).toBe(sentinel);
+      expect(readFileSync(kept, "utf8")).toBe('{"kept":true}');
+    }),
+  120_000,
+);
+
+test.if(process.platform === "win32")(
+  "profile-like protected chain prepares the same nested checkout runtime",
+  () =>
+    fixture((root) => {
+      const checkout = join(root, "src", "herdr-web");
+      mkdirSync(checkout, { recursive: true });
+      const before = fixtureAcl(checkout, "sddl");
+      const runtime = join(checkout, ".agent-state", "runtime", "upstream");
+      preparePrivateRuntimeTree(runtime);
+      preparePrivateRuntimeTree(runtime);
+      expect(
+        readPrivateConfiguration(join(runtime, "missing.json")),
+      ).toBeNull();
+      expect(fixtureAcl(checkout, "sddl")).toBe(before);
     }),
   120_000,
 );
