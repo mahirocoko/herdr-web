@@ -176,6 +176,15 @@ export const PROMOTION_REFERENCES = [
   '.github/workflows/omp-question-compat.yml',
 ]
 export const PROMOTION_PATCHES = [
+  'INSTALL.md',
+  'CONTRIBUTING.md',
+  'SECURITY.md',
+  'CODE_OF_CONDUCT.md',
+  'DESIGN.md',
+  'docs/guide.md',
+  'docs/development.md',
+  'docs/app-updates.md',
+  'docs/remote-pcs.md',
   'server/pty/smoke.mjs',
   'THIRD_PARTY_NOTICES.md',
   'CHANGELOG.md',
@@ -237,6 +246,7 @@ export const PROMOTION_PATCHES = [
   'public/icons/badge-96.png',
 ]
 export const PROMOTION_ADDITIONS = [
+  'scripts/docs-contracts.test.ts',
   'server/letta-stop.ts',
   'server/letta-stop.test.ts',
   'server/letta.ts',

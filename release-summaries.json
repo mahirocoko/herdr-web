@@ -1,4 +1,38 @@
 {
+  "0.10.4": {
+    "en": {
+      "improved": [
+        "Clarify fork setup, contributions and security; preserve licenses and source history."
+      ],
+      "fixed": [
+        "Explain Windows ACL refusals without bypasses; real host startup remains unverified."
+      ]
+    },
+    "ko": {
+      "improved": [
+        "라이선스와 소스 이력을 보존하면서 이 포크의 설치·기여·보안 안내를 간결하게 정리했습니다."
+      ],
+      "fixed": [
+        "개인정보 검사를 유지하며 Windows ACL 거부를 설명합니다. 실제 호스트 시작은 미검증입니다."
+      ]
+    },
+    "ja": {
+      "improved": [
+        "ライセンスとソース履歴を保持し、このフォークのセットアップ・貢献・セキュリティガイドを簡潔に整理しました。"
+      ],
+      "fixed": [
+        "Windows の ACL 拒否を説明し、プライバシー検査を維持。実機のホスト起動は未検証です。"
+      ]
+    },
+    "zh": {
+      "improved": [
+        "简化本分支的安装、贡献和安全指南，同时保留许可证与源码历史。"
+      ],
+      "fixed": [
+        "说明 Windows 父目录 ACL 拒绝原因，不绕过隐私检查；真实 Windows 主机启动仍未经验证。"
+      ]
+    }
+  },
   "0.10.3": {
     "en": {
       "fixed": [

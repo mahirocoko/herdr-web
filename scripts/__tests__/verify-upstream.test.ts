@@ -215,6 +215,35 @@ test('promoted root audits mapped source MIT, complete inventory and runtime UI 
   )
 })
 
+test('approved active documentation patches do not exempt other Markdown source', () => {
+  for (const path of ['INSTALL.md', 'docs/guide.md', 'docs/unapproved.md']) {
+    promotedFixture((root, tree, manifest) => {
+      const data = Buffer.from('pinned documentation\n')
+      const blob = createHash('sha1')
+        .update(`blob ${data.length}\0`)
+        .update(data)
+        .digest('hex')
+      manifest.entries.push({
+        path,
+        blob,
+        mode: '100644',
+        disposition: 'acquired'
+      })
+      save(root, manifest)
+      mkdirSync(dirname(join(root, path)), { recursive: true })
+      writeFileSync(join(root, path), 'rewritten fork documentation\n')
+      const candidateTree = tree + `100644 blob ${blob}\t${path}\0`
+      if (path === 'docs/unapproved.md') {
+        expect(() => verifyPromoted(root, candidateTree)).toThrow(
+          'Unapproved promoted source patch'
+        )
+      } else {
+        expect(verifyPromoted(root, candidateTree).patched).toContain(path)
+      }
+    })
+  }
+})
+
 test('promoted manifest cannot authorize its own extra UI patch', () => {
   promotedFixture((root, tree, manifest) => {
     manifest.promotion.patches.push('src/App.tsx')

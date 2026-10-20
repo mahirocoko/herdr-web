@@ -8,6 +8,29 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-10-20
+
+### Changed
+
+- Rewrite twelve current guides around this fork's installation, contribution,
+  security and source ownership; reduce repeated prose by about 87% while
+  preserving licenses, generated design tables and historical references.
+- Correct fork support links and Apache-2.0/MIT license scopes. Keep GitHub
+  reporting and branch-protection settings explicit rather than claiming they
+  are enabled.
+
+### Fixed
+
+- Explain native Windows ancestor ACL refusals with bounded path, SID and access
+  diagnostics plus recovery instructions. Preserve the privacy guard and add
+  native data-drive/profile fixtures; actual Windows host startup is not fixed
+  or certified by this release.
+
+### Maintenance
+
+- Add link, command and license regression checks for current documentation and
+  narrowly authorize the rewritten documents in the pinned-source audit.
+
 ## [0.10.3] - 2026-10-20
 
 ### Fixed
@@ -5001,7 +5024,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.10.3...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.10.4...HEAD
+[0.10.4]: https://github.com/mahirocoko/herdr-web/compare/v0.10.3...v0.10.4
 [0.10.3]: https://github.com/mahirocoko/herdr-web/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/mahirocoko/herdr-web/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/mahirocoko/herdr-web/compare/v0.10.0...v0.10.1
