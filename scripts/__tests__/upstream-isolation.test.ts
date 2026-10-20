@@ -108,6 +108,32 @@ test('fork CI separates unit and explicitly dispatched shell-native proof withou
   const ci = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8')
   expect(ci).toContain('bun-version: 1.4.2')
   expect(ci).toContain('Source unit suite only (no native preload)')
+  expect(ci).toContain('include-hidden-files: true')
+  expect(ci).toContain('.ci/unit.log')
+  expect(ci).toContain('.ci/unit-summary.json')
+  const block = ci.match(/run: \|\n([\s\S]*?)      - name: Fetch fixed source/)
+  expect(block).not.toBeNull()
+  const cwd = mkdtempSync(join(tmpdir(), 'herdr-ci-failure-'))
+  try {
+    mkdirSync(join(cwd, 'bin'))
+    writeFileSync(
+      join(cwd, 'bin/bun'),
+      '#!/bin/sh\necho "intentional unit failure sentinel"\nexit 7\n',
+      { mode: 0o700 }
+    )
+    const result = spawnSync('/bin/bash', ['-e', '-c', block![1]!], {
+      cwd,
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${join(cwd, 'bin')}:/usr/bin:/bin` }
+    })
+    expect(result.status).toBe(7)
+    expect(result.stdout).toContain('intentional unit failure sentinel')
+    expect(readFileSync(join(cwd, '.ci/unit.log'), 'utf8')).toContain(
+      'intentional unit failure sentinel'
+    )
+  } finally {
+    rmSync(cwd, { recursive: true, force: true })
+  }
   expect(ci).toContain(
     "github.event_name == 'workflow_dispatch' && inputs.native_shell_fixture"
   )

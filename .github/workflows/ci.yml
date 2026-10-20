@@ -28,7 +28,12 @@ jobs:
       - run: bun run typecheck
       - run: HERDR_TEST_HOOKS=0 bun run build
       - name: Source unit suite only (no native preload)
-        run: mkdir -p .ci && bun run test > .ci/unit.log 2>&1
+        run: |
+          mkdir -p .ci
+          status=0
+          bun run test > .ci/unit.log 2>&1 || status=$?
+          tail -n 160 .ci/unit.log
+          exit "$status"
       - name: Fetch fixed source reference, without activating upstream automation
         run: |
           git init .agent-state/learn/devswha/herdr-web-ui/origin
@@ -38,7 +43,11 @@ jobs:
         if: always()
         with:
           name: source-unit-evidence
-          path: .ci/
+          include-hidden-files: true
+          if-no-files-found: error
+          path: |
+            .ci/unit.log
+            .ci/unit-summary.json
   native-shell:
     if: github.event_name == 'workflow_dispatch' && inputs.native_shell_fixture
     runs-on: [self-hosted, macOS, ARM64]
