@@ -9,7 +9,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { join, win32 } from "node:path";
 import { tmpdir } from "node:os";
 import {
   decodePrivacyResponse,
@@ -35,10 +35,17 @@ test("fixed PowerShell worker fits Windows CreateProcess command-line budget", (
     new URL("./private-filesystem.ps1", import.meta.url),
     "utf8",
   );
-  // Reserve space below 32767 for the system executable, flags and quoting.
-  expect(Buffer.from(source, "utf16le").toString("base64").length).toBeLessThan(
-    30_000,
+  const executable = win32.join(
+    process.env["SystemRoot"] ?? "C:\\Windows",
+    "System32/WindowsPowerShell/v1.0/powershell.exe",
   );
+  // Conservative executable escaping plus fixed flags/quoting, not just the
+  // encoded script. stdin configuration never consumes command-line space.
+  const budget =
+    Buffer.from(source, "utf16le").toString("base64").length +
+    2 * executable.length +
+    256;
+  expect(budget).toBeLessThan(32_767);
 });
 
 test("native response protocol rejects malformed, extra, wrong-operation and oversized results", () => {

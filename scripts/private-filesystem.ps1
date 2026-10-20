@@ -13,6 +13,14 @@ function Attributes-OrAbsent([string] $Path) {
     # Access denied and all other inspection errors must propagate.
 }
 
+function Descriptor-Principals([string] $Path, [bool] $Private, [bool] $Directory) {
+    # Windows servicing authority at a volume ancestor, NEVER a private grant.
+    if (!$Private -and $Directory -and $Path -match '^[A-Za-z]:\\$' -and [String]::Equals([IO.Path]::GetFullPath($Path), [IO.Path]::GetPathRoot($Path), [StringComparison]::OrdinalIgnoreCase)) {
+        return $trusted + @('S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
+    }
+    return $trusted
+}
+
 function Assert-Descriptor([string] $Path, [bool] $Private, [bool] $Directory) {
     $attributes = Attributes-OrAbsent $Path
     if ($null -eq $attributes) { throw 'Protected path disappeared' }
@@ -21,11 +29,12 @@ function Assert-Descriptor([string] $Path, [bool] $Private, [bool] $Directory) {
     if ($Directory) { $security = [IO.Directory]::GetAccessControl($Path) }
     else { $security = [IO.File]::GetAccessControl($Path) }
     $raw = [Security.AccessControl.RawSecurityDescriptor]::new($security.GetSecurityDescriptorBinaryForm(), 0)
-    if ($null -eq $raw.Owner -or $trusted -notcontains $raw.Owner.Value) { throw ('Unrecognized protected path owner ' + $raw.Owner + ' at ' + $Path + '; no ACL repair attempted') }
+    $principals = @(Descriptor-Principals $Path $Private $Directory)
+    if ($null -eq $raw.Owner -or $principals -notcontains $raw.Owner.Value) { throw ('Unrecognized protected path owner ' + $raw.Owner + ' at ' + $Path + '; no ACL repair attempted') }
     if (($raw.ControlFlags -band [Security.AccessControl.ControlFlags]::DiscretionaryAclPresent) -eq 0 -or $null -eq $raw.DiscretionaryAcl) { throw 'Null or missing DACL refused' }
     foreach ($ace in $raw.DiscretionaryAcl) {
         if ($ace -isnot [Security.AccessControl.CommonAce] -or $ace.IsCallback -or $ace.AceType -ne [Security.AccessControl.AceType]::AccessAllowed -or (([int]$ace.AceFlags -band (-bnot 31)) -ne 0)) { throw 'Deny or unsupported ACE refused' }
-        if ($trusted -contains $ace.SecurityIdentifier.Value) { continue }
+        if ($principals -contains $ace.SecurityIdentifier.Value) { continue }
         if ($Private) { throw 'Untrusted Allow ACE on private path' }
         # Ancestors may be readable/traversable. Reject effective replacement,
         # deletion and security-descriptor authority, not harmless read access.

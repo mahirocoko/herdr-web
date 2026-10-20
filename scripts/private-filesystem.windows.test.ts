@@ -11,21 +11,37 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, parse } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   preparePrivateRuntimeTree,
   readPrivateConfiguration,
 } from "./private-filesystem.ts";
 import { preservePushIdentity } from "./run-local.ts";
 
-// Fixture-only ACL mutations, never accepted as production authority. This code
-// runs only against a freshly-owned TEMP subtree; no HOME or native host access.
+// ACL mutations stay inside freshly-owned TEMP subtrees. Pure classifier probes
+// read owned source/native SID metadata only, never mutate a volume or access
+// private HOME configuration or a native Herdr host.
 const fixtureScript = `
 $ErrorActionPreference = 'Stop'
 [Console]::InputEncoding = [Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $r = [Console]::In.ReadToEnd() | ConvertFrom-Json
 $p = [string]$r.path
+if ($r.operation -eq 'principals') {
+  # Execute only the pure classifier from the OWNED production source AST.
+  # This is classifier evidence, not a fabricated filesystem descriptor.
+  $tokens = $null; $errors = $null
+  $ast = [Management.Automation.Language.Parser]::ParseInput([IO.File]::ReadAllText($r.source), [ref]$tokens, [ref]$errors)
+  $fn = $ast.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Descriptor-Principals'}, $true)
+  if ($errors.Count -gt 0 -or !$fn) { throw 'Production classifier parsing failed' }
+  . ([ScriptBlock]::Create($fn.Extent.Text))
+  $trusted = @([Security.Principal.WindowsIdentity]::GetCurrent().User.Value, 'S-1-5-18', 'S-1-5-32-544')
+  $ids = @(Descriptor-Principals $p ([bool]$r.private) ([bool]$r.directory))
+  $service = ([Security.Principal.SecurityIdentifier]::new('S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')).Translate([Security.Principal.NTAccount]).Value
+  [Console]::Write((@{ principals = $ids; serviceAccount = $service } | ConvertTo-Json -Compress))
+  exit
+}
 if ($r.operation -eq 'canonical') {
   [Console]::Write((@{ inputPath = $p; canonicalPath = [IO.Path]::GetFullPath($p); characters = $p.Length } | ConvertTo-Json -Compress))
   exit
@@ -61,7 +77,11 @@ if ($r.operation -notin @('private', 'noinherit')) {
 }
 if ($directory) { [IO.Directory]::SetAccessControl($p, $acl) } else { [IO.File]::SetAccessControl($p, $acl) }
 `;
-function fixtureAcl(path: string, operation: string): string {
+function fixtureAcl(
+  path: string,
+  operation: string,
+  options: { private?: boolean; directory?: boolean } = {},
+): string {
   return execFileSync(
     join(
       process.env["SystemRoot"]!,
@@ -74,7 +94,14 @@ function fixtureAcl(path: string, operation: string): string {
       Buffer.from(fixtureScript, "utf16le").toString("base64"),
     ],
     {
-      input: JSON.stringify({ path, operation }),
+      input: JSON.stringify({
+        path,
+        operation,
+        source: fileURLToPath(
+          new URL("./private-filesystem.ps1", import.meta.url),
+        ),
+        ...options,
+      }),
       encoding: "utf8",
       timeout: 10_000,
       maxBuffer: 64 * 1024,
@@ -82,6 +109,38 @@ function fixtureAcl(path: string, operation: string): string {
     },
   );
 }
+
+test.if(process.platform === "win32")(
+  "TrustedInstaller classification is exact-SID and nonprivate drive-root only",
+  () => {
+    const sid =
+      "S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464";
+    const root = parse(tmpdir()).root;
+    for (const [path, privatePath, directory, allowed] of [
+      [root, false, true, true],
+      [root.toLowerCase(), false, true, true],
+      [join(root, "nonroot"), false, true, false],
+      [root, true, true, false],
+      [root, false, false, false],
+      [root.slice(0, 2), false, true, false],
+      ["\\\\server\\share\\", false, true, false],
+    ] as const) {
+      const result = JSON.parse(
+        fixtureAcl(path, "principals", {
+          private: privatePath,
+          directory,
+        }),
+      ) as { principals: string[]; serviceAccount: string };
+      expect(result.principals.includes(sid)).toBe(allowed);
+      expect(result.principals).not.toContain("S-1-1-0");
+      expect(result.serviceAccount.toLowerCase()).toEndWith(
+        "\\trustedinstaller",
+      );
+    }
+  },
+  120_000,
+);
+
 function fixture(run: (root: string, state: string) => void) {
   const root = mkdtempSync(join(tmpdir(), "herdr privacy ' &; % Unicode-ไทย-"));
   const before = process.env["HERDR_WEB_PUSH_SUBJECT"];
