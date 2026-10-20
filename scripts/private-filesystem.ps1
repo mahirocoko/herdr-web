@@ -38,7 +38,7 @@ function Assert-Descriptor([string] $Path, [bool] $Private, [bool] $Directory) {
         if ($Private) { throw 'Untrusted Allow ACE on private path' }
         # Ancestors may be readable/traversable. Reject effective replacement,
         # deletion and security-descriptor authority, not harmless read access.
-        if (($ace.AceFlags -band [Security.AccessControl.AceFlags]::InheritOnly) -ne 0) { continue }
+        if (([int]$ace.AceFlags -band [int][Security.AccessControl.AceFlags]::InheritOnly) -ne 0) { continue }
         $replacement = 0x00010000 -bor 0x00040000 -bor 0x00080000 -bor 0x00000040 -bor 0x10000000
         if (($ace.AccessMask -band $replacement) -ne 0) { throw 'Untrusted ancestor replacement or ACL authority' }
     }
