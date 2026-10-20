@@ -15,7 +15,8 @@ on the existing strokes, without changing source geometry or color. Rendering
 supersamples at 1024px before downsampling to RGBA8. Focused tests decode PNG pixels
 and require green chevron arms/vertex, blue underscore, dark background and the
 badge's visible white prompt in their actual coordinate regions. Dimensions alone
-are not fidelity evidence. Runtime URLs use `mahiro1`; the service-worker cache is bumped separately.
+are not fidelity evidence. Runtime URLs use `mahiro2`; the service-worker cache is `herdr-web-ui-v6-mahiro`.
+This icon family includes the unchanged, vendored official Letta provider PNG.
 Manifest identity, start URL, scope and push identity are unchanged.
 
 `icon-source.png` is **upstream's** supplied ram artwork, not Mahiro's brand

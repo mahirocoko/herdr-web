@@ -10,7 +10,7 @@ describe("agent marks", () => {
     const html = renderToStaticMarkup(
       createElement(AgentMark, { agent: "letta", size: 24 }),
     );
-    expect(html).toContain('src="/icons/letta-webclip.png"');
+    expect(html).toContain('src="/icons/letta-webclip.png?v=mahiro2"');
     expect(html).toContain('width="24" height="24" alt="letta"');
     expect(html).not.toContain("<text");
     const image = readFileSync(

@@ -11,7 +11,7 @@ export const FRAGMENT_NAME = /^[a-z0-9][a-z0-9.-]*\.md$/;
 /** The sections a fragment may use, in the order a release lists them. */
 export const SECTIONS = ["Added", "Changed", "Removed", "Fixed", "Maintenance"] as const;
 
-const REPO = "https://github.com/devswha/herdr-web-ui";
+const REPO = "https://github.com/mahirocoko/herdr-web";
 const UNRELEASED = "## [Unreleased]";
 const HINT = `see ${FRAGMENTS_DIR}/${FRAGMENTS_README}`;
 const CHANGELOG_HINT = `fix the entry, or move it into a ${FRAGMENTS_DIR}/ fragment (${HINT})`;

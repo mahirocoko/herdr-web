@@ -179,6 +179,11 @@ export const PROMOTION_PATCHES = [
   'THIRD_PARTY_NOTICES.md',
   'CHANGELOG.md',
   'release-summaries.json',
+  'scripts/changelog-fold.ts',
+  'scripts/changelog-fold.test.ts',
+  'src/lib/i18n.ko.ts',
+  'src/lib/i18n.ja.ts',
+  'src/lib/i18n.zh.ts',
   'scripts/conventions.test.ts',
   'scripts/pages-gate.test.ts',
   'scripts/ci-setup.test.ts',
@@ -402,7 +407,7 @@ export const verifyPromoted = (root: string, tree: string) => {
       ) {
         const original = data
           .toString()
-          .replaceAll('?v=mahiro1', '?v=ram1')
+          .replaceAll('?v=mahiro2', '?v=ram1')
           .replaceAll(
             'Herdr <span className="brand-sub">Web</span>',
             'herdr <span className="brand-sub">web ui</span>',

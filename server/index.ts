@@ -489,6 +489,7 @@ export function createServer(
   async function observeLettaStop(ticket: LettaStopTicket<Client, PendingLease>): Promise<void> {
     try {
       while (lettaStops.current(ticket)) {
+        // fixed wait: pace post-Stop native reads while the expiring ticket remains current; this delay grants no readiness.
         await Bun.sleep(150);
         authorizePending(ticket.owner, ticket.paneId, ticket.lease);
         if (!ticket.lease.sighting.facts().sameClaim) break;
@@ -496,6 +497,7 @@ export function createServer(
         const context = await pendingContext(ticket.owner, ticket.paneId, ticket.lease, { ...ticket.identity });
         if (pending.mark(ticket.paneId) !== ticket.generation) break;
         if (activity !== ticket.activity || !lettaStops.matches(ticket, { ...context, generation: pending.mark(ticket.paneId) })) continue;
+        // fixed wait: separate matching native reads by a stability gap; any intervening output rejects arming.
         await Bun.sleep(150);
         if (activity !== ticket.activity) continue;
         const fresh = await pendingContext(ticket.owner, ticket.paneId, ticket.lease, { ...ticket.identity });

@@ -279,8 +279,8 @@ The existing generator now derives runtime PNG/ICO, maskable, touch and notifica
 assets through installed ImageMagick without redrawing the source. App/access-gate
 brand composition, document/reader titles and PWA names use Herdr Web; shell CSS,
 fonts, geometry, menus and features are untouched. Actual icon consumers share
-`mahiro1`, the manifest link is versioned, and the service-worker cache moves to
-`herdr-web-ui-v5-mahiro`. Manifest id/start URL/scope, worker scope and push/user
+`mahiro2` (including the vendored Letta provider icon), the manifest link is versioned,
+and the service-worker cache moves to `herdr-web-ui-v6-mahiro`. Manifest id/start URL/scope, worker scope and push/user
 state are unchanged. The ram artwork and social/marketing assets remain explicitly
 upstream reference material, not a claim of full-site rebranding.
 

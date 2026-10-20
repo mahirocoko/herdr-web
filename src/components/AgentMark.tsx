@@ -192,7 +192,7 @@ export function AgentMark({ agent, size = 16, className }: AgentMarkProps) {
   const mark =
     agent === "letta" ? (
       <img
-        src="/icons/letta-webclip.png"
+        src="/icons/letta-webclip.png?v=mahiro2"
         width={size}
         height={size}
         alt="letta"

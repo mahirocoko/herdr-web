@@ -6,12 +6,12 @@ import { conflictMarkers, foldChangelog, FRAGMENTS_DIR, fragmentFiles, linkPr, p
 import { releaseNotes } from "./release-notes.ts";
 
 const root = join(import.meta.dir, "..");
-const pull = (n: number) => `https://github.com/devswha/herdr-web-ui/pull/${n}`;
+const pull = (n: number) => `https://github.com/mahirocoko/herdr-web/pull/${n}`;
 const changelog = [
   "# Changelog", "", "Intro.", "", "## [Unreleased]", "", "### Fixed", "- Old fix.", "  Continued.", "",
   "### Added", "- Old feature. ([#1](" + pull(1) + "))", "", "## [1.2.2] - 2026-01-01", "", "### Fixed", "- Older.", "",
-  "[Unreleased]: https://github.com/devswha/herdr-web-ui/compare/v1.2.2...HEAD",
-  "[1.2.2]: https://github.com/devswha/herdr-web-ui/compare/v1.2.1...v1.2.2", "",
+  "[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v1.2.2...HEAD",
+  "[1.2.2]: https://github.com/mahirocoko/herdr-web/compare/v1.2.1...v1.2.2", "",
 ].join("\n");
 const fragment = (name: string, text: string) => ({ name, sections: parseFragment(text, name) });
 
@@ -27,9 +27,9 @@ describe("changelog fold", () => {
       "### Changed", "- Tweak.", "",
       "### Fixed", "- Old fix.", "  Continued.", "- New fix.", "  Wrapped.", "- Second fix.", "",
       "## [1.2.2] - 2026-01-01", "", "### Fixed", "- Older.", "",
-      "[Unreleased]: https://github.com/devswha/herdr-web-ui/compare/v1.2.3...HEAD",
-      "[1.2.3]: https://github.com/devswha/herdr-web-ui/compare/v1.2.2...v1.2.3",
-      "[1.2.2]: https://github.com/devswha/herdr-web-ui/compare/v1.2.1...v1.2.2", "",
+      "[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v1.2.3...HEAD",
+      "[1.2.3]: https://github.com/mahirocoko/herdr-web/compare/v1.2.2...v1.2.3",
+      "[1.2.2]: https://github.com/mahirocoko/herdr-web/compare/v1.2.1...v1.2.2", "",
     ].join("\n"));
   });
 
@@ -62,7 +62,7 @@ describe("changelog fold", () => {
       [changelog.replace("## [Unreleased]\n", "## [Unreleased]\nStray text.\n"), "before the first section"],
       [changelog.replace("  Continued.", "\n  Continued."), "neither"],
       [changelog.replace("## [Unreleased]", "## Unreleased"), "exactly one"],
-      [changelog.replace("[Unreleased]: https://github.com/devswha/herdr-web-ui/compare/v1.2.2...HEAD\n", ""), "end its links"],
+      [changelog.replace("[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v1.2.2...HEAD\n", ""), "end its links"],
       [changelog.replace("## [1.2.2] - 2026-01-01", "## [1.2.3] - 2026-01-01"), "already has 1.2.3"],
     ];
     for (const [text, message] of cases) expect(() => foldChangelog(text, [], "1.2.3", "2026-02-03")).toThrow(message);
@@ -142,5 +142,9 @@ describe("changelog.d", () => {
     const text = readFileSync(join(root, "CHANGELOG.md"), "utf8").replace(/\r\n/g, "\n");
     const folded = foldChangelog(text, [...fragments, fragment("zz-probe.md", "### Fixed\n- Probe.\n")], "999.0.0", "2099-01-01");
     expect(folded).toContain("## [Unreleased]\n\n## [999.0.0] - 2099-01-01\n");
+    expect(folded).toContain("[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v999.0.0...HEAD");
+    expect(folded).toContain("[999.0.0]: https://github.com/mahirocoko/herdr-web/compare/v0.10.1...v999.0.0");
+    // Adopted upstream release history is reference material, not rewritten fork lineage.
+    expect(folded).toContain("[0.4.12]: https://github.com/devswha/herdr-web-ui/compare/v0.4.11...v0.4.12");
   });
 });

@@ -118,10 +118,11 @@ describe("DESIGN.md", () => {
  * cache name is never reused. CACHE_NAME may move on its own (fonts, shell assets) without an entry.
  */
 const ICON_VERSIONS: Record<string, { sha256: string; cacheName: string }> = {
+  mahiro2: { sha256: "649600654833f63f2815dc8a21254deee6f3fab78bef06655f4630884829efe3", cacheName: "herdr-web-ui-v6-mahiro" },
   mahiro1: { sha256: "229a1e8fa58f387cad65dd8a40646cabd41d65fc20a04c4a6864222bdb622f5b", cacheName: "herdr-web-ui-v5-mahiro" },
   ram1: { sha256: "ed82342db3ec3ed2151ddd2d0d77805233e9251758e29972b4f09aa95602041e", cacheName: "herdr-web-ui-v4-ram" },
 };
-const CURRENT_ICONS = "mahiro1";
+const CURRENT_ICONS = "mahiro2";
 
 /** The icon images: dotfiles and other strays in public/icons (a Finder .DS_Store) are not icons. */
 function iconFiles(): string[] {

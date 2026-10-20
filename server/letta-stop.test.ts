@@ -234,7 +234,7 @@ async function fixture() {
   };
   const stop = async () => {
     await send({ type: "input", stop: true, text: "\u001b" });
-    await Bun.sleep(400); // two stable post-Stop reads; no provider or native process
+    await Bun.sleep(400); // fixed wait: allow both 150ms post-Stop reads before testing an already-armed witness; no native process
   };
   return { send, submit, stop, seen, client };
 }
@@ -350,7 +350,7 @@ describe("real dispatcher: local Letta Stop compatibility witness", () => {
     stoppedScreen = `${box(warning)}\n(esc to interrupt)`;
     await f.send({ type: "input", stop: true, text: "\u001b" });
     const result = f.submit(1);
-    await Bun.sleep(450);
+    await Bun.sleep(450); // fixed wait: keep native processing visible beyond the initial two 150ms reads to exercise delayed readiness
     screen = box(warning);
     output("p");
     const reply = await result;

@@ -133,8 +133,8 @@ test("manifest rebrands without changing installed identity or scope", () => {
     "/",
   ]);
   expect(manifest.icons).toHaveLength(4);
-  for (const icon of manifest.icons) expect(icon.src).toEndWith("?v=mahiro1");
-  expect(read("index.html")).toContain("/manifest.webmanifest?v=mahiro1");
+  for (const icon of manifest.icons) expect(icon.src).toEndWith("?v=mahiro2");
+  expect(read("index.html")).toContain("/manifest.webmanifest?v=mahiro2");
   expect(read("index.html")).toContain("<title>Herdr Web</title>");
 });
 
@@ -145,12 +145,12 @@ test("real shell and both notification owners consume the new icon version", () 
     "src/lib/notifications.ts",
     "public/sw.js",
   ]) {
-    expect(read(path)).toContain("/icons/icon-192.png?v=mahiro1");
+    expect(read(path)).toContain("/icons/icon-192.png?v=mahiro2");
     expect(read(path)).not.toContain("?v=ram1");
   }
-  expect(read("public/sw.js")).toContain("/icons/badge-96.png?v=mahiro1");
+  expect(read("public/sw.js")).toContain("/icons/badge-96.png?v=mahiro2");
   expect(read("public/sw.js")).toContain(
-    'const CACHE_NAME = "herdr-web-ui-v5-mahiro"',
+    'const CACHE_NAME = "herdr-web-ui-v6-mahiro"',
   );
   expect(read("src/App.tsx")).toContain('const APP_TITLE = "Herdr Web"');
   expect(read("src/App.tsx")).toContain(
