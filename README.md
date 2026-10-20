@@ -20,6 +20,12 @@ PORT=8788 bun start
 
 This changes the local listener only; it does not reconfigure Tailscale Serve. `bun run server` and `bun run dev` are aliases of the same build-and-serve launcher, **not** Vite HMR or an update supervisor. Help: `bun start --help`.
 
+## Windows status (T206, partial)
+
+Package entrypoints use a shared Bun-native bootstrap, without Bash/WSL. A fork-owned native ACL helper candidate now validates private reads and prepares runtime state using built-in Windows PowerShell/.NET Framework. It refuses unsupported paths/filesystems, untrusted owners/ACLs, reparse points and unsafe ancestor replacement authority rather than using chmod or repairing existing ACLs. New NTFS directories receive private descriptors at creation; disposable inheritance/rename witnesses precede secret writes. This is a cooperative local boundary, not isolation from the same user, SYSTEM or administrators.
+
+The Windows CI definition includes actual native privacy fixtures, but **has not executed for this candidate**. Null-DACL, unsupported-ACE, unexpected-owner and inspection-failure fixture coverage still needs completion and native execution. Service-owned volume ancestors may be refused; no blanket service-owner trust is granted. Windows startup, desktop, Letta's separate history reader and physical Push remain unverified. This is not a Windows-support release; do not bypass failures with chmod or WSL.
+
 ## First-time setup
 
 Requirements:
@@ -31,7 +37,7 @@ Requirements:
 ```sh
 git clone https://github.com/mahirocoko/herdr-web.git
 cd herdr-web
-bash scripts/bun-project.sh install --frozen-lockfile
+bun scripts/bun-project.mjs install --frozen-lockfile
 bun start
 ```
 

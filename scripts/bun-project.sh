@@ -1,22 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
-local_bin="$root/.agent-state/tools/bun/1.4.2/bun-darwin-aarch64/bun"
-if [[ -x "$local_bin" ]]; then
-  binary="$local_bin"
-else
-  binary="$(command -v bun || true)"
-  if [[ -z "$binary" ]]; then
-    printf '%s\n' 'Bun 1.4.2 was not found. Provide that version on PATH or use the existing project-local copy; no runtime was installed.' >&2
-    exit 1
-  fi
+# Compatibility entry for Unix checkouts without Bun on PATH. This only finds a
+# bootstrap engine; bun-project.mjs exclusively owns version selection/dispatch.
+engine="$(command -v bun || true)"
+if [[ -z "$engine" ]]; then
+  for candidate in "$root"/.agent-state/tools/bun/*/bun-*/bun; do
+    if [[ -x "$candidate" ]]; then engine="$candidate"; break; fi
+  done
 fi
-if [[ "$("$binary" --version)" != '1.4.2' ]]; then
-  printf '%s\n' 'Use the verified project-local Bun 1.4.2 (or CI Bun 1.4.2); do not upgrade the global runtime.' >&2
+if [[ -z "$engine" ]]; then
+  printf '%s\n' 'Bun 1.4.2 was not found. Provide that version on PATH or use the existing project-local copy; no runtime was installed.' >&2
   exit 1
 fi
-export PATH="$(dirname "$binary"):$PATH"
-export UNIT_TEST_WORKERS="${UNIT_TEST_WORKERS:-1}"
-export HERDR_TEST_SHARDS="${HERDR_TEST_SHARDS:-1}"
-cd "$root"
-exec "$binary" "$@"
+exec "$engine" "$root/scripts/bun-project.mjs" "$@"

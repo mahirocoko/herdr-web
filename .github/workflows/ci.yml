@@ -48,6 +48,34 @@ jobs:
           path: |
             .ci/unit.log
             .ci/unit-summary.json
+  windows-bootstrap:
+    # T206 candidate: these native fixtures are not proof until this job actually runs.
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+      HERDR_TEST_MODE: unit
+      UNIT_TEST_WORKERS: '1'
+      HERDR_TEST_HOOKS: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - name: Focused bootstrap checks only (not full Windows unit/ACL coverage)
+        run: bun scripts/bun-project.mjs test --preload ./scripts/test-herdr.ts ./scripts/bun-project.test.ts
+      - name: Native NTFS privacy and equivalent launcher fixtures (no app or native host)
+        run: bun scripts/bun-project.mjs test --preload ./scripts/test-herdr.ts ./scripts/private-filesystem.test.ts ./scripts/private-filesystem.windows.test.ts ./scripts/run-local.test.ts
+      - name: Ordinary cmd entrypoint help, without Bash or WSL
+        shell: cmd
+        run: bun run start --help
+      - name: Ordinary PowerShell entrypoint help, without Bash or WSL
+        shell: powershell
+        run: bun run start --help
+      - name: Isolated production build, no app or native host
+        run: bun run build --outDir .ci/windows-build
   native-shell:
     if: github.event_name == 'workflow_dispatch' && inputs.native_shell_fixture
     runs-on: [self-hosted, macOS, ARM64]

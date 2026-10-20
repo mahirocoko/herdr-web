@@ -176,6 +176,7 @@ export const PROMOTION_REFERENCES = [
   '.github/workflows/omp-question-compat.yml',
 ]
 export const PROMOTION_PATCHES = [
+  'server/pty/smoke.mjs',
   'THIRD_PARTY_NOTICES.md',
   'CHANGELOG.md',
   'release-summaries.json',
@@ -248,7 +249,13 @@ export const PROMOTION_ADDITIONS = [
   'server/fork-policy.test.ts',
   'scripts/run-local.ts',
   'scripts/run-local.test.ts',
+  'scripts/private-filesystem.ts',
+  'scripts/private-filesystem.ps1',
+  'scripts/private-filesystem.test.ts',
+  'scripts/private-filesystem.windows.test.ts',
   'scripts/bun-project.sh',
+  'scripts/bun-project.mjs',
+  'scripts/bun-project.test.ts',
   'scripts/fork-native-check.ts',
   'scripts/preview-build.ts',
   'scripts/acquire-upstream.ts',

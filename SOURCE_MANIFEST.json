@@ -10705,6 +10705,7 @@
   ],
   "promotion": {
     "patches": [
+      "server/pty/smoke.mjs",
       "server/static.test.ts",
       "THIRD_PARTY_NOTICES.md",
       "CHANGELOG.md",
@@ -10777,7 +10778,13 @@
       "server/fork-policy.test.ts",
       "scripts/run-local.ts",
       "scripts/run-local.test.ts",
+      "scripts/private-filesystem.ts",
+      "scripts/private-filesystem.ps1",
+      "scripts/private-filesystem.test.ts",
+      "scripts/private-filesystem.windows.test.ts",
       "scripts/bun-project.sh",
+      "scripts/bun-project.mjs",
+      "scripts/bun-project.test.ts",
       "scripts/fork-native-check.ts",
       "scripts/preview-build.ts",
       "scripts/acquire-upstream.ts",

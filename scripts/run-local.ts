@@ -1,50 +1,20 @@
-import {
-  chmodSync,
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readFileSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, statSync, writeFileSync } from "node:fs";
 import { createECDH } from "node:crypto";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { createServer } from "../server/index.ts";
-import { ping } from "../server/herdr/client.ts";
+import { herdrSocketPath, ping } from "../server/herdr/client.ts";
 import { isRealNode } from "../server/pty/sidecar.ts";
 import type { ForkPolicy } from "../server/fork-policy.ts";
+
+import {
+  preparePrivateRuntimeTree,
+  readPrivateConfiguration as privateConfiguration,
+} from "./private-filesystem.ts";
 
 const existingConfigPath = () =>
   process.env["HERDR_PUSH_CONFIG_PATH"] ||
   join(homedir(), ".config/herdr-web/push-config.json");
-
-function privateConfiguration(config: string): Record<string, unknown> | null {
-  if (!existsSync(config)) return null;
-  const stat = lstatSync(config);
-  const parent = lstatSync(resolve(config, ".."));
-  if (
-    !stat.isFile() ||
-    stat.isSymbolicLink() ||
-    stat.mode & 0o077 ||
-    !parent.isDirectory() ||
-    parent.isSymbolicLink() ||
-    parent.mode & 0o077
-  )
-    throw new Error(
-      "Existing owner configuration is not private; left unchanged",
-    );
-  if (stat.size > 16_384)
-    throw new Error(
-      "Existing private configuration is oversized; left unchanged",
-    );
-  const value: unknown = JSON.parse(readFileSync(config, "utf8"));
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new Error(
-      "Existing private configuration is invalid; left unchanged",
-    );
-  return value as Record<string, unknown>;
-}
 
 /** Keep the browser's existing Push subscription bound to the same VAPID identity.
  * Source Push repairs a changed key by unsubscribing on load, which must not happen at cutover.
@@ -54,6 +24,7 @@ export function preservePushIdentity(
   stateDir: string,
   configPath = existingConfigPath(),
 ): boolean {
+  if (process.platform === "win32") preparePrivateRuntimeTree(stateDir);
   const previous = privateConfiguration(configPath);
   if (!previous) return false;
   const { publicKey, privateKey, subject } = previous;
@@ -164,6 +135,16 @@ export function buildClient(
     );
 }
 
+/** Unix retains its real-Node smoke; Windows mirror does not need a PTY sidecar.
+ * The caller uses the native client's capability normalization, not a version guess.
+ */
+export function requiresNodePty(
+  terminalAttach: boolean,
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  return platform !== "win32" || terminalAttach;
+}
+
 export async function startLocal() {
   if (Bun.version !== "1.4.2")
     throw new Error(
@@ -183,34 +164,34 @@ export async function startLocal() {
     throw new Error("Invalid local port");
   assertLocalPortAvailable(port);
   const stateDir = join(root, ".agent-state/runtime/upstream-v10700");
-  mkdirSync(stateDir, { recursive: true, mode: 0o700 });
-  if (lstatSync(stateDir).isSymbolicLink())
-    throw new Error("Runtime state must not be a symlink");
-  chmodSync(stateDir, 0o700);
-  process.umask(0o077);
+  preparePrivateRuntimeTree(stateDir);
   process.env["HERDR_WEB_STATE_DIR"] = stateDir;
   process.env["HERDR_WEB_FORK_PRIVACY"] = "1";
   process.env["HERDR_WEB_PASTE_DIR"] = join(stateDir, "paste");
-  process.env["HERDR_SOCKET"] = join(homedir(), ".config/herdr/herdr.sock");
+  process.env["HERDR_SOCKET"] = herdrSocketPath();
   process.env["HERDR_WEB_HERDR_BIN"] = Bun.which("herdr") || "";
   if (!process.env["HERDR_WEB_HERDR_BIN"])
     throw new Error("Installed Herdr binary is missing");
-  const node = Bun.which("node");
-  if (
-    !node ||
-    !isRealNode(node) ||
-    Bun.spawnSync([node, join(root, "server/pty/smoke.mjs")], {
-      cwd: root,
-      stderr: "ignore",
-      timeout: 15_000,
-    }).exitCode !== 0
-  )
-    throw new Error("Real Node and the lock-pinned PTY sidecar are required");
   const native = await ping();
   if (native.protocol !== 22)
     throw new Error(
       "Installed native protocol differs; no auto-update attempted",
     );
+  if (requiresNodePty(native.terminal_attach === true)) {
+    const node = Bun.which("node");
+    if (
+      !node ||
+      !isRealNode(node) ||
+      Bun.spawnSync([node, join(root, "server/pty/smoke.mjs")], {
+        cwd: root,
+        stderr: "ignore",
+        timeout: 15_000,
+      }).exitCode !== 0
+    )
+      throw new Error(
+        "Real Node and the lock-pinned PTY sidecar are required for native terminal attachment; check Node on PATH and the frozen dependency installation",
+      );
+  }
   buildClient(root);
   const policy = localPolicy(port);
   const pushPreserved = preservePushIdentity(stateDir);
@@ -255,8 +236,10 @@ Usage: bun start
        PORT=8788 bun start
 
 Builds the web client, then serves http://127.0.0.1:8787 in the foreground.
-Requires Bun 1.4.2 (project-local or PATH), real Node, installed dependencies,
-and a running Herdr host with native protocol 22. See README.md for first setup.
+Requires Bun 1.4.2 (project-local or PATH), installed dependencies,
+and a running Herdr host with native protocol 22. Unix/native direct attachment
+requires real Node. Windows private state requires native NTFS ACL checks;
+Windows execution remains unverified. No Bash/WSL. See README.md for first setup.
 Ctrl-C stops this process. No global install, managed updater or public bind.`);
   } else if (args.length) {
     throw new Error("Unknown launcher argument; use bun start --help");

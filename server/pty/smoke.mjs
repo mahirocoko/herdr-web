@@ -4,7 +4,9 @@ import pty from "@lydell/node-pty";
 
 const timer = setTimeout(() => { console.error("Bundled PTY smoke test timed out"); process.exit(1); }, 10_000);
 try {
-  const child = pty.spawn("/bin/sh", ["-c", "printf herdr-bundle-pty-ok"], { cols: 80, rows: 24 });
+  const child = process.platform === "win32"
+    ? pty.spawn(process.execPath, ["-e", "process.stdout.write('herdr-bundle-pty-ok')"], { cols: 80, rows: 24 })
+    : pty.spawn("/bin/sh", ["-c", "printf herdr-bundle-pty-ok"], { cols: 80, rows: 24 });
   let output = "";
   child.onData((text) => { output += text; });
   child.onExit(({ exitCode }) => {
