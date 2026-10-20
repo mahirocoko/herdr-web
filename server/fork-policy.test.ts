@@ -18,6 +18,139 @@ const req = (
   });
 
 describe("fork ingress before route side effects", () => {
+  test("observed Android empty-destination navigation is not a general fetch exception", () => {
+    const navigation = {
+      "sec-fetch-site": "cross-site",
+      "sec-fetch-mode": "navigate",
+      "sec-fetch-dest": "empty",
+    };
+    expect(forkRequestGate(req("/", navigation), true, policy)).toBeNull();
+    const remote = {
+      ...navigation,
+      host: policy.tailnetHost,
+      "tailscale-user-login": policy.ownerLogin,
+      "x-forwarded-for": "100.70.1.2",
+      "x-forwarded-proto": "https",
+    };
+    expect(forkRequestGate(req("/", remote), true, policy)).toBeNull();
+    expect(
+      forkRequestGate(
+        req("/", { ...remote, "tailscale-user-login": "other@example.test" }),
+        true,
+        policy,
+      )?.status,
+    ).toBe(403);
+    expect(
+      forkRequestGate(
+        req("/", { ...remote, "x-forwarded-for": "203.0.113.1" }),
+        true,
+        policy,
+      )?.status,
+    ).toBe(403);
+    expect(
+      forkRequestGate(
+        req("/", { ...remote, "tailscale-funnel-request": "1" }),
+        true,
+        policy,
+      )?.status,
+    ).toBe(403);
+    for (const path of ["/api/session", "/api/fs/file", "/ws", "/index.html"]) {
+      expect(forkRequestGate(req(path, navigation), true, policy)?.status).toBe(
+        403,
+      );
+    }
+    for (const mode of ["cors", "no-cors", "same-origin", ""]) {
+      expect(
+        forkRequestGate(
+          req("/", { ...navigation, "sec-fetch-mode": mode }),
+          true,
+          policy,
+        )?.status,
+      ).toBe(403);
+    }
+    for (const origin of ["null", "https://attacker.test"]) {
+      expect(
+        forkRequestGate(req("/", { ...navigation, origin }), true, policy)
+          ?.status,
+      ).toBe(403);
+    }
+    expect(
+      forkRequestGate(req("/", navigation, "POST"), true, policy)?.status,
+    ).toBe(403);
+    expect(
+      forkRequestGate(
+        req("/", { ...navigation, host: "attacker.test" }),
+        true,
+        policy,
+      )?.status,
+    ).toBe(403);
+    expect(forkRequestGate(req("/", navigation), false, policy)?.status).toBe(
+      403,
+    );
+  });
+
+  test("Android-style cross-site root document launch preserves all other boundaries", () => {
+    const navigation = {
+      "sec-fetch-site": "cross-site",
+      "sec-fetch-mode": "navigate",
+      "sec-fetch-dest": "document",
+    };
+    expect(forkRequestGate(req("/", navigation), true, policy)).toBeNull();
+    expect(
+      forkRequestGate(req("/?workspace=test", navigation), true, policy),
+    ).toBeNull();
+    for (const path of [
+      "/api/session",
+      "/api/fs/file",
+      "/ws",
+      "/manifest.webmanifest",
+    ]) {
+      expect(forkRequestGate(req(path, navigation), true, policy)?.status).toBe(
+        403,
+      );
+    }
+    for (const headers of [
+      { ...navigation, origin: "https://attacker.test" },
+      { ...navigation, origin: "null" },
+      { ...navigation, "sec-fetch-mode": "cors" },
+      { ...navigation, "sec-fetch-dest": "iframe" },
+      { ...navigation, "sec-fetch-site": "unknown" },
+      { ...navigation, host: "attacker.test" },
+      { ...navigation, "tailscale-user-login": policy.ownerLogin },
+    ]) {
+      expect(forkRequestGate(req("/", headers), true, policy)?.status).toBe(
+        403,
+      );
+    }
+    for (const method of ["POST", "PUT", "DELETE", "HEAD"]) {
+      expect(
+        forkRequestGate(req("/", navigation, method), true, policy)?.status,
+      ).toBe(403);
+    }
+    expect(forkRequestGate(req("/", navigation), false, policy)?.status).toBe(
+      403,
+    );
+    const remote = {
+      ...navigation,
+      host: policy.tailnetHost,
+      "tailscale-user-login": policy.ownerLogin,
+      "x-forwarded-for": "100.70.1.2",
+      "x-forwarded-proto": "https",
+    };
+    expect(forkRequestGate(req("/", remote), true, policy)).toBeNull();
+    const remoteFailures: Record<string, string>[] = [
+      { "tailscale-user-login": "other@example.test" },
+      { "x-forwarded-for": "203.0.113.1" },
+      { "tailscale-funnel-request": "1" },
+    ];
+    for (const patch of remoteFailures) {
+      expect(
+        forkRequestGate(req("/", { ...remote, ...patch }), true, policy)
+          ?.status,
+      ).toBe(403);
+    }
+  });
+
   test("local read works, but arbitrary Host and non-loopback peers do not", () => {
     expect(forkRequestGate(req(), true, policy)).toBeNull();
     expect(forkRequestGate(req(), false, policy)?.status).toBe(403);

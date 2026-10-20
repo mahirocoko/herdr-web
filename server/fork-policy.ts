@@ -74,8 +74,20 @@ export function forkRequestGate(
   const websocket = url.pathname === "/ws";
   const mutation = !["GET", "HEAD", "OPTIONS"].includes(request.method);
   const site = request.headers.get("sec-fetch-site");
+  const destination = request.headers.get("sec-fetch-dest");
+  // Android launches/replayed navigations use document or empty destinations.
+  // Keep mode=navigate mandatory; ordinary fetches cannot use this exception.
+  // Only an origin-less GET of the manifest's root shell crosses that boundary;
+  // owner/proxy checks above and API/WS/mutation Origin checks remain intact.
+  const appLaunch =
+    request.method === "GET" &&
+    url.pathname === "/" &&
+    origin === null &&
+    site === "cross-site" &&
+    request.headers.get("sec-fetch-mode") === "navigate" &&
+    (destination === "document" || destination === "empty");
   if (
-    (site && site !== "same-origin" && site !== "none") ||
+    (site && site !== "same-origin" && site !== "none" && !appLaunch) ||
     (origin !== null && origin !== expected) ||
     ((websocket || mutation) && origin === null)
   ) {

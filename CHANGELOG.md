@@ -8,6 +8,23 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-10-20
+
+### Fixed
+
+- Accept the installed Android PWA's origin-less, cross-site root navigation
+  with either observed `document` or `empty` fetch destination. Still require
+  `GET /` and navigation mode; API, WebSocket, mutation and private-owner checks
+  remain strict. Ordinary cross-site fetches and hostile Origins remain refused.
+- Add regression coverage for both launch shapes and their security boundaries;
+  remove the bounded diagnostic instrumentation used to identify the real requests.
+
+### Boundaries
+
+- Local Mac HTTP replay and independent source-security checks passed. Repeated
+  installed-device acceptance remains separate; Windows support retains the
+  experimental boundaries documented in 0.10.2. Source-only release, no installer.
+
 ## [0.10.2] - 2026-10-20
 
 ### Fixed
@@ -4984,7 +5001,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.10.2...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.10.3...HEAD
+[0.10.3]: https://github.com/mahirocoko/herdr-web/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/mahirocoko/herdr-web/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/mahirocoko/herdr-web/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/mahirocoko/herdr-web/compare/v0.9.1...v0.10.0

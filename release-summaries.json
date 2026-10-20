@@ -1,4 +1,26 @@
 {
+  "0.10.3": {
+    "en": {
+      "fixed": [
+        "Fix Android PWA launch navigation without weakening owner, API or WebSocket checks."
+      ]
+    },
+    "ko": {
+      "fixed": [
+        "소유자, API, WebSocket 보호를 유지하면서 Android PWA 시작 탐색을 수정합니다."
+      ]
+    },
+    "ja": {
+      "fixed": [
+        "所有者・API・WebSocketの保護を維持し、Android PWAの起動時の遷移を修正。"
+      ]
+    },
+    "zh": {
+      "fixed": [
+        "修复 Android PWA 启动导航，同时保留所有者、API 和 WebSocket 防护。"
+      ]
+    }
+  },
   "0.10.2": {
     "en": {
       "fixed": [
