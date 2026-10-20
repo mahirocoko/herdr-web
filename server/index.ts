@@ -57,6 +57,7 @@ import { mirrorInput } from "./mirror-input.ts";
 import { PendingInputs, samePendingIdentity, type PendingIdentity, type PendingRecord } from "./pending-input.ts";
 import { processStartedAt } from "./process-start.ts";
 import { PendingRequestBook } from "./pending-requests.ts";
+import { LettaStops, type LettaStopTicket } from "./letta-stop.ts";
 import { interruptCodexSteering } from "./codex-steering.ts";
 import { OUTPUT_HARD_BYTES } from "./output-window.ts";
 import { connectUpdater, handleUpdateRequest, type UpdateService } from "./update-api.ts";
@@ -254,6 +255,7 @@ export function createServer(
   type PendingLease = { sighting: TerminalSighting; authority: object };
   const pendingAuthorities = new WeakMap<Client, Map<string, object>>();
   type PendingItem = PendingRecord<Client, PendingLease>;
+  const lettaStops = new LettaStops<Client, PendingLease>();
   const pending = new PendingInputs<Client, PendingLease>((owner, paneId, messages, removed) => {
     send(owner, { type: "pending-messages", pane_id: paneId, messages, ...(removed ? { removed } : {}) });
   }, Date.now, options.pendingStartTimeoutMs);
@@ -263,7 +265,7 @@ export function createServer(
   // the last input_draft refusal per pane: its named draft (Clear it and send), or none (Send anyway)
   const draftConfirmations = new WeakMap<Client, Map<string, { draft: string | null; identity: PendingIdentity; box?: string | null }>>();
   let stopped = false;
-  const { attachments, conversations, reconcileOutput, closeAttachment, detachClaimed, dropClaims, sight, poke, drainOutput, terminalFrames } = createTerminalRegistry({ options, clients, stopped: () => stopped, terminalAttach, holdFor, heldRetry, retryFor, relookupFor, holdPending, holdPendingPane, end: (client, reason) => end(client, reason) });
+  const { attachments, conversations, reconcileOutput, closeAttachment, detachClaimed, dropClaims, sight, poke, drainOutput, terminalFrames } = createTerminalRegistry({ options, clients, stopped: () => stopped, terminalAttach, holdFor, heldRetry, retryFor, relookupFor, holdPending, holdPendingPane, end: (client, reason) => end(client, reason), onOutput: (paneId) => lettaStops.output(paneId) });
 
   const { serialize, settleAfterTyping, paneQueues, lastTyped, typedEscape } = createInputLane({ TYPED_SETTLE_MS, KEY_SETTLE_MS });
   /** per pane, the WS keys still waiting at the tail of the pane's queue: later keys of the same sender join them */
@@ -308,11 +310,13 @@ export function createServer(
   // Losing authority cancels already-running checks too. Rejoining the same shared
   // attachment or returning to interact must never revive a captured lease.
   function holdPending(owner: Client, paneId?: string): void {
+    lettaStops.ownerLeft(owner, paneId);
     if (paneId === undefined) pendingAuthorities.delete(owner);
     else pendingAuthorities.get(owner)?.delete(paneId);
     pending.hold(owner, paneId);
   }
   function holdPendingPane(paneId: string, fault: { code: string; message: string }): void {
+    lettaStops.invalidate(paneId);
     for (const owner of clients) pendingAuthorities.get(owner)?.delete(paneId);
     pending.holdPane(paneId, fault);
   }
@@ -381,7 +385,8 @@ export function createServer(
    */
 
   async function dispatchPendingText(owner: Client, paneId: string, text: string, lease: PendingLease, identity: PendingIdentity,
-    automatic: boolean, arrivedAt: number, committing: (working: boolean, restarting?: boolean) => void = () => {}, interruptWorkingCodex = false): Promise<SubmitReply> {
+    automatic: boolean, arrivedAt: number, committing: (working: boolean, restarting?: boolean) => void = () => {}, interruptWorkingCodex = false,
+    recovery?: LettaStopTicket<Client, PendingLease>): Promise<SubmitReply> {
     let wrote = false;
     // what the checks below read is older than a status event that arrives while they run
     let mark = pending.mark(paneId);
@@ -389,7 +394,33 @@ export function createServer(
       const typed = Date.now() - (lastTyped.get(paneId) ?? 0);
       if (typed < TYPED_SETTLE_MS) await Bun.sleep(TYPED_SETTLE_MS - typed);
       mark = pending.mark(paneId);
+      let activity = recovery?.activity;
+      let normalAfterStop = false;
+      let normalGeneration = mark;
       const context = await pendingContext(owner, paneId, lease, identity);
+      const recoveryReady = (current: typeof context, draft = "") => {
+        if (!recovery) return;
+        authorizePending(owner, paneId, recovery.lease);
+        if (!recovery.lease.sighting.facts().sameClaim || recovery.activity !== activity
+          || current.identity.processPid == null || current.identity.processBirth == null
+          || !lettaStops.current(recovery) || recovery.identity.session !== current.identity.session
+          || recovery.scope !== current.pane.tokens?.["letta_scope"]) {
+          throw new HerdrError("pending_target_changed", "The stopped Letta terminal changed; check it before sending again");
+        }
+        // Real native readiness supersedes the compatibility witness, never the identity,
+        // lease, prompt or uncertainty guards. A subsequent working turn cancels this send.
+        if (["idle", "done"].includes(current.pane.agent_status)) {
+          if (pending.mark(paneId) !== mark) throw new HerdrError("pending_wait", "The native state changed during the input check; try again");
+          normalAfterStop = true;
+          normalGeneration = mark;
+          return;
+        }
+        if (normalAfterStop || !lettaStops.valid(recovery, { ...current, generation: pending.mark(paneId) }, draft)) {
+          throw new HerdrError("pending_target_changed", "The stopped Letta terminal changed; check it before sending again");
+        }
+      };
+      recoveryReady(context);
+      if (recovery && !pending.interruptReview(paneId, true)) throw new HerdrError("pending_uncertain", "Check the earlier unconfirmed delivery in the terminal before sending again");
       if (automatic && context.working) {
         pending.observe(paneId, "working", mark);
         throw new HerdrError("pending_wait", "The agent is working again; this message still waits for its next turn");
@@ -403,7 +434,15 @@ export function createServer(
       authorizePending(owner, paneId, lease);
       // asked again right before herdr is written to: its connect is awaited (#666)
       const allowed = (): boolean => {
-        try { authorizePending(owner, paneId, lease); return true; } catch { return false; }
+        try {
+          authorizePending(owner, paneId, lease);
+          if (recovery) {
+            authorizePending(owner, paneId, recovery.lease);
+            if (!recovery.lease.sighting.facts().sameClaim || !lettaStops.current(recovery)
+              || recovery.activity !== activity || pending.mark(paneId) !== (normalAfterStop ? normalGeneration : recovery.generation)) return false;
+          }
+          return true;
+        } catch { return false; }
       };
       // Pending input is a guarded literal paste + Enter, never Codex's native Tab queue.
       // Keep the final key here so a disconnect, pane switch or new menu can cancel it.
@@ -414,10 +453,13 @@ export function createServer(
         throw error;
       });
       await Bun.sleep(options.submitDelayMs ?? SUBMIT_DELAY_MS);
+      activity = recovery?.activity;
+      mark = pending.mark(paneId);
       const beforeEnter = await pendingContext(owner, paneId, lease, identity, true);
+      recoveryReady(beforeEnter, closeMention(text).trimEnd());
       if (automatic && beforeEnter.working) throw new HerdrError("pending_wait", "The agent started another turn before this queued message could be committed");
       authorizePending(owner, paneId, lease);
-      const steering = !automatic && beforeEnter.working;
+      const steering = !automatic && beforeEnter.working && !recovery;
       committing(steering);
       // Claude Code queues what Enter commits during a turn; Ctrl+Enter sends it now (#737). herdr
       // encodes the key as the pane asked, and as a plain CR for a program that asked for nothing.
@@ -443,6 +485,48 @@ export function createServer(
       return { ok: false, ...fault };
     }
   }
+  /** Observe only after our authenticated Stop write succeeded; never drain pending input. */
+  async function observeLettaStop(ticket: LettaStopTicket<Client, PendingLease>): Promise<void> {
+    try {
+      while (lettaStops.current(ticket)) {
+        await Bun.sleep(150);
+        authorizePending(ticket.owner, ticket.paneId, ticket.lease);
+        if (!ticket.lease.sighting.facts().sameClaim) break;
+        const activity = ticket.activity;
+        const context = await pendingContext(ticket.owner, ticket.paneId, ticket.lease, { ...ticket.identity });
+        if (pending.mark(ticket.paneId) !== ticket.generation) break;
+        if (activity !== ticket.activity || !lettaStops.matches(ticket, { ...context, generation: pending.mark(ticket.paneId) })) continue;
+        await Bun.sleep(150);
+        if (activity !== ticket.activity) continue;
+        const fresh = await pendingContext(ticket.owner, ticket.paneId, ticket.lease, { ...ticket.identity });
+        if (activity === ticket.activity && lettaStops.arm(ticket, { ...fresh, generation: pending.mark(ticket.paneId) })) return;
+      }
+    } catch { /* A lost lease, approval or unknown state cannot authorize recovery. */ }
+    lettaStops.forget(ticket);
+  }
+
+  async function dispatchLettaRecovery(owner: Client, paneId: string, text: string, arrivedAt: number): Promise<SubmitReply | null> {
+    const waiting = lettaStops.waiting(owner, paneId);
+    if (waiting) {
+      // Only this explicit new request waits; no old row gains replay authority.
+      const until = Math.min(arrivedAt + (options.submitDeadlineMs ?? SUBMIT_DEADLINE_MS), Date.now() + DRAFT_CLEAR_WAIT_MS);
+      while (lettaStops.current(waiting) && waiting.phase === "waiting" && Date.now() < until) {
+        authorizePending(owner, paneId, waiting.lease);
+        if (!waiting.lease.sighting.facts().sameClaim) throw new HerdrError("pending_lease_lost", "The stopped terminal's claim changed");
+        await Bun.sleep(50);
+      }
+    }
+    const ticket = lettaStops.take(owner, paneId);
+    if (!ticket) {
+      if (waiting) lettaStops.forget(waiting);
+      return waiting ? { ok: false, code: "input_not_ready", message: "Stop is still settling or the terminal changed. Check it, then send again; nothing was queued or typed." } : null;
+    }
+    try {
+      authorizePending(owner, paneId, ticket.lease);
+      return await dispatchPendingText(owner, paneId, pendingText(text), ticket.lease, { ...ticket.identity }, false, arrivedAt, undefined, false, ticket);
+    } finally { lettaStops.forget(ticket); }
+  }
+
   async function dispatchPending(item: PendingItem, automatic: boolean, arrivedAt: number, interruptWorkingCodex = false): Promise<SubmitReply> {
     const reply = await dispatchPendingText(item.owner, item.paneId, item.message.text, item.lease, item.identity,
       automatic, arrivedAt, (working, restarting) => pending.committing(item, working, restarting), interruptWorkingCodex);
@@ -1037,6 +1121,7 @@ export function createServer(
                 // checked again right before herdr is written to: its connect is awaited (#545)
                 // and into the same attach, or still none: one made while this waited is someone else's (#732)
                 const allowed = () => mayType(client) && connectionOf(client).roles === roles && typingGuards.herdrTyping(sighting.facts());
+                if (allowed()) lettaStops.invalidate(message.pane_id);
                 void serialize(message.pane_id, async () => {
                   // a herdr that attaches: typing reaches an attached pane only
                   if (await terminalAttach()) { inputFailed(); return; }
@@ -1057,6 +1142,7 @@ export function createServer(
                 send(client, { type: "error", code: "input_not_ready", message: "Terminal input is not ready. Nothing was sent.", pane_id: message.pane_id });
                 break;
               }
+              if (mayType(client) && typingGuards.queuedTyping(seen)) lettaStops.invalidate(message.pane_id);
               const typedIntoPty = (text: string) => {
                 lastTyped.set(message.pane_id, Date.now());
                 if (text.endsWith("\x1b")) typedEscape.add(message.pane_id); else typedEscape.delete(message.pane_id);
@@ -1089,7 +1175,24 @@ export function createServer(
                     typedIntoPty(text);
                     return;
                   }
-                  await paneSendText(message.pane_id, text, undefined, allowed);
+                  let ticket: LettaStopTicket<Client, PendingLease> | null = null;
+                  let stopLetta = false;
+                  if (stop) {
+                    try {
+                      const lease = pendingLease(client, message.pane_id);
+                      const epoch = lettaStops.epoch(message.pane_id);
+                      const generation = pending.mark(message.pane_id);
+                      stopLetta = (await clientSnapshot()).panes.find((pane) => pane.pane_id === message.pane_id)?.agent === "letta";
+                      const context = await pendingContext(client, message.pane_id, lease);
+                      if (lease.sighting.facts().sameClaim && pending.mark(message.pane_id) === generation) {
+                        ticket = lettaStops.begin(client, message.pane_id, lease, { ...context, generation }, epoch);
+                      }
+                    } catch { /* Normal Stop remains available; no compatibility witness. */ }
+                  }
+                  try { await paneSendText(message.pane_id, text, undefined, allowed); }
+                  catch (error) { lettaStops.invalidate(message.pane_id); throw error; }
+                  if (stopLetta) pending.interruptReview(message.pane_id);
+                  if (ticket && lettaStops.current(ticket)) void observeLettaStop(ticket);
                   // herdr still holds a lone ESC a moment: a message after the Stop waits out the same
                   // settling gap as after a typed one, and checks again for a question before pasting
                   if (stop) typedIntoPty(text);
@@ -1126,6 +1229,7 @@ export function createServer(
                 send(client, { type: "error", code: "input_not_ready", message: "Terminal input is not ready. Nothing was sent.", pane_id: message.pane_id });
                 break;
               }
+              if (mayType(client) && typingGuards.keys(seen)) lettaStops.invalidate(message.pane_id);
               // A key behind keys of the same sender that have not gone out yet joins them, as long as
               // nothing else was queued since: one RPC carries them all, so keys held faster than herdr
               // answers (a slow herdr, a busy PC) never queue up an RPC each, and keep their order.
@@ -1220,6 +1324,7 @@ export function createServer(
                   if (!facts.member || !facts.sameAttachment || !facts.sameClaim) { result(false, "not_attached"); return; }
                   if (!facts.ready || facts.held || !facts.samePty) { result(false, "input_not_ready"); return; }
                   if (secretPrompt(screen.text, facts.cols) !== message.prompt) { result(false, "prompt_changed"); return; }
+                  lettaStops.invalidate(message.pane_id);
                   if (facts.mirror) {
                     // A mirrored pane has no pty to type into: the secret is herdr's text, then the
                     // Enter key (a `\r` inside the text is not Enter to every shell). Both are awaited,
@@ -1302,6 +1407,19 @@ export function createServer(
               }
               const arrivedAt = Date.now();
               try {
+                if (!waits && !message.typed && message.resend_id === undefined && message.clear_draft === undefined && !message.send_anyway) {
+                  let book = pendingRequests.get(client);
+                  const fingerprint = new Bun.CryptoHasher("sha256").update(JSON.stringify([message.pane_id, message.text, message.payload, message.delivery])).digest("hex");
+                  const previous = book?.get(message.id, fingerprint);
+                  if (previous || lettaStops.available(client, message.pane_id)) {
+                    if (!book) { book = new PendingRequestBook((reply: SubmitReply) => reply.pending !== undefined && pending.retains(client, reply.pending.id)); pendingRequests.set(client, book); }
+                    const answer = await (previous ?? book.run(message.id, fingerprint, () => serialize(message.pane_id, async () =>
+                      await dispatchLettaRecovery(client, message.pane_id, message.text, arrivedAt)
+                      ?? { ok: false, code: "pending_target_changed", message: "The stopped terminal changed; check it before sending again" })));
+                    result(answer.ok, answer.code, answer.message);
+                    break;
+                  }
+                }
                 if (waits) {
                   let book = pendingRequests.get(client);
                   if (!book) { book = new PendingRequestBook((reply: SubmitReply) => reply.pending !== undefined && pending.retains(client, reply.pending.id)); pendingRequests.set(client, book); }
@@ -1311,6 +1429,11 @@ export function createServer(
                   const lease = previous ? null : pendingLease(client, message.pane_id);
                   const reply = previous ?? book.run(message.id, fingerprint, () => serialize(message.pane_id, async (): Promise<SubmitReply> => {
                     const text = pendingText(message.text);
+                    if (message.delivery === "queue") {
+                      const recovery = await dispatchLettaRecovery(client, message.pane_id, text, arrivedAt);
+                      if (recovery) return recovery;
+                    }
+                    lettaStops.ownerLeft(client, message.pane_id);
                     const mark = pending.mark(message.pane_id);
                     const context = await pendingContext(client, message.pane_id, lease!);
                     if (Date.now() - arrivedAt > (options.submitDeadlineMs ?? SUBMIT_DEADLINE_MS)) throw new HerdrError("submit_timeout", "This pending message waited too long; nothing was typed");
@@ -1336,6 +1459,7 @@ export function createServer(
                   break;
                 }
                 const dispatch = () => {
+                  lettaStops.ownerLeft(client, message.pane_id);
                   // held while this waited its turn (the attach was refused after the check above)
                   if (attachments.get(message.pane_id)?.held) throw new HerdrError("attach_held", ATTACH_HELD_MESSAGE);
                   return submitText(message.pane_id, message.text, message.payload, arrivedAt, message.typed === true, () => authorizeSocket(client), message.clear_draft,
@@ -1369,6 +1493,7 @@ export function createServer(
               break;
             }
             case "pending-action": {
+              lettaStops.ownerLeft(client, message.pane_id);
               const result = (reply: SubmitReply) => send(client, { type: "pending-result", id: message.id, pane_id: message.pane_id, pending_id: message.pending_id, ...reply });
               if (!Number.isSafeInteger(message.id) || typeof message.pane_id !== "string" || !message.pane_id
                 || typeof message.pending_id !== "string" || !message.pending_id || !["steer", "discard"].includes(message.action)) {
@@ -1466,6 +1591,7 @@ export function createServer(
   // ACKs can stop arriving entirely (a suspended tab). Bound the pause even then.
   const outputTimer = setInterval(() => {
     pending.expire();
+    lettaStops.expire();
     for (const paneId of attachments.keys()) reconcileOutput(paneId);
   }, 100);
   outputTimer.unref();

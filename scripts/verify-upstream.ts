@@ -188,6 +188,8 @@ export const PROMOTION_PATCHES = [
   'public/sw.js',
   'server/static.test.ts',
   'server/index.ts',
+  'server/pending-input.ts',
+  'server/pending-input.test.ts',
   'server/conversation.ts',
   'server/conversation-monitor.ts',
   'server/core/terminals.ts',
@@ -227,6 +229,8 @@ export const PROMOTION_PATCHES = [
   'public/icons/badge-96.png',
 ]
 export const PROMOTION_ADDITIONS = [
+  'server/letta-stop.ts',
+  'server/letta-stop.test.ts',
   'server/letta.ts',
   'server/letta.test.ts',
   'server/letta-parser.ts',

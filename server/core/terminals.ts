@@ -54,7 +54,7 @@ export function validGeometry(cols: unknown, rows: unknown): { cols: number; row
  * The server's terminals. `stopped` is read through a getter, as `stop()` sets it later, and `end`
  * is called through one, as the connections are built after the terminals.
  */
-export function createTerminalRegistry({ options, clients, stopped, terminalAttach, holdFor, heldRetry, retryFor, relookupFor, holdPending, holdPendingPane, end }: {
+export function createTerminalRegistry({ options, clients, stopped, terminalAttach, holdFor, heldRetry, retryFor, relookupFor, holdPending, holdPendingPane, end, onOutput }: {
   options: { codexHome?: string; devinDbPath?: string; opencodeDb?: string; hermesHome?: string; grokHome?: string; lettaRoot?: string };
   clients: Set<Client>;
   stopped: () => boolean;
@@ -66,6 +66,7 @@ export function createTerminalRegistry({ options, clients, stopped, terminalAtta
   holdPending: (owner: Client, paneId?: string) => void;
   holdPendingPane: (paneId: string, fault: { code: string; message: string }) => void;
   end: (client: Client, reason: "stalled" | "revoked" | "closed") => void;
+  onOutput?: (paneId: string) => void;
 }) {
   const attachments = new Map<string, PaneAttachment>();
 
@@ -123,6 +124,7 @@ export function createTerminalRegistry({ options, clients, stopped, terminalAtta
   }
 
   function sendOutput(client: Client, paneId: string, data: string): void {
+    onOutput?.(paneId);
     const window = client.data.output.get(paneId);
     const bytes = Buffer.byteLength(data);
     if ((window && window.pending + bytes > OUTPUT_HARD_BYTES) || client.getBufferedAmount() >= OUTPUT_HARD_BYTES) {

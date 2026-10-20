@@ -196,6 +196,13 @@ export class PendingInputs<Owner, Lease> {
     this.apply(paneId, status);
   }
 
+  /** Collector reconciliation is an observation, not a new turn event when unchanged.
+   * A changed baseline still fences older reads and applies the normal gate state machine. */
+  baseline(paneId: string, status: AgentStatus): void {
+    if (this.current(paneId) !== status) this.events.set(paneId, this.mark(paneId) + 1);
+    this.apply(paneId, status);
+  }
+
   /** A status read from a snapshot taken after `mark`: an event that came since is newer, and stands. */
   observe(paneId: string, status: AgentStatus, mark: number): void {
     if (this.mark(paneId) === mark) this.apply(paneId, status);
@@ -204,6 +211,21 @@ export class PendingInputs<Owner, Lease> {
   /** Whether a message of any connection still waits its turn on the pane. */
   waiting(paneId: string): boolean {
     return [...this.records.values()].some((item) => item.paneId === paneId && (item.inFlight || item.message.state === "queued"));
+  }
+
+  /** A local Stop never grants old rows replay authority or changes native status. */
+  interruptReview(paneId: string, retireGate = false): boolean {
+    const owners = new Set<Owner>();
+    for (const item of this.records.values()) {
+      if (item.paneId !== paneId || item.message.state !== "queued" || item.inFlight) continue;
+      item.message.state = "held";
+      item.message.error = { code: "pending_interrupted", message: "The turn was stopped; review this earlier message before sending it explicitly" };
+      owners.add(item.owner);
+    }
+    for (const owner of owners) this.publish(owner, paneId);
+    if ([...this.records.values()].some((item) => item.paneId === paneId && (item.inFlight || item.message.state === "uncertain"))) return false;
+    if (retireGate) this.gates.delete(paneId);
+    return true;
   }
 
   /** The pane ended: its held messages stay with their owners, its status and turn gate go. */

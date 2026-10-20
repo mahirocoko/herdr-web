@@ -306,6 +306,30 @@ describe("bridge pending input", () => {
     expect(f.queue.waiting("p1")).toBe(false);
   });
 
+  it("keeps unchanged baseline observations distinct from genuine same-status events", () => {
+    const f = fixture(); f.queue.status("p1", "working");
+    const mark = f.queue.mark("p1");
+    f.queue.baseline("p1", "working"); expect(f.queue.mark("p1")).toBe(mark);
+    f.queue.status("p1", "working"); expect(f.queue.mark("p1")).toBe(mark + 1);
+    const beforeChangedBaseline = f.queue.mark("p1");
+    f.queue.baseline("p1", "idle"); expect(f.queue.mark("p1")).toBe(beforeChangedBaseline + 1);
+    f.queue.observe("p1", "working", beforeChangedBaseline); expect(f.queue.current("p1")).toBe("idle");
+  });
+
+  it("applies baseline turn cycles to normal committed gates without rearming held or uncertain rows", () => {
+    const f = fixture(); const first = f.enqueue(1); const second = f.enqueue(2);
+    f.queue.baseline("p1", "idle"); expect(f.queue.claim(first, true)).toBe(true);
+    f.queue.committing(first); f.queue.settle(first);
+    f.queue.baseline("p1", "working"); const mark = f.queue.mark("p1");
+    f.queue.baseline("p1", "working"); expect(f.queue.mark("p1")).toBe(mark);
+    expect(f.queue.next("p1")).toBeNull(); f.queue.baseline("p1", "idle");
+    expect(f.queue.next("p1")).toBe(second); expect(f.queue.claim(second, true)).toBe(true);
+    f.queue.settle(second, { code: "uncertain", message: "check" }, true);
+    const preserved = JSON.stringify(second.message);
+    f.queue.baseline("p1", "working"); f.queue.baseline("p1", "idle");
+    expect(f.queue.next("p1")).toBeNull(); expect(JSON.stringify(second.message)).toBe(preserved);
+  });
+
   it("forgets an ended pane's status and its turn gate", () => {
     const f = fixture(); const first = f.enqueue(1);
     f.queue.status("p1", "idle");

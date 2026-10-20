@@ -295,7 +295,7 @@ export function createStatusHub<Lease>({ options, devices, clients, present, pen
         // known ready baseline can schedule a fresh guarded check even when the tracker
         // still remembers working; an unknown baseline never supplies that permission.
         const status = pane.agent_status === "idle" || pane.agent_status === "done" ? pane.agent_status : completions.current(pane.pane_id) ?? pane.agent_status;
-        pending.status(pane.pane_id, status); drainPending(pane.pane_id);
+        pending.baseline(pane.pane_id, status); drainPending(pane.pane_id);
       }
     },
     // a pane created a moment ago got its agent after the roster's own read of it. After the
@@ -306,7 +306,7 @@ export function createStatusHub<Lease>({ options, devices, clients, present, pen
     onResync: (panes, newer) => {
       completions.resync(panes, newer);
       const settled = (pane: HerdrPane): AgentStatus => completions.current(pane.pane_id) ?? pane.agent_status;
-      for (const pane of panes) { pending.status(pane.pane_id, settled(pane)); drainPending(pane.pane_id); }
+      for (const pane of panes) { pending.baseline(pane.pane_id, settled(pane)); drainPending(pane.pane_id); }
       for (const pane of panes) if (!newer.has(pane.pane_id) && pane.agent === "claude") waits.status(pane.pane_id, settled(pane));
       push.resync(panes.map((pane) => ({ ...pane, agent_status: alertStatus(settled(pane), waits.waiting(pane.pane_id)) })), newer);
     },
