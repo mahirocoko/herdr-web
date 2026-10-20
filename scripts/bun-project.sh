@@ -5,7 +5,11 @@ local_bin="$root/.agent-state/tools/bun/1.4.2/bun-darwin-aarch64/bun"
 if [[ -x "$local_bin" ]]; then
   binary="$local_bin"
 else
-  binary="$(command -v bun)"
+  binary="$(command -v bun || true)"
+  if [[ -z "$binary" ]]; then
+    printf '%s\n' 'Bun 1.4.2 was not found. Provide that version on PATH or use the existing project-local copy; no runtime was installed.' >&2
+    exit 1
+  fi
 fi
 if [[ "$("$binary" --version)" != '1.4.2' ]]; then
   printf '%s\n' 'Use the verified project-local Bun 1.4.2 (or CI Bun 1.4.2); do not upgrade the global runtime.' >&2

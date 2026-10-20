@@ -1,4 +1,58 @@
 {
+  "0.10.0": {
+    "en": {
+      "new": [
+        "Source-native workspaces, Chat and terminals with bounded Letta history."
+      ],
+      "improved": [
+        "Run bun start to build and serve in one command.",
+        "Clear first-time setup and startup error guidance."
+      ],
+      "fixed": [
+        "Allow one new Send within 30 seconds of Stop after native interruption checks pass.",
+        "Reject occupied ports before rebuilding a running app's assets."
+      ]
+    },
+    "ko": {
+      "new": [
+        "소스 기반 작업 공간, Chat, 터미널과 제한된 범위의 Letta 기록 읽기를 제공합니다."
+      ],
+      "improved": [
+        "bun start 명령 하나로 빌드하고 서버를 실행합니다.",
+        "최초 설정과 시작 오류에 대한 안내를 정리했습니다."
+      ],
+      "fixed": [
+        "네이티브 중단 확인을 통과하면 Stop 후 30초 안에 새 메시지를 한 번 보낼 수 있습니다.",
+        "사용 중인 포트는 실행 중인 앱의 파일을 다시 빌드하기 전에 거부합니다."
+      ]
+    },
+    "ja": {
+      "new": [
+        "ソースネイティブのワークスペース、Chat、ターミナルと範囲を限定したLetta履歴表示。"
+      ],
+      "improved": [
+        "bun startだけでビルドしてサーバーを起動できます。",
+        "初回セットアップと起動エラーの案内を整理しました。"
+      ],
+      "fixed": [
+        "ネイティブの中断確認が通れば、Stop後30秒以内に新しいメッセージを1回送信できます。",
+        "使用中のポートでは、稼働中のアプリのファイルを再ビルドする前に停止します。"
+      ]
+    },
+    "zh": {
+      "new": [
+        "采用源码原生工作区、Chat 和终端界面，并提供有界的 Letta 历史读取。"
+      ],
+      "improved": [
+        "运行 bun start 即可完成构建并启动服务。",
+        "整理首次设置与启动错误的操作指引。"
+      ],
+      "fixed": [
+        "通过原生中断检查后，可在 Stop 后 30 秒内发送一次新消息。",
+        "端口被占用时，在重新构建运行中应用的文件前拒绝启动。"
+      ]
+    }
+  },
   "0.4.12": {
     "en": {
       "new": [
@@ -702,9 +756,7 @@
         "可选择听写语言，并为每台电脑上安装的应用设置不同的名称。",
         "可通过触摸调整工作区顺序，并在聊天中查看代码高亮和任务列表。"
       ],
-      "improved": [
-        "可通过名称片段、描述或按顺序匹配的字母查找斜杠命令。"
-      ],
+      "improved": ["可通过名称片段、描述或按顺序匹配的字母查找斜杠命令。"],
       "fixed": [
         "等待后台任务的 Claude 回合不再过早发出完成通知。",
         "未使用的浏览器标签页会释放窗格，保持 herdr 终端的显示尺寸。",

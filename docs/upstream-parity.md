@@ -69,7 +69,9 @@ H2 (now supported by real source-native fixture and foreground startup, not infe
 
 ## Historical discovery facts (superseded where noted)
 
-Current runtime uses the verified project-local Bun 1.4.2 and the relocated unchanged upstream dependency graph; global Bun 1.3.11 is untouched. The launcher imports the source builder, never direct-main/managed/plugin startup. Installed native ping and the actual app report Herdr 0.9.5/protocol 22/terminal attach true. The following original discovery observations are retained chronologically, not launch guidance.
+Current startup is `bun start` through the existing pinned-Bun wrapper and `scripts/run-local.ts`. It rejects occupied loopback ports before build/state writes, verifies native prerequisites, rebuilds the client on every start and only then creates the server. A failed build stops startup rather than serving old assets. `--help` does not build/start; `server`/`dev` remain aliases, not HMR. README owns first-time setup and user-facing commands; unit/native suites are separate engineering checks. No installer, runtime download, global update, public bind or new service manager was added.
+
+Current runtime uses the verified project-local Bun 1.4.2 and the relocated unchanged upstream dependency graph; global Bun 1.3.11 is untouched. The launcher imports the source builder, never direct-main/managed/plugin startup. Installed native ping and the actual app report Herdr 0.9.5/protocol 22/terminal attach true. The existing live server was not restarted for the startup convenience change. The following original discovery observations are retained chronologically, not launch guidance.
 
 - Current installed Bun: `1.3.11`; upstream declares `packageManager: bun@1.4.2` but no `engines` field. Compatibility has not been tested. Do not infer a mandatory global upgrade from the package-manager field alone.
 - Additional upstream runtime dependency names: `@legendapp/list`, `@lydell/node-pty`, `@tanstack/highlight`, `@xterm/addon-unicode-graphemes`, `@xterm/addon-web-links`, `mermaid`, `qrcode-generator`.

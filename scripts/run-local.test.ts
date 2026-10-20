@@ -13,7 +13,106 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { preservePushIdentity } from "./run-local.ts";
+import {
+  assertLocalPortAvailable,
+  buildClient,
+  preservePushIdentity,
+} from "./run-local.ts";
+
+test("fresh-clone wrapper explains missing Bun without installing a runtime", () => {
+  const root = mkdtempSync(join(tmpdir(), "herdr-missing-bun-"));
+  try {
+    mkdirSync(join(root, "scripts"));
+    mkdirSync(join(root, "bin"));
+    const wrapper = join(root, "scripts/bun-project.sh");
+    writeFileSync(
+      wrapper,
+      readFileSync(new URL("./bun-project.sh", import.meta.url)),
+    );
+    symlinkSync(Bun.which("dirname")!, join(root, "bin/dirname"));
+    const result = Bun.spawnSync(["/bin/bash", wrapper, "--version"], {
+      env: { PATH: join(root, "bin") },
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr.toString()).toContain("Bun 1.4.2 was not found");
+    expect(existsSync(join(root, ".agent-state"))).toBe(false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("startup refuses an occupied loopback port without closing its owner", () => {
+  const owner = Bun.listen({
+    hostname: "127.0.0.1",
+    port: 0,
+    socket: { data() {} },
+  });
+  try {
+    expect(() => assertLocalPortAvailable(owner.port)).toThrow(
+      "No build or server was started",
+    );
+    expect(owner.port).toBeGreaterThan(0);
+  } finally {
+    owner.stop();
+  }
+});
+
+test("startup port probe releases its own listener", () => {
+  const listener = Bun.listen({
+    hostname: "127.0.0.1",
+    port: 0,
+    socket: { data() {} },
+  });
+  const port = listener.port;
+  listener.stop();
+  assertLocalPortAvailable(port);
+  const next = Bun.listen({
+    hostname: "127.0.0.1",
+    port,
+    socket: { data() {} },
+  });
+  next.stop();
+});
+
+test("normal start really executes the build script, including when dist already exists", () => {
+  const root = mkdtempSync(join(tmpdir(), "herdr-start-build-"));
+  try {
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({ scripts: { build: "bun build.ts" } }),
+    );
+    writeFileSync(
+      join(root, "build.ts"),
+      `import { mkdirSync, writeFileSync } from "node:fs";
+mkdirSync("dist", { recursive: true });
+writeFileSync("dist/index.html", "built");`,
+    );
+    buildClient(root);
+    const index = join(root, "dist/index.html");
+    expect(readFileSync(index, "utf8")).toBe("built");
+    writeFileSync(index, "stale");
+    buildClient(root);
+    expect(readFileSync(index, "utf8")).toBe("built");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("failed or empty builds never qualify an old client for startup", () => {
+  const root = mkdtempSync(join(tmpdir(), "herdr-failed-build-"));
+  try {
+    expect(() => buildClient(root, () => 1)).toThrow("server was not started");
+    expect(() => buildClient(root, () => 0)).toThrow("did not produce");
+    mkdirSync(join(root, "dist"));
+    writeFileSync(join(root, "dist/index.html"), "old client");
+    expect(() => buildClient(root, () => 2)).toThrow("server was not started");
+    expect(readFileSync(join(root, "dist/index.html"), "utf8")).toBe(
+      "old client",
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 const pair = () => {
   const curve = createECDH("prime256v1");

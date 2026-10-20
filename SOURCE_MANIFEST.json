@@ -1,9 +1,7 @@
 {
   "repository": "https://github.com/devswha/herdr-web-ui",
   "pin": "d918448647e41079c52047ffc96cdaac50ccba32",
-  "forkPatchAllowlist": [
-    "scripts/demo-build.ts"
-  ],
+  "forkPatchAllowlist": ["scripts/demo-build.ts"],
   "forkAddedPaths": [
     "AGENTS.md",
     "SOURCE_MANIFEST.json",
@@ -10709,6 +10707,8 @@
     "patches": [
       "server/static.test.ts",
       "THIRD_PARTY_NOTICES.md",
+      "CHANGELOG.md",
+      "release-summaries.json",
       "scripts/conventions.test.ts",
       "scripts/pages-gate.test.ts",
       "scripts/ci-setup.test.ts",

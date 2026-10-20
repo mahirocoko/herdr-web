@@ -177,6 +177,8 @@ export const PROMOTION_REFERENCES = [
 ]
 export const PROMOTION_PATCHES = [
   'THIRD_PARTY_NOTICES.md',
+  'CHANGELOG.md',
+  'release-summaries.json',
   'scripts/conventions.test.ts',
   'scripts/pages-gate.test.ts',
   'scripts/ci-setup.test.ts',

@@ -4,6 +4,7 @@ import {
   lstatSync,
   mkdirSync,
   readFileSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { createECDH } from "node:crypto";
@@ -123,6 +124,46 @@ export function localPolicy(port: number): ForkPolicy {
   return policy;
 }
 
+/** Fail before rebuilding assets served by an already-running instance.
+ * The real server bind remains authoritative if another process wins the race.
+ */
+export function assertLocalPortAvailable(port: number): void {
+  try {
+    const listener = Bun.listen({
+      hostname: "127.0.0.1",
+      port,
+      socket: { data() {} },
+    });
+    listener.stop();
+  } catch {
+    throw new Error(
+      `Port ${port} is unavailable. If Herdr Web is already running, open http://127.0.0.1:${port}; otherwise stop its owner or choose another PORT. No build or server was started.`,
+    );
+  }
+}
+
+/** Rebuild on every normal start so a pull cannot silently serve an old client. */
+export function buildClient(
+  root: string,
+  runBuild: (cwd: string) => number = (cwd) =>
+    Bun.spawnSync([process.execPath, "run", "build"], {
+      cwd,
+      stdout: "inherit",
+      stderr: "inherit",
+    }).exitCode,
+): void {
+  console.log("Building Herdr Web…");
+  if (runBuild(root) !== 0)
+    throw new Error(
+      "Client build failed; the server was not started. For first-time setup, install the frozen dependencies before starting again.",
+    );
+  const index = join(root, "dist/index.html");
+  if (!existsSync(index) || !statSync(index).isFile())
+    throw new Error(
+      "Build did not produce dist/index.html; server not started",
+    );
+}
+
 export async function startLocal() {
   if (Bun.version !== "1.4.2")
     throw new Error(
@@ -140,6 +181,7 @@ export async function startLocal() {
   const port = Number(process.env["PORT"] || "8787");
   if (!Number.isSafeInteger(port) || port < 1024 || port > 65535)
     throw new Error("Invalid local port");
+  assertLocalPortAvailable(port);
   const stateDir = join(root, ".agent-state/runtime/upstream-v10700");
   mkdirSync(stateDir, { recursive: true, mode: 0o700 });
   if (lstatSync(stateDir).isSymbolicLink())
@@ -169,6 +211,7 @@ export async function startLocal() {
     throw new Error(
       "Installed native protocol differs; no auto-update attempted",
     );
+  buildClient(root);
   const policy = localPolicy(port);
   const pushPreserved = preservePushIdentity(stateDir);
   const instance = createServer({
@@ -203,4 +246,21 @@ export async function startLocal() {
   return instance;
 }
 
-if (import.meta.main) await startLocal();
+if (import.meta.main) {
+  const args = process.argv.slice(2);
+  if (args.length === 1 && (args[0] === "--help" || args[0] === "-h")) {
+    console.log(`Herdr Web — local source-native launcher
+
+Usage: bun start
+       PORT=8788 bun start
+
+Builds the web client, then serves http://127.0.0.1:8787 in the foreground.
+Requires Bun 1.4.2 (project-local or PATH), real Node, installed dependencies,
+and a running Herdr host with native protocol 22. See README.md for first setup.
+Ctrl-C stops this process. No global install, managed updater or public bind.`);
+  } else if (args.length) {
+    throw new Error("Unknown launcher argument; use bun start --help");
+  } else {
+    await startLocal();
+  }
+}

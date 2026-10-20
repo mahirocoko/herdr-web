@@ -1,15 +1,51 @@
 # Changelog
 
-herdr web ui is versioned with [semantic versioning](https://semver.org/). Each release is a
-`vX.Y.Z` Git tag with a GitHub release. Installs update only to releases; commits on `main`
-between releases do not reach them. Remote-PC runtime bundles are versioned separately as
-`remote-vN` releases.
+This fork follows [semantic versioning](https://semver.org/) with `vX.Y.Z` tags and
+GitHub source releases. Follow the root README to install dependencies and run the
+app; the fork does not enable upstream managed updates, installers or remote-PC
+runtime publishing. Earlier fork releases are listed on
+[GitHub](https://github.com/mahirocoko/herdr-web/releases).
 
 ## [Unreleased]
+
+## [0.10.0] - 2026-10-20
+
+### Changed
+
+- Adopt the complete pinned source-native React/Vite/Bun application rather than
+  the retired React Router/DTO architecture, retaining our terminal-mark branding.
+- Make `bun start` build the client and start the native server in one foreground
+  command. Reject occupied ports before rebuilding; failed builds never start the
+  server with an old client. Add help and actionable missing-runtime guidance.
+- Rewrite the README startup guide with first-time requirements, frozen dependency
+  installation, troubleshooting and engineering checks separated from normal use.
+
+### Added
+
+- Letta Code history in the source Chat path, with bounded private indexing/paging.
+- One guarded new manual Send after this client's Stop through an expiring
+  30-second compatibility witness, without replaying held or uncertain messages.
+- Terminal Pause fit / Resume Live and fork-owned About/integration information.
+
+### Boundaries
+
+- Preserve loopback binding, native protocol checks, real Node PTY ownership,
+  private state and the existing Push identity. No global runtime upgrade,
+  plugin installer, new public exposure or account mutation is enabled.
+- Native Working can remain stale after Stop. Native recovery history can contain
+  distinct duplicate prompt records; the reader does not delete them by text.
+- Physical-device/PWA/Push receipt, broader provider/global capabilities and human
+  visual/product acceptance are separate from the verified engineering scope.
+- Source adoption, native/fixture/runtime evidence and remaining gaps are detailed
+  in `docs/upstream-parity.md`. This is a source release, not a packaged installer.
+
+The entries below are retained upstream reference history from the pinned source,
+not this fork's release lineage or permission to enable upstream update tooling.
 
 ## [0.4.12] - 2026-10-18
 
 ### Added
+
 - Settings → Integrations → New agents picks the mode Claude Code (permission mode) and Codex
   (sandbox and approvals) start in from New workspace, New tab and New worktree. Agent default,
   the default, adds no flag, so the agent's own configuration still decides. The choice is shared
@@ -120,6 +156,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#1302](https://github.com/devswha/herdr-web-ui/pull/1302))
 
 ### Changed
+
 - Every agent's `/` menu (and Codex's `$`) now reads the way omo's does: each command's
   description is one short line with the whole text in its tooltip, skills stand under where they
   come from (yours, this project's, built in, from a plugin) with an icon for each, a namespaced
@@ -277,11 +314,13 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#1236](https://github.com/devswha/herdr-web-ui/pull/1236))
 
 ### Removed
+
 - The message box no longer has a resize grip on its top edge: its height always follows the
   draft, and a height chosen with the grip before is no longer applied.
   ([#1273](https://github.com/devswha/herdr-web-ui/pull/1273))
 
 ### Fixed
+
 - Screen readers now hear "Sending your answer…" when a prompt answer is on its way: the card's
   busy state sits on its options alone, no longer over the status line.
   ([#1246](https://github.com/devswha/herdr-web-ui/pull/1246))
@@ -519,7 +558,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   session instead of always following herdr's own socket.
   ([#1330](https://github.com/devswha/herdr-web-ui/pull/1330))
 - Installing the herdr plugin on WSL no longer fails with `scripts/preflight.sh: 7: set: Illegal
-  option -` when git there converts line endings (`core.autocrlf=true`): every text file is now
+option -` when git there converts line endings (`core.autocrlf=true`): every text file is now
   checked out with LF.
   ([#1293](https://github.com/devswha/herdr-web-ui/pull/1293))
 - `status` and `stop` run by hand (without herdr's environment) now find the server herdr started,
@@ -639,6 +678,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#1262](https://github.com/devswha/herdr-web-ui/pull/1262))
 
 ### Maintenance
+
 - One `useAnnouncedText` hook (`src/lib/`) carries the announced-status pattern that the header note,
   the file viewer and the two sidebars each copied; DESIGN.md names the pattern and where the prompt
   card's `aria-busy` lives.
@@ -661,6 +701,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.4.11] - 2026-10-16
 
 ### Fixed
+
 - `/effort` in a Claude Code chat shows its card again with Claude Code 2.1.301, whose slider
   describes the level between the level names and the hint.
   ([#1200](https://github.com/devswha/herdr-web-ui/pull/1200) by @sergiorademacher)
@@ -680,22 +721,26 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#1183](https://github.com/devswha/herdr-web-ui/pull/1183) by @philipprass-prog)
 
 ### Maintenance
+
 - The remote-PC runtime is now version 30: every saved PC asks for **Update bridge…** once.
 
 ## [0.4.10] - 2026-10-16
 
 ### Changed
+
 - On a phone or tablet, the chip above the message box that holds the prompt Claude Code suggests
   next is off by default. **Settings → Chat → Composer → Suggestion chip** turns it back on; the
   suggestion still shows grey in the empty message box. With a keyboard, Tab takes it as before.
   ([#1185](https://github.com/devswha/herdr-web-ui/pull/1185))
 
 ### Maintenance
+
 - The remote-PC runtime is now version 29: every saved PC asks for **Update bridge…** once.
 
 ## [0.4.9] - 2026-10-16
 
 ### Added
+
 - Mod+Shift+PageUp/PageDown page the current chat transcript or the terminal's native history, one
   line overlapping between pages. When herdr reports no native history, they send plain page keys to
   the running program, which sets its own page length.
@@ -876,6 +921,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#914](https://github.com/devswha/herdr-web-ui/pull/914) by @Galtozzy)
 
 ### Changed
+
 - Install and update counts include app setting values such as theme, text size and notification
   choices, rather than only the names of changed appearance settings. Custom text and account
   identifiers stay out; custom choices use flags or counts. The expanded notice is shown again
@@ -1048,6 +1094,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#1101](https://github.com/devswha/herdr-web-ui/pull/1101))
 
 ### Removed
+
 - Settings → Appearance no longer has Workspace cards, Pin agents or Quiet opened finishes. The
   Agents list is always flat, and a finished agent keeps herdr's DONE until herdr shows it.
   ([#1120](https://github.com/devswha/herdr-web-ui/pull/1120))
@@ -1084,6 +1131,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#1099](https://github.com/devswha/herdr-web-ui/pull/1099))
 
 ### Fixed
+
 - Open terminals reconnect automatically after herdr restarts or updates, without switching
   panes or reloading the browser, and clear the stale terminal-ended notice.
 - First-device pairing waits for the browser to return its device cookie before restricting
@@ -1527,6 +1575,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#967](https://github.com/devswha/herdr-web-ui/pull/967), [#972](https://github.com/devswha/herdr-web-ui/pull/972))
 
 ### Maintenance
+
 - The remote-PC runtime is now version 28: every saved PC asks for **Update bridge…** once.
 - The pending-input "turn never starts" test waits for the recorder to log the bridge's Enter
   before comparing the bytes, instead of racing it.
@@ -1600,6 +1649,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.4.8] - 2026-10-12
 
 ### Added
+
 - **Settings → Composer → Send queued messages automatically** (on by default). Turned off, a
   message sent while the agent works waits under the message box until you press **Send now**,
   instead of going by itself when the turn ends. A PC whose bridge is older than this release
@@ -1608,6 +1658,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#836](https://github.com/devswha/herdr-web-ui/pull/836))
 
 ### Changed
+
 - With **Workspace cards** on, a pinned agent stays in its workspace's card, first there, and the
   cards that hold pins come first, instead of the agent leaving its card for the top of the list.
   ([#852](https://github.com/devswha/herdr-web-ui/pull/852))
@@ -1634,6 +1685,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#787](https://github.com/devswha/herdr-web-ui/pull/787) by @kilhyeonjun)
 
 ### Fixed
+
 - The file viewer draws the HTML a README is written with (a centered logo, a row of badges and
   links, `<details>`) as markdown instead of showing its tags as text: paragraphs and headings,
   centered where `align="center"` says so, links, images with their width, emphasis and line breaks.
@@ -1683,12 +1735,14 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#793](https://github.com/devswha/herdr-web-ui/pull/793))
 
 ### Maintenance
+
 - The remote-PC runtime is now version 27: every saved PC asks for **Update bridge…** once, so the
   held messages setting and the precompressed assets reach it.
 
 ## [0.4.7] - 2026-10-12
 
 ### Added
+
 - **Settings → Subscription usage → Show pace** (off by default) makes the usage meters show each
   limit's pace: a mark on its bar where an even pace would be by now,
   how fast it is being used (`15%/h` for a session, `18%/day` for a week), and **Runs out in 2d 1h**
@@ -1751,6 +1805,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#690](https://github.com/devswha/herdr-web-ui/pull/690) by @okcedric)
 
 ### Changed
+
 - The anonymous install and update counts also name the appearance settings changed from their
   defaults (theme, density, colors, sidebar rows, Agents order, workspace cards, pin agents and the
   two plan settings): the names only, never a value, and never a setting you type. The notice is
@@ -1791,6 +1846,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#652](https://github.com/devswha/herdr-web-ui/pull/652) by @od-studio-webagency, [#829](https://github.com/devswha/herdr-web-ui/pull/829))
 
 ### Fixed
+
 - Mod+Shift+↑/↓ switch panes from the chat's empty message box too, as they do from the terminal.
   A box with a draft keeps them for selecting text.
   ([#827](https://github.com/devswha/herdr-web-ui/pull/827) by @sergiorademacher)
@@ -1882,6 +1938,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#817](https://github.com/devswha/herdr-web-ui/pull/817) by @foxion37)
 
 ### Maintenance
+
 - CI runs the browser scripts in parallel and the unit tests in parallel processes, and caches its
   setup. ([#795](https://github.com/devswha/herdr-web-ui/pull/795), [#805](https://github.com/devswha/herdr-web-ui/pull/805))
 - Browser checks that failed by timing no longer do: a route's handlers finish before it is
@@ -1898,6 +1955,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.4.6] - 2026-10-11
 
 ### Added
+
 - Drag tabs to reorder them within their workspace without changing the selected pane. The tab
   menu offers **Move tab left / right**, including on phones; Alt+Shift+Left/Right moves a focused
   tab. The order is saved by herdr and shared with its TUI.
@@ -1948,6 +2006,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   from another client. ([#736](https://github.com/devswha/herdr-web-ui/pull/736), [#747](https://github.com/devswha/herdr-web-ui/pull/747))
 
 ### Changed
+
 - The server gzips its JSON and text answers for a browser that accepts it. A conversation page
   of a couple of megabytes, fetched on every session switch and polled while it changes, goes over
   the wire at about a quarter of its size, and the app's script at about a third; over a slow link
@@ -1975,6 +2034,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#724](https://github.com/devswha/herdr-web-ui/pull/724))
 
 ### Fixed
+
 - A screen reader no longer reads a pane's id out as the terminal's name.
   ([#695](https://github.com/devswha/herdr-web-ui/pull/695) by @pt-act)
 - Pending messages remain available for **Send now** after switching tabs, workspaces or PCs.
@@ -2027,6 +2087,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#714](https://github.com/devswha/herdr-web-ui/pull/714))
 
 ### Maintenance
+
 - A few herdr-backed check runs can share a PC, one per checkout, so parallel worktrees no longer
   wait on one lock; integration results are counted through bun's colour codes; three more
   entry-point scripts are typechecked.
@@ -2036,6 +2097,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.4.5] - 2026-10-09
 
 ### Changed
+
 - A desktop tab no longer pauses its terminal a second after you switch to another window, as
   0.4.4 started doing: it keeps updating, as before 0.4.4. If this PC also shows herdr in a
   terminal window, turn on **Settings → Terminal → Use alongside herdr's own window**: a second
@@ -2047,6 +2109,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   connected PC after updating the app. ([#711](https://github.com/devswha/herdr-web-ui/pull/711))
 
 ### Fixed
+
 - Claude background counts reread concurrent transcript appends and replaced transcript files
   instead of keeping a stale count until another write. ([#701](https://github.com/devswha/herdr-web-ui/pull/701))
 - Claude process identity lookups recover after transient failures, so tasks left by an earlier
@@ -2060,6 +2123,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   on or off. The Copy code button continues to copy the original source. ([#710](https://github.com/devswha/herdr-web-ui/pull/710))
 
 ### Maintenance
+
 - Include TanStack Highlight's MIT license in the notices shipped with the app.
   ([#704](https://github.com/devswha/herdr-web-ui/pull/704))
 - Update source-map-js to 1.2.2 for its security fix.
@@ -2072,6 +2136,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.4.4] - 2026-10-09
 
 ### Added
+
 - A Claude Code pane's subagents (the `Agent` tool) now show where OmO's background tasks do:
   the status line lists what runs and what ended in the last day, the pane's badge counts the
   running ones, and a subagent that ends leaves a card in the chat with its answer instead of
@@ -2101,6 +2166,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#671](https://github.com/devswha/herdr-web-ui/pull/671) by @aNNdii)
 
 ### Changed
+
 - Website and installer publishing waits for CI and the site build to pass on the same commit.
   Local checks retain source-bound results and failure evidence, and critical build scripts
   and the demo transport are typechecked alongside the app.
@@ -2118,6 +2184,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#663](https://github.com/devswha/herdr-web-ui/pull/663))
 
 ### Fixed
+
 - The working arc in the sidebar is drawn thirty times a second instead of five, so a working
   agent reads as work in progress and not as a stutter. The arc is the same size and the turn
   still takes 1.6 s; only its eight 45° steps became forty-eight 7.5° ones.
@@ -2175,6 +2242,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.4.3] - 2026-10-09
 
 ### Fixed
+
 - A web UI tab you are not using no longer resizes the pane you are using elsewhere. A window
   left open behind another app turned visible again when the screen woke, or reconnected,
   reloaded or moved on to the next pane in the background, and fitted the pane to itself: herdr
@@ -2248,6 +2316,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.4.2] - 2026-10-09
 
 ### Added
+
 - Devin CLI panes with an explicitly identified native session show their active conversation
   branch and tool activity in Chat. Unresolved or unreadable sessions keep the terminal-text
   fallback. ([#438](https://github.com/devswha/herdr-web-ui/pull/438) by @Haeminway1)
@@ -2268,6 +2337,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   [#599](https://github.com/devswha/herdr-web-ui/pull/599))
 
 ### Changed
+
 - The default mobile terminal key bar puts Esc, Tab and Ctrl+C first, before the held modifiers
   and arrows. Saved layouts keep their order. ([#607](https://github.com/devswha/herdr-web-ui/pull/607))
 - **Settings → Shortcuts** explains which keys control the app and marks known browser/OS
@@ -2287,6 +2357,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#610](https://github.com/devswha/herdr-web-ui/pull/610))
 
 ### Fixed
+
 - Command palette shortcut hints follow changed bindings and disappear for disabled ones.
   App shortcuts also recognize physical letter keys on non-Latin layouts outside IME composition.
   ([#607](https://github.com/devswha/herdr-web-ui/pull/607))
@@ -2317,6 +2388,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.4.1] - 2026-10-08
 
 ### Added
+
 - `/effort` sent from a Claude Code chat opens a card with the effort levels, low to max, so the
   level no longer has to be set in the terminal. A pick applies to this session only, as a pick
   from the `/model` card does, and leaves the default for new sessions alone. `/effort` is also in
@@ -2343,6 +2415,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   this browser. ([#529](https://github.com/devswha/herdr-web-ui/pull/529) by @phirschybar)
 
 ### Changed
+
 - A wrong access token is refused with a growing wait after five tries, up to a minute, whether it
   is typed into the sign-in form or sent with a request. Each visitor behind `tailscale serve` has
   their own count, and a browser holding an old token never stops you signing in with the new one.
@@ -2354,6 +2427,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#570](https://github.com/devswha/herdr-web-ui/pull/570) by @radicor)
 
 ### Fixed
+
 - Gajae Code's selection menus show their choices instead of only arrow-key buttons, including
   startup selectors shown before the pane reports that it is waiting. Answers move to the selected
   row and recheck the menu before confirming.
@@ -2500,6 +2574,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.4.0] - 2026-10-08
 
 ### Added
+
 - An update tells what it brings before it is installed. **Settings → About** shows
   **What's new** under the version on offer: the changelog of every release the update installs,
   newest first, read from the release itself. The line under the header has a **What's new**
@@ -2549,6 +2624,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   and existing Alt combinations remain intact. ([#508](https://github.com/devswha/herdr-web-ui/pull/508))
 
 ### Changed
+
 - The terminal's **Input held until the terminal is ready** notice appears only when there is
   text to send or discard, or when text was too long to hold. It no longer counts "special
   keys dropped": the count rose without a key being pressed, with every answer the terminal
@@ -2629,6 +2705,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#557](https://github.com/devswha/herdr-web-ui/pull/557))
 
 ### Fixed
+
 - A pane whose agent has just started is listed as an agent's pane within a moment, where the
   list on this PC could take up to 5 seconds to say so. A device that opened the pane in that
   time took it for a shell: it opened the terminal instead of the chat, and resized the
@@ -2678,6 +2755,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.52] - 2026-10-06
 
 ### Added
+
 - A PC whose connect or reconnect is refused on the bridge version check now offers
   **Update bridge and connect** in its dialog, so a PC that was never registered — no sidebar
   row, no saved key — can be updated and connected in one go, through the same approval list
@@ -2695,6 +2773,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#444](https://github.com/devswha/herdr-web-ui/pull/444) by @diogo7dias)
 
 ### Changed
+
 - The README answers common questions about installation, Windows support, phone access,
   privacy and deployment, in English, Korean, Japanese and Chinese.
   ([#495](https://github.com/devswha/herdr-web-ui/pull/495))
@@ -2719,6 +2798,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#493](https://github.com/devswha/herdr-web-ui/pull/493) by @kilhyeonjun)
 
 ### Fixed
+
 - A Claude Code pane started with its own `CLAUDE_CONFIG_DIR` (a launcher such as cac keeps one
   store per environment) shows its chat. Before, only `~/.claude` was searched, so the chat was
   unavailable and only the terminal worked. The store is read from the pane's Claude process, as
@@ -2763,6 +2843,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#503](https://github.com/devswha/herdr-web-ui/pull/503))
 
 ### Maintenance
+
 - Browser regressions run on macOS as well as Linux, with portable fixtures and bounded
   readiness checks. ([#499](https://github.com/devswha/herdr-web-ui/pull/499) by @kilhyeonjun)
 - Isolated test panes start at a shell prompt even where zsh includes its new-user wizard.
@@ -2773,6 +2854,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.51] - 2026-10-06
 
 ### Added
+
 - **Open here** on a held pane explicitly takes it from another web bridge or standalone
   `herdr terminal attach`. A displaced bridge waits with the same button; it never takes the pane
   back automatically. Available on supporting bridges, for interact connections only.
@@ -2785,6 +2867,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   the arrows and Ctrl+C stay as they were. ([#487](https://github.com/devswha/herdr-web-ui/pull/487))
 
 ### Fixed
+
 - A tab strip you scrolled yourself to look at other tabs stays where you left it when a
   typeface arrives late and redraws the tabs' names at another width. Before, the strip
   brought the open tab back into view then; it still does so until you have scrolled it.
@@ -2829,6 +2912,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.50] - 2026-10-06
 
 ### Changed
+
 - The app brings its own typefaces instead of counting on the ones a device has: Pretendard for
   the interface and the chat, and JetBrains Mono for code in the chat and the interface, so a
   phone or a PC without them draws Latin text and Korean in the same letters as one with them.
@@ -2981,6 +3065,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#462](https://github.com/devswha/herdr-web-ui/pull/462))
 
 ### Fixed
+
 - An answer tapped in the chat for a row the cursor is not on looks at the screen again before
   it presses Enter (or the first key that does more than move the cursor). A menu answered in
   the terminal while the answer was moving the cursor could be replaced by another menu, which
@@ -3054,6 +3139,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.49] - 2026-10-04
 
 ### Added
+
 - `HERDR_WEB_PASTE_DIR` saves pasted and attached files to one directory instead of
   `.herdr-web-ui/` in each pane's project. It is read by the server, for the panes of its own
   PC; a remote PC keeps the default.
@@ -3073,6 +3159,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#346](https://github.com/devswha/herdr-web-ui/pull/346) by @WOULDU-pres)
 
 ### Fixed
+
 - On an Android phone, dragging down at the top of a chat no longer reloads the app. The drag
   was handed on to the page, where Chrome takes it for pull-to-refresh, so reading back
   through a conversation kept ending in a reload.
@@ -3100,6 +3187,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.48] - 2026-10-04
 
 ### Added
+
 - **New worktree** has an **Agent** picker, as New workspace does: the agent you choose starts in
   the new checkout, and Shell starts none. It opens on the agent you last started. An agent that
   cannot start leaves the worktree there, with the reason and an **Open** button. Remote PCs
@@ -3107,6 +3195,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#401](https://github.com/devswha/herdr-web-ui/pull/401))
 
 ### Changed
+
 - A new release is installed from the line that announces it: **Update** starts the install
   there, in place of **View update** and a second button in Settings. The line then shows the
   install's step and a bar (downloading, installing dependencies, checking, building,
@@ -3129,6 +3218,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#407](https://github.com/devswha/herdr-web-ui/pull/407))
 
 ### Fixed
+
 - On an iPhone the image viewer's controls and the composer stay inside the usable screen: the
   viewer is bounded by the safe-area insets and the keyboard's height, the keyboard is told from
   the viewport's geometry rather than from focus alone, and in-app alerts stay below the header.
@@ -3165,6 +3255,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.47] - 2026-10-03
 
 ### Added
+
 - A tab is renamed and closed from the tab strip, as herdr's prefix+shift+t and prefix+shift+x.
   With a mouse: an **x** on the open tab and on the one under the pointer, a double-click on the
   name to type a new one, a right-click for a menu with **Rename tab** and **Close tab**. With
@@ -3175,6 +3266,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#391](https://github.com/devswha/herdr-web-ui/pull/391))
 
 ### Changed
+
 - **New session** is **New workspace**: the `+` on a PC's header, the button of an empty PC, the
   command palette action and the Settings → Shortcuts row create a herdr workspace, and say so
   now, beside **New tab**. The dialog's buttons are **Start**, **Open** and **Close dialog** in
@@ -3186,6 +3278,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#388](https://github.com/devswha/herdr-web-ui/pull/388))
 
 ### Fixed
+
 - In the iPhone home screen app, a dialog with a text field stays above the keyboard: the command
   palette, and the other bottom sheets, ended at the bottom of the screen, behind the keyboard, and
   a palette with few results was hidden whole.
@@ -3208,6 +3301,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.46] - 2026-10-03
 
 ### Added
+
 - A workspace row's **⋯** menu has **New worktree** and **Open worktree…**, as herdr's own
   worktree keys do. New worktree checks a branch out as a git worktree under herdr's worktree
   folder and opens it as a workspace next to the repository's; Open worktree… lists the
@@ -3221,7 +3315,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   workspace over open worktrees says so and closes them with it.
   ([#384](https://github.com/devswha/herdr-web-ui/pull/384))
 - **New tab**, as herdr's prefix+c: a workspace row's **⋯** menu, the header's **New tab** button
-  on a desktop, the command palette and the tab strip's `+` open the session dialog as *New tab*,
+  on a desktop, the command palette and the tab strip's `+` open the session dialog as _New tab_,
   with the folder fixed to the workspace's and the agent and an optional tab name to choose. The
   tab opens in the workspace with its agent started the way a new session's is. Remote PCs get
   it with their next bridge update. The server half starts from
@@ -3234,6 +3328,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#386](https://github.com/devswha/herdr-web-ui/pull/386))
 
 ### Changed
+
 - The sidebar lists one row per workspace, as herdr's Spaces sidebar does, instead of a header
   with a row per pane. The row shows the workspace's current pane (the selected one, else the one
   last viewed there, else the one herdr has in front) and the roll-up of its agents' states; its
@@ -3243,6 +3338,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#386](https://github.com/devswha/herdr-web-ui/pull/386))
 
 ### Fixed
+
 - Settings → Updates no longer leaves **Check for updates** and **Update and restart** disabled
   when the answer to a click arrives while the page is hidden, as when a phone sends the app to
   the background. The status poll pauses with the page; the click's answer now lands anyway.
@@ -3255,6 +3351,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.45] - 2026-10-03
 
 ### Added
+
 - **Settings → herdr → Update herdr** updates herdr itself from the app, on the PC the app runs
   on (Linux and macOS). herdr refuses `herdr update` typed into one of its panes, and every
   terminal in the app is a pane, so the server runs it instead: it installs the newest herdr and
@@ -3263,6 +3360,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#373](https://github.com/devswha/herdr-web-ui/pull/373))
 
 ### Changed
+
 - Each sidebar row has one `⋯` button in place of a hover pencil and a two-click X. Its menu
   renames the workspace or the pane and closes the row: a close that takes the workspace with it
   (a one-pane row, or **Close workspace** on a workspace header) asks first, as herdr's
@@ -3285,6 +3383,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#372](https://github.com/devswha/herdr-web-ui/pull/372))
 
 ### Fixed
+
 - An open terminal no longer says "terminal ended" when herdr hands its panes to a new server,
   as `herdr update --handoff` and `herdr server live-handoff` do. The pane is still running, so
   the terminal attaches to it again for everyone viewing it.
@@ -3309,6 +3408,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.44] - 2026-10-03
 
 ### Added
+
 - Native Windows x64 installation through `install.ps1`, with the same herdr plugin startup
   and updates. Windows needs Bun and Git, without Node or WSL, and keeps using the terminal
   screen mirror. ([#330](https://github.com/devswha/herdr-web-ui/pull/330) by @JJLiebig)
@@ -3320,6 +3420,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#334](https://github.com/devswha/herdr-web-ui/pull/334))
 
 ### Changed
+
 - In the sidebar's By workspace view, a workspace with one pane keeps its numbered header and
   can be folded, renamed and reordered from that header, just like a workspace with several panes.
   ([#332](https://github.com/devswha/herdr-web-ui/pull/332) by @beomq)
@@ -3334,6 +3435,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#358](https://github.com/devswha/herdr-web-ui/pull/358))
 
 ### Fixed
+
 - GJC conversations are resolved from the foreground process directory when it differs from
   the pane directory. ([#333](https://github.com/devswha/herdr-web-ui/pull/333) by @Kinetic27)
 - Direct terminal input preserves rapid IME commits when punctuation arrives before composition
@@ -3380,12 +3482,14 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.43] - 2026-10-02
 
 ### Changed
+
 - The sidebar's rows are as they were before 0.3.42. Its new tab and split buttons took room from
   every pane's name, also while hidden, so the names were cut shorter. Both buttons are gone, and
   so are `POST /api/tab/create` and `POST /api/pane/split`.
   ([#327](https://github.com/devswha/herdr-web-ui/pull/327))
 
 ### Fixed
+
 - The message box stays editable while the app reconnects. On an iPhone, a dictation keyboard such
   as Typeless or Wispr Flow opens its own app and comes back; the connection could drop meanwhile,
   the box was disabled and lost its focus, and the dictated text went nowhere. Sending still waits
@@ -3400,6 +3504,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.42] - 2026-10-02
 
 ### Added
+
 - Voice input in the chat composer and the terminal input line. Hold or tap the mic and speak,
   Korean and English mixed; the text lands in the box at the caret and is never sent by itself.
   It uses your own OpenAI API key, kept on the server (Settings → Voice input), and falls back to
@@ -3442,6 +3547,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#308](https://github.com/devswha/herdr-web-ui/pull/308) by @Kuhave)
 
 ### Changed
+
 - Remote PCs use the `remote-v11` runtime, which carries the server-side changes since `remote-v10`
   to them: a new tab and a split from the sidebar, an OmO pane's background tasks and workflows,
   and the access token asked before a Tailscale login is trusted. A PC connected with the
@@ -3461,6 +3567,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#292](https://github.com/devswha/herdr-web-ui/pull/292))
 
 ### Fixed
+
 - On a phone, picking a pane (from the drawer, the palette or a notification) or switching between
   chat and terminal no longer raises the keyboard over it: you read first, and a tap on the message
   box or the terminal raises it. Turning direct typing on still does. A desktop is unchanged.
@@ -3523,6 +3630,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.41] - 2026-10-02
 
 ### Added
+
 - An OmO pane shows how many background tasks it still has running, as a small count beside its
   state in the sidebar. A turn can be DONE while tasks it started still work, and they wake the
   session by themselves; the count tells that pane from one with nothing left to do.
@@ -3590,6 +3698,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#262](https://github.com/devswha/herdr-web-ui/pull/262) by @diegolhambi)
 
 ### Changed
+
 - Remote PCs use the `remote-v10` runtime, which carries the server-side fixes since `remote-v9`
   to them, Windows PCs included: New session with Gajae Code, the chat of a Gajae Code or omp
   pane, pasted and sent lines that stay in an agent's message box, typing that no longer outlives
@@ -3597,6 +3706,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   for earlier runtimes. ([#282](https://github.com/devswha/herdr-web-ui/pull/282))
 
 ### Removed
+
 - `/tree` is no longer suggested in a pi pane's chat. pi offers it, and typing it works, but the
   chat reads the tree browser it opens as nothing at all — no card, and the pane still looks idle
   while the terminal waits for arrow keys — so a reader who picked it from the menu landed in a
@@ -3606,6 +3716,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#262](https://github.com/devswha/herdr-web-ui/pull/262) by @diegolhambi)
 
 ### Fixed
+
 - A Codex pane whose answers are all short shows its chat. The chat finds a Codex conversation by
   an answer it can see on the pane's screen, and only one of 64 letters or more counted, so a
   session of one-line answers stayed empty until a longer answer came. When nothing else tells
@@ -3654,7 +3765,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 - The chat shows the conversation of OmO installed with `bun add -g omo-ai` again, and the
   sidebar marks its pane as OmO. A global bun install puts OmO's engine next to omo-ai rather
   than inside it, so the pane runs `bun …/@code-yeongyu/senpi/dist/bundle/cli.js --extension
-  …/omo-ai/plugin`, and 0.3.40 no longer took it for OmO: the chat found no conversation and
+…/omo-ai/plugin`, and 0.3.40 no longer took it for OmO: the chat found no conversation and
   New session did not see OmO start. That engine counts as OmO again when omo-ai's plugin is one
   of its extensions.
   ([#278](https://github.com/devswha/herdr-web-ui/pull/278) by @ddotz)
@@ -3708,6 +3819,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.40] - 2026-10-01
 
 ### Fixed
+
 - Korean, Japanese and Chinese in the terminal no longer look spread apart on an iPhone. iOS has
   no font that draws Hangul as wide as two terminal cells, so every syllable sat at the left of
   its cells with a 4px gap after it. A character narrower than its cells is now drawn larger
@@ -3769,6 +3881,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.39] - 2026-10-01
 
 ### Fixed
+
 - A password or PIN sent right after a reconnect is no longer refused with "Update this PC to
   use masked input". The terminal's output could arrive before the server had said what it
   supports, and a Send in that gap sent nothing
@@ -3803,6 +3916,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.38] - 2026-10-01
 
 ### Added
+
 - A workspace with several panes gets a chevron in its sidebar header that folds its pane rows
   away. The fold is remembered per PC and workspace, the header keeps its status badge, Needs you
   still lists agents inside it, and opening one of its panes (palette, Needs you, an alert link)
@@ -3826,6 +3940,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   [#228](https://github.com/devswha/herdr-web-ui/pull/228)).
 
 ### Fixed
+
 - A gjc chat no longer folds hours of work into one turn. gjc wakes its agent with a
   background job's result in the user's seat; the chat skipped that record, so the answer before
   it sank into the work block and only the last status line showed as the reply. The result now
@@ -3846,6 +3961,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.37] - 2026-10-01
 
 ### Changed
+
 - Settings → Appearance no longer offers Clawd and the Codex app icon in place of the
   provider logos. Claude and Codex panes show their provider logos again, also where one of
   the icons was chosen in 0.3.36. The color palettes stay
@@ -3858,9 +3974,11 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   prompt is now off until Settings → Composer → **Suggestion chip** turns it on. The suggestion
   still stands as the box's placeholder, and Tab still takes it with a keyboard
   ([#223](https://github.com/devswha/herdr-web-ui/pull/223)).
+
 ## [0.3.36] - 2026-10-01
 
 ### Added
+
 - On a phone, a swipe in from the left edge opens the workspace list and a swipe to the left
   closes it; a stroke on a text field or one that selects text is left alone. While typing in
   the chat, a tap on the transcript, a drag down it, or the new **Hide keyboard** button puts
@@ -3886,6 +4004,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   ([#206](https://github.com/devswha/herdr-web-ui/pull/206) by @Haeminway1, [#217](https://github.com/devswha/herdr-web-ui/pull/217)).
 
 ### Fixed
+
 - A table an agent indents under a list item shows as a table in that item in the chat. It was
   read as the item's text, so its rows ran together on one line with their pipes. The list goes
   on after it: items numbered `1.` throughout keep counting, and nested items stay nested
@@ -3920,16 +4039,19 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.35] - 2026-09-30
 
 ### Added
+
 - A Korean README (`README.ko.md`), linked from the English, Simplified Chinese and
   Japanese READMEs.
 
 ### Changed
+
 - Remote PCs without their own herdr get herdr 0.9.3 in the bundled runtime (was 0.9.1),
   along with this release's event-stream recovery for the remote bridge. The runtime is
   version 8: a connected PC's bridge asks for **Update bridge…** once, and herdr sessions
   keep running while it updates.
 
 ### Fixed
+
 - Claude Code's unnumbered menus, such as the folder-trust check on a folder it has not seen
   ("Enter to confirm · Esc to cancel"), show as a card in the chat and can be answered there.
   herdr reported the pane INPUT, but no card appeared. An answer presses Enter only once the
@@ -3959,6 +4081,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.34] - 2026-09-30
 
 ### Added
+
 - A pane herdr could not restore after a restart (herdr 0.9.3+, e.g. its folder was
   removed) is marked NOT RESTORED in the sidebar, and selecting it shows herdr's reason
   instead of a terminal that ends at once. The server no longer tries to attach it.
@@ -3975,6 +4098,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   Sign-in locations and endpoints follow OpenUsage.
 
 ### Changed
+
 - Tested against herdr 0.9.3: CI runs the integration and browser suites on it, and the API
   types are generated from its schema. herdr 0.9.0 or newer is still enough.
 - The website is redesigned after herdr.dev: ink and paper modes, one large headline with the
@@ -3986,6 +4110,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   `HERDR_WEB_UI_REF` still picks another branch or tag.
 
 ### Fixed
+
 - Enforce device permissions and request origins consistently, persist device changes
   before reporting success, and stop alerts after device access is revoked. A device that
   can only watch can no longer read files on a connected PC through a path with an empty
@@ -4012,6 +4137,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.33] - 2026-09-29
 
 ### Fixed
+
 - The chat finds an omo pane's conversation again with current omo, which no longer keeps
   its session file open. It now reads the session omo records as held by the pane's
   process, so the chat works with several omo panes in one folder, on macOS, and after
@@ -4024,6 +4150,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.32] - 2026-09-29
 
 ### Added
+
 - The desktop terminal selects with a plain drag and copies on release, like the herdr
   TUI; Ctrl+C copies a selection instead of interrupting the pane.
 - A selecting drag can outlive one screen: the wheel, or dragging past the top or bottom
@@ -4032,12 +4159,14 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   copy the visible selection. Remote PCs use bundle v7.
 
 ### Removed
+
 - The todo pill at the top right of the chat is gone, with its lane beside the
   transcript. The chat shows the agent's transcript and nothing pinned over or beside
   it: a todo call stays in its turn's work block, where it reads as the done count or the
   step it took and opens to the whole list.
 
 ### Fixed
+
 - A terminal attach whose helper process could not start (for example, `node` missing from
   PATH) no longer leaves the pane half-open. The pane stayed blank for the next device, and
   closing that device crashed the server. The attach now reports the error, the failure is
@@ -4050,6 +4179,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.31] - 2026-09-29
 
 ### Added
+
 - Recognized password, SSH passphrase and PIN prompts offer a masked input in both
   lenses. Secrets go straight to the attached terminal after a fresh prompt check;
   they are never saved in drafts or the held queue. Remote PCs use bundle v6.
@@ -4068,6 +4198,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   other herdr users can find the app. Reruns, such as the one for the phone address, skip it.
 
 ### Changed
+
 - The new-session dialog's agent list shows each agent's mark beside its name, and the plain
   shell entry reads "Shell" in every language (it was "셸만" in Korean). Every agent herdr can
   start now has a mark (Amp, Antigravity, Cline, Devin, Droid, Gemini CLI, GitHub Copilot,
@@ -4080,6 +4211,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   is closed (Escape closes it too).
 
 ### Fixed
+
 - The chat finds a Claude Code pane's conversation when its folder name has a dot, an
   underscore, a space or non-ASCII characters (a Korean folder, `example.com`, `my_project`).
   The project folder is now named the way Claude Code names it, and a session Claude
@@ -4125,10 +4257,12 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.30] - 2026-09-29
 
 ### Added
+
 - A Japanese README (`README.ja.md`), linked from the English and Simplified Chinese
   READMEs' language selectors.
 
 ### Fixed
+
 - Prompt cards list each option on its own full-width row, number, label and description
   aligned, instead of wrapping buttons of uneven width. The first option is no longer filled
   as if already chosen, which left its description unreadable in both themes. Checked and
@@ -4146,6 +4280,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.29] - 2026-09-28
 
 ### Fixed
+
 - Escape closes the command palette even if terminal attachment moves keyboard focus
   outside it, and does not forward that Escape into the terminal.
 - Restore GJC chat when its writer closes the transcript between writes. Resolve the
@@ -4160,6 +4295,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   show only the app's selection and pressed states.
 
 ### Documentation
+
 - Clarify that pinned plans require supported todo-tool records. Claude Code sessions
   without TodoWrite do not currently show a pinned plan; TaskCreate/TaskUpdate support
   remains pending.
@@ -4167,6 +4303,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.28] - 2026-09-28
 
 ### Fixed
+
 - Problem reports now bound the full encoded GitHub URL, preventing errors with long or Korean
   reports. Large reports can be copied or saved for attachment. The report dialog fits mobile
   screens, its chat entry button has a visible label and a touch-sized target, and manual edits
@@ -4199,6 +4336,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.27] - 2026-09-27
 
 ### Fixed
+
 - An omo pane's chat keeps its transcript while a background task runs. omo holds the task's log
   (`.omo/senpi-task/logs/*.jsonl` in the working directory) open, and that file was taken for the
   pane's session, so the chat fell back to terminal text until omo restarted. Only files in omo's
@@ -4207,10 +4345,12 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.26] - 2026-09-27
 
 ### Changed
+
 - Releases are published only from a `main` commit that passed the full CI run, and pull requests
   must pass the same checks before they merge.
 
 ### Fixed
+
 - Foldable and tablet-width screens (481-768px, e.g. a Galaxy Z Fold8 inner screen): the header no
   longer breaks the Korean "채팅"/"터미널" labels one syllable per line, and no longer shows the
   sidebar collapse toggle (a no-op in drawer mode) or sign out beside the drawer button. Up to
@@ -4226,15 +4366,18 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.25] - 2026-09-27
 
 ### Added
+
 - Chat Markdown renders inline `\(...\)` and display `\[...\]` equations with KaTeX.
   Code stays literal, and invalid or incomplete formulas preserve the surrounding Markdown.
 
 ### Changed
+
 - The installer keeps herdr's plugin install preview (every command of the manifest) to itself and
   prints only herdr's `Installed ...` line; when the install fails, it prints all of herdr's output.
 - README: a sample of the installer's output, from a PC that had herdr but no Bun or Node.
 
 ### Fixed
+
 - Ctrl+V in the terminal pastes clipboard text instead of sending a control character that
   triggers an agent's image-paste shortcut and reports "No image in clipboard". Korean text,
   multiline paste, Ctrl+Shift+V and other terminal control keys retain their expected behavior.
@@ -4252,6 +4395,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.24] - 2026-09-27
 
 ### Changed
+
 - The installer's addresses are links a terminal can open with a click (OSC 8), plain text when
   the output goes to a file or log. It also names this PC's Tailscale IP next to the phone address,
   which stays the MagicDNS name: the HTTPS certificate is for the name, not the IP.
@@ -4259,6 +4403,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.23] - 2026-09-27
 
 ### Fixed
+
 - The one-line installer, run where the app is already installed, prints the phone address and its
   QR code from the version that runs. herdr's plugin directory keeps the version first installed
   (in-app updates run from `~/.config/herdr-web-ui/updates`), so it used to find no `phone` step
@@ -4268,6 +4413,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.22] - 2026-09-27
 
 ### Added
+
 - A one-line installer: `curl -fsSL https://devswha.github.io/herdr-web-ui/install.sh | sh`
   installs what is missing (herdr, Bun, Node 22, for the user only and without sudo), installs the
   herdr plugin and starts it when herdr runs. When Tailscale runs on the PC, it serves the app to
@@ -4276,6 +4422,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 - `bun scripts/plugin.ts phone`, the installer's last step, for a plugin installed without it.
 
 ### Changed
+
 - Through a proxy on a PC whose Tailscale login is known, as with `tailscale serve`, a request
   with no login (a tagged device) needs pairing, even before the first device is paired.
 - The plugin starts the server with `~/.bun/bin`, `~/.local/bin` and the installer's Node appended
@@ -4284,6 +4431,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.21] - 2026-09-27
 
 ### Added
+
 - Codex and Claude skill activity stays visible above folded chat work blocks: the skill name,
   invocation/read status, and expandable evidence or document path. Recorded activity is distinct
   from completing the skill's workflow; English and Korean labels work on desktop and mobile.
@@ -4291,6 +4439,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   bounded, pane-scoped image reads.
 
 ### Fixed
+
 - Native context clears discard old turns, pending calls, loaded pages and stale cursors.
   Late page and tool-output responses cannot restore cleared history or populate another pane.
 - omp, omo and gjc transcripts honor hidden messages and normalize string messages, tool field
@@ -4299,18 +4448,21 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   candidates. Claude paste wrappers unwrap only when their identifiers match.
 
 ### Changed
+
 - Growing Codex tasks parse incrementally while preserving transcript rewrite invalidation,
   reducing repeated parsing of long tool-heavy turns.
 
 ## [0.3.20] - 2026-09-27
 
 ### Added
+
 - **Report a problem**: a small bug icon at the end of the chat's status line gathers what a chat
   or prompt-card bug is made of (the versions, browser and agent; the latest turns and the prompt
   card as parsed; the terminal screen if chosen) into a report to read and edit. It is then
   copied, saved as a file, or opened as a prefilled GitHub issue; nothing is sent on its own.
 
 ### Changed
+
 - The ⚡ button beside the message box is gone: quick replies show above the box only when turned on
   in **Settings → Quick replies** (off by default), so the box looks as it did before them.
 - The context left is a small ring beside the model, filled by what is used and red when little is
@@ -4323,6 +4475,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   one more way to the same place, is gone. On a phone that is ☰, then Settings.
 
 ### Fixed
+
 - Numbered lists in the chat keep their numbers now: items with blank lines between them (as agents
   often write them) each read "1.", a list broken by a code block started over at 1, and one that
   began at 3 read 1. An item's indented lines now read as its own text, and a code block indented
@@ -4331,6 +4484,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.19] - 2026-09-27
 
 ### Added
+
 - Quick replies: one-tap messages above the chat's message box (`continue`, `yes`, `no`,
   `commit and push`, `retry` to start with). Each is sent as if typed: queued while the agent works,
   taken as the answer when a question is open, and a draft in the box stays. **Settings → Quick
@@ -4368,6 +4522,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   straight into it, remembered per device. Desktops are unchanged.
 
 ### Changed
+
 - Remote PCs use the `remote-v5` runtime, which carries this release's server side to them: the
   context left and failed calls in their chats, images and whole tool outputs, skills in the menu,
   questions read in a narrow pane, and the terminal's input line. A connected PC's bridge updates
@@ -4381,6 +4536,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   terminal follows the finish choice.
 
 ### Fixed
+
 - An agent's chat said "No conversation yet" until its first answer arrived, seconds on a remote PC.
   It now says it is loading.
 - A Claude question never showed as a card in the chat when its pane was narrow (a phone, a split):
@@ -4391,11 +4547,13 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.18] - 2026-09-26
 
 ### Changed
+
 - Remote PCs use the `remote-v4` runtime, which carries the fix below to the remote side: an omo
   or gjc pane that finished keeps reading DONE after the bridge restarts. A connected PC's bridge
   updates itself as for `remote-v3`.
 
 ### Fixed
+
 - An omo or gjc pane that had finished read READY again after this server restarted (an update
   does): what this server adds to herdr's own `done` lived in memory. It is now kept in
   `completions.json` in the state directory, for the herdr it was seen in; a herdr started anew
@@ -4404,6 +4562,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.17] - 2026-09-26
 
 ### Changed
+
 - Remote PCs use the `remote-v3` runtime, which carries 0.3.16's server fixes to the remote side: a
   finish in the pane herdr has in front reads DONE, and a Codex answer ending with a file link is
   found on screen. With **Update PC bridges automatically** on (the default), a connected PC's
@@ -4413,6 +4572,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.16] - 2026-09-26
 
 ### Added
+
 - A pairing code from the PC's terminal, for a headless PC with no browser to open Settings →
   Devices in: `bun scripts/plugin.ts pair` (in the plugin checkout; a terminal command, since herdr
   keeps an action's output in its log) prints the code, the address a phone opens when Tailscale
@@ -4421,6 +4581,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   link as text, to send to the other device however you like.
 
 ### Fixed
+
 - Web addresses in the chat open. An address in backticks (`` `https://…` ``, as agents often write
   them) is a link that still looks like code; `[docs](www.example.com/x)`,
   `[guide](docs.example.com/guide)` and `[here](localhost:7317)` are links, not files; a bare
@@ -4442,6 +4603,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.15] - 2026-09-26
 
 ### Added
+
 - The app speaks Korean. It follows the browser's language, or **Settings → Appearance → Language**
   picks English or 한국어. Every label, button, hint and status in the client is translated; what
   agents write, terminal output and server messages are not. A test keeps the dictionary complete.
@@ -4449,6 +4611,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.14] - 2026-09-26
 
 ### Added
+
 - **Who gets in, without a token.** From anywhere but this PC, a request now gets in as the PC's
   own Tailscale login (which `tailscale serve` states in a header nobody else can set), as a
   paired device, or with the token. **Settings → Devices** pairs a device: a six-digit code that
@@ -4461,6 +4624,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.13] - 2026-09-26
 
 ### Fixed
+
 - With two or more Codex panes, one pane's chat could show another pane's conversation. Since
   Codex 0.157 every Codex TUI shares one app-server daemon, and that daemon reports each TUI's
   thread to herdr as the thread of the pane that started it. That report is now only a fallback:
@@ -4470,11 +4634,13 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.12] - 2026-09-26
 
 ### Added
+
 - The website has a demo, <https://devswha.github.io/herdr-web-ui/demo/>: the app itself on a
   fictional session, no server. Its five panes, chats and Codex approval are the README media's;
   answering the approval, sending a message and typing into the shell pane all get demo answers.
 
 ### Fixed
+
 - Installing no longer compiles a native module. The terminal addon comes prebuilt for Linux x64
   and arm64 and for macOS (`@lydell/node-pty`, node-pty 1.1.0 repackaged), so a PC without Python
   and a C++ toolchain installs, where `herdr plugin install` used to end in a page of node-gyp
@@ -4484,6 +4650,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.11] - 2026-09-26
 
 ### Added
+
 - **Settings → Phone**: how to get the app onto a phone from this PC. When the page is already on
   an HTTPS address, or Tailscale on the PC already serves the app, it shows that address as a QR
   code. Otherwise it shows the one `tailscale serve` command still to run, on the first free of the
@@ -4496,12 +4663,14 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   on every push to `main`; `bun run build:site` builds it locally.
 
 ### Fixed
+
 - A link styled as a button (**Reconnect** after a PC drops, **Star on GitHub**) is no longer
   underlined.
 
 ## [0.3.10] - 2026-09-26
 
 ### Fixed
+
 - A file named without its folders in a chat answer (`demo.mp4` for `docs/screenshots/demo.mp4`)
   opens: the viewer finds it under the pane's folder, ignored files included, and lists the
   files to choose from when several have that name. It used to say "No readable file".
@@ -4509,6 +4678,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.9] - 2026-09-26
 
 ### Added
+
 - Open the files your agents write, from any device. A file path in a chat answer
   (`docs/demo.mp4`, `~/out/shot.png`) opens in a viewer: images, video and audio that play and
   seek at once, PDFs, and the start of a text file, each with Open in new tab and Download.
@@ -4517,6 +4687,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   HTML and SVG open sandboxed and text as plain text, never as script on the app's origin.
 
 ### Changed
+
 - The README's screenshots and demos are sharper and framed: recorded at 2x, in a browser window
   or a phone, with a moving camera and cursor on desktop. The phone demo no longer shows only the
   top left of the screen.
@@ -4524,12 +4695,14 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.8] - 2026-09-26
 
 ### Added
+
 - The chat pins the agent's todo list to its bottom: done count and the item in progress on one
   line, the whole list by phase when opened. It follows Claude Code's `TodoWrite`, Codex's
   `update_plan`, and omp, omo and gjc todo operations, and in the work block a todo call reads as
   one line ("done · Build") that opens to the list as it stood after it.
 
 ### Fixed
+
 - A pane's terminal (and the chat over it) no longer shows "terminal ended" when it reconnects
   just after Codex finished an answer, for example on a phone coming back from the background.
   herdr refuses an attach while a read of the same terminal is in progress, and asks for a
@@ -4546,6 +4719,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.7] - 2026-09-25
 
 ### Added
+
 - Answer an agent's waiting prompt from the chat's message box: type an option's number or your
   own answer. A pick for an approval, a plan or a menu waits in the prompt card for **Confirm**,
   and the options are numbered to match ([#6](https://github.com/devswha/herdr-web-ui/pull/6) by @Yoonwoo-Ha).
@@ -4557,24 +4731,28 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   on request. A remote PC offers it once its bridge is updated; until then, type the path.
 
 ### Fixed
+
 - The header no longer says "reconnecting" after you switch to another pane on the same PC. The
   switch reset the connection badge, and the terminal, still connected, never reported again.
 
 ## [0.3.6] - 2026-09-25
 
 ### Added
+
 - gjc and omo have their own marks in the sidebar and the chat. An omo pane is named `omo` even
   though herdr labels it `pi` or `claude` as omo works, so its mark no longer changes under you.
 - gjc panes open in the chat view with their conversation, model and effort, like omp and omo.
   The chat follows the session the pane's gjc has open.
 
 ### Fixed
+
 - A request that failed (an authentication error, an overloaded provider) shows its error in the
   chat of an omp, omo or gjc pane. The prompt used to stand there with no answer at all.
 
 ## [0.3.5] - 2026-09-25
 
 ### Added
+
 - Web addresses in chat messages are links: a bare `https://…` URL or one in `<…>` opens in a
   new tab, as a `[text](url)` link already did. Punctuation that ends the sentence stays out of
   the link, and so does text written straight after it (e.g. Korean without a space).
@@ -4583,6 +4761,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   get a thumbnail too. Other files used to be dropped without a word.
 
 ### Fixed
+
 - Resizing the window no longer lags on a long session. Every frame of the drag resized the pane,
   and each resize made herdr reflow it and the program in it (Claude Code) repaint its whole
   conversation; the terminal now resizes once the drag rests.
@@ -4602,11 +4781,13 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.4] - 2026-09-25
 
 ### Changed
+
 - On a phone or tablet, an agent pane opens in the chat the first time you select it; shells, and
   every pane on a desktop, still open their terminal. The lens you pick is still remembered per
   pane.
 
 ### Fixed
+
 - Scrolling the terminal on a phone scrolls herdr's history again when another tab (for example a
   desktop browser) already had that pane open. The phone joined a busy pane without its mouse
   mode, so a drag turned into arrow keys and paged through the agent's prompt history instead.
@@ -4617,6 +4798,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.3] - 2026-09-25
 
 ### Added
+
 - Remote PC bridges update in the background. When an app update needs a newer bridge, PCs that
   connect with their saved key are updated automatically (**Settings → Remote PCs**, on by
   default); with it off, **Update bridge** starts the same update in one tap. A PC that needs a
@@ -4627,6 +4809,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   PC or a retry only sends it to the PC.
 
 ### Fixed
+
 - Dragging the terminal on a phone scrolls herdr's history again. The gesture was lost after its
   first move, since the redraw replaced the row it started on, and the browser then scrolled the
   page or the composer instead. The text now also follows the finger (drag down for older lines),
@@ -4634,6 +4817,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 - Android notifications show the herdr mark instead of Chrome's bell as their small icon.
 
 ### Development
+
 - Tests and the browser QA scripts run in a herdr session of their own, `herdr-web-ui-test`, so
   their workspaces and agents never show in the herdr you work in. `HERDR_TEST_LIVE=1` restores
   the old behaviour.
@@ -4641,6 +4825,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.2] - 2026-09-25
 
 ### Changed
+
 - A pane opens its terminal the first time you select it, agent panes included, instead of the chat.
   Switch to Chat once and that pane keeps opening in chat.
 - `bun run start` now listens on `127.0.0.1` by default, like the plugin, instead of every
@@ -4651,6 +4836,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   or a public address.
 
 ### Fixed
+
 - A composer message that waited more than 45s behind earlier input is not typed any more; the
   composer keeps it and says nothing was typed. Before, it could reach the pane after the composer
   had given up on it, so sending it again typed it twice.
@@ -4662,6 +4848,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.1] - 2026-09-25
 
 ### Changed
+
 - Remote PCs use the `remote-v2` runtime, which carries 0.3.0's server changes (chat pages, the
   Codex conversation fixes, server-side message sending and `304` answers) to the remote side.
   A PC connected with the `remote-v1` bridge needs **Update bridge…** once; its herdr sessions are
@@ -4673,6 +4860,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.3.0] - 2026-09-25
 
 ### Added
+
 - Chat history pages: a transcript is read one page at a time (at most 16MB and 50 prompts), and
   scrolling up loads earlier turns while keeping your place. A long Codex rollout no longer re-reads
   the whole file on every poll, and a Codex conversation that was backtracked shows the history
@@ -4684,6 +4872,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 - The status line shows the reasoning effort Claude Code records, for example `Reasoning xhigh`.
 
 ### Changed
+
 - **New session** is back at the top of the sidebar, opening on the selected PC (the same as
   Mod+Shift+N), with **Add PC** beside it.
 - **Install app** shows in the sidebar unless the app is installed. Where the browser offers no
@@ -4700,6 +4889,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 - Each window reopens its own pane on reload; a new window still starts on the last pane used.
 
 ### Fixed
+
 - A Codex pane kept its conversation only while an answer was on screen; a long run of tool output
   flipped the chat to "Conversation unavailable". The pane now keeps the rollout it matched, or the
   thread named by `codex resume`, until a newer interactive thread begins in that directory.
@@ -4714,6 +4904,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.2.1] - 2026-09-23
 
 ### Fixed
+
 - Updates now replace the update supervisor too. `server/managed.ts` became a small launcher that
   runs the active release's supervisor; after an install passes its health check the supervisor
   hands over to the new one (one more brief reconnect), and a new supervisor that cannot start is
@@ -4723,6 +4914,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 ## [0.2.0] - 2026-09-23
 
 ### Added
+
 - Remote PCs over SSH: **Add PC** walks through the host fingerprint, password or key passphrase and
   an approved install, then groups workspaces by PC. Chat, files, images, terminal input and alerts
   follow the selected PC.
@@ -4736,6 +4928,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 - [INSTALL.md](INSTALL.md), a step-by-step install guide written for coding agents.
 
 ### Changed
+
 - Warm terminal redesign: amber on graphite (dark) and ledger paper (light), with agent states in
   their own colors. Sidebar titles use the full width, PC headers fit on one line, user chat turns
   are neutral cards, and the composer placeholder is short.
@@ -4744,6 +4937,7 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 - README rewritten around setup, remote PCs, mobile use and updates.
 
 ### Fixed
+
 - Codex transcripts resolve on macOS, where `/proc` does not exist.
 - Underscores inside identifiers (`MAC_QA_CHAT_OK`) stay literal in rendered Markdown.
 - The settings shortcut table no longer splits its row rules.

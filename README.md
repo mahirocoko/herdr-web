@@ -1,23 +1,68 @@
 # Herdr Web
 
-Private, source-native browser UI for the installed Herdr terminal manager. The complete frontend/backend is adopted from `devswha/herdr-web-ui` at `d918448647e41079c52047ffc96cdaac50ccba32`, rather than adapted through the former local API.
+Browser UI for your installed Herdr terminal manager: workspaces, Chat, terminals, files and diffs. Runs locally on loopback by default, with the source-native frontend/backend adopted from `devswha/herdr-web-ui`.
 
-## Run this fork
+## Run
 
-The approved project-local Bun **1.4.2** is selected by the wrapper; global Bun is not upgraded. Node must be real Node with the lock-pinned `@lydell/node-pty`. Herdr must already be installed/running (verified local host: 0.9.5, protocol 22).
+From an already configured checkout:
 
 ```sh
-bash scripts/bun-project.sh run typecheck
-bash scripts/bun-project.sh run build
-bash scripts/bun-project.sh run test
-bash scripts/bun-project.sh run test:native
-bash scripts/bun-project.sh run source:verify
-bash scripts/bun-project.sh run start
+bun start
 ```
 
-Normal app: `http://127.0.0.1:8787`. Start in a named visible project terminal. `start`, `server` and `dev` all invoke the safe imported-builder launcher; none invokes upstream managed updates or its direct-main entrypoint. This is the real source client/native server, not the fictional demo. It serves the built `dist/` application; rebuild after client edits.
+Open **http://127.0.0.1:8787**. The command builds the client, then starts the native server in the foreground. It rebuilds on every start, including after a pull; no separate build or test run is required to open the app. **Ctrl-C** stops this instance. Use a visible project terminal so its logs and process stay accessible.
+
+If it is already running, use the existing URL instead of starting another instance. An occupied port is rejected **before rebuilding**; the launcher does not stop its owner. For another local port:
+
+```sh
+PORT=8788 bun start
+```
+
+This changes the local listener only; it does not reconfigure Tailscale Serve. `bun run server` and `bun run dev` are aliases of the same build-and-serve launcher, **not** Vite HMR or an update supervisor. Help: `bun start --help`.
+
+## First-time setup
+
+Requirements:
+
+- **Bun 1.4.2**: an existing project-local copy, or exactly 1.4.2 on PATH. The wrapper selects that runtime; it never downloads Bun or upgrades the global installation.
+- **Real Node.js** on PATH. The native PTY sidecar must run in Node, not Bun impersonating Node.
+- **Herdr installed and running**, with its CLI on PATH and the main socket at `~/.config/herdr/herdr.sock`. The launcher requires native protocol **22**; the verified host was Herdr **0.9.5**. It does not install or update Herdr.
+
+```sh
+git clone https://github.com/mahirocoko/herdr-web.git
+cd herdr-web
+bash scripts/bun-project.sh install --frozen-lockfile
+bun start
+```
+
+The dependency install applies the checked-in patches and provides the lock-pinned Node PTY package. A fresh clone does **not** include the ignored project-local Bun binary, so provide Bun 1.4.2 on PATH first. If the local binary exists but Bun is not on PATH, run `bash scripts/bun-project.sh run start` instead.
+
+### Startup problems
+
+| Message                              | What to do                                                                                                            |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| Bun version mismatch                 | Use the exact supported runtime, not a global upgrade made by this app.                                               |
+| Port unavailable                     | Open the existing instance, stop that process yourself, or choose another `PORT`.                                     |
+| Missing Herdr or native ping failure | Open Herdr and check that its CLI/main socket are available.                                                          |
+| Native protocol differs              | Use a compatible host; no automatic update is attempted.                                                              |
+| Node/PTY check fails                 | Check real Node on PATH and the frozen dependency installation.                                                       |
+| Client build fails                   | Read the build error; first-time setup needs the frozen dependency install. No server is started with a failed build. |
+
+## State and access
 
 The server uses project-owned private state and the existing authenticated HOME. The previously configured private Tailscale Serve address remains owner-restricted; no new exposure/configuration is created. Legacy credentials, subscriptions, browser drafts and held evidence are preserved, not imported into source automatic queues. The same existing VAPID identity is copied privately so an already-permitted browser is not silently unsubscribed/rekeyed; subscription/policy stores are not bulk-translated and physical Push receipt is still unproven. Existing browser pages must reload after cutover; retired legacy action/controllers cannot write through the new API. Do not clear browser storage.
+
+## Development checks
+
+These are engineering checks, **not required before normal startup**:
+
+```sh
+bun run typecheck
+bun run test
+bun run source:verify
+```
+
+`bun run build` is available for a standalone build; do not overwrite a running instance's assets. `bun run test:native` is an intentional, disposable shell-only native fixture, not a general startup check. See the safety notes below before broader testing.
 
 ## Scope and evidence
 
