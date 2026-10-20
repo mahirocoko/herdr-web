@@ -143,7 +143,11 @@ try {
     if ((($request.PSObject.Properties.Name | Sort-Object) -join ',') -ne 'operation,path,version') { throw 'Malformed privacy request' }
     if ($request.version -ne 1 -or $request.operation -notin @('read', 'prepare') -or $request.path -isnot [string]) { throw 'Malformed privacy request' }
     $path = $request.path
-    if ($path.Length -gt 240 -or $path -notmatch '^[A-Za-z]:\\' -or $path.Substring(3) -match '[:\x00-\x1f<>"|?*]' -or $path -ne [IO.Path]::GetFullPath($path)) { throw 'Unsupported private filesystem path' }
+    if ($path.Length -gt 240 -or $path -notmatch '^[A-Za-z]:\\' -or $path.Substring(3) -match '[:\x00-\x1f<>"|?*]') { throw 'Unsupported private filesystem path syntax or length' }
+    # Framework normalizes valid DOS short-name aliases (for example RUNNER~1).
+    # Inspect the canonical native path, not whether the caller spelled that alias.
+    $path = [IO.Path]::GetFullPath($path)
+    if ($path.Length -gt 240 -or $path -notmatch '^[A-Za-z]:\\' -or $path.Substring(3) -match '[:\x00-\x1f<>"|?*]') { throw 'Unsupported canonical private filesystem path' }
     foreach ($part in $path.Substring(3).Split('\')) {
         if (!$part -or $part -match '[. ]$' -or $part -match '^(?i:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)') { throw 'Unsupported private path component' }
     }

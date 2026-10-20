@@ -26,6 +26,10 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $r = [Console]::In.ReadToEnd() | ConvertFrom-Json
 $p = [string]$r.path
+if ($r.operation -eq 'canonical') {
+  [Console]::Write((@{ inputPath = $p; canonicalPath = [IO.Path]::GetFullPath($p); characters = $p.Length } | ConvertTo-Json -Compress))
+  exit
+}
 $directory = [IO.Directory]::Exists($p)
 if ($r.operation -eq 'sddl') {
   if ($directory) { $acl = [IO.Directory]::GetAccessControl($p) } else { $acl = [IO.File]::GetAccessControl($p) }
@@ -84,6 +88,11 @@ function fixture(run: (root: string, state: string) => void) {
   try {
     fixtureAcl(root, "private");
     const state = join(root, "state");
+    // Synthetic fixture path metadata only: no user configuration or secret bytes.
+    console.log(
+      "Native Windows fixture ingress:",
+      fixtureAcl(state, "canonical"),
+    );
     preparePrivateRuntimeTree(state); // Actual production worker, no mock flags.
     run(root, state);
   } finally {
