@@ -1,13 +1,7 @@
 name: CI
 on:
-  push:
-  pull_request:
-  workflow_dispatch:
-    inputs:
-      native_shell_fixture:
-        description: Run only the owned shell-native fixture on a prepared Mac runner
-        type: boolean
-        default: false
+  release:
+    types: [published]
 permissions:
   contents: read
 jobs:
@@ -21,6 +15,8 @@ jobs:
       UNIT_TEST_REPORT: .ci/unit-summary.json
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
@@ -59,6 +55,8 @@ jobs:
       HERDR_TEST_HOOKS: '0'
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
@@ -76,14 +74,3 @@ jobs:
         run: bun run start --help
       - name: Isolated production build, no app or native host
         run: bun run build --outDir .ci/windows-build
-  native-shell:
-    if: github.event_name == 'workflow_dispatch' && inputs.native_shell_fixture
-    runs-on: [self-hosted, macOS, ARM64]
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      # Prepared tools only: no Herdr installer, global Bun upgrade, accounts or provider turns.
-      - run: command -v herdr && bash scripts/bun-project.sh --version
-      - run: bash scripts/bun-project.sh install --frozen-lockfile
-      - name: Explicit isolated shell fixture (not the broader agent integration lane)
-        run: bash scripts/bun-project.sh run test:native

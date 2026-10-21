@@ -103,7 +103,7 @@ test('preview retains source origin-level icons as well as nested app assets', (
   }
 })
 
-test('fork CI separates unit and explicitly dispatched shell-native proof without upstream installers', () => {
+test('fork CI checks published release tags without automatic native input or upstream installers', () => {
   const root = join(import.meta.dir, '../..')
   const ci = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8')
   expect(ci).toContain('bun-version: 1.4.2')
@@ -134,10 +134,22 @@ test('fork CI separates unit and explicitly dispatched shell-native proof withou
   } finally {
     rmSync(cwd, { recursive: true, force: true })
   }
-  expect(ci).toContain(
-    "github.event_name == 'workflow_dispatch' && inputs.native_shell_fixture"
-  )
-  expect(ci).toContain('run test:native')
+  const workflow = Bun.YAML.parse(ci) as {
+    on: Record<string, unknown>
+    permissions: Record<string, string>
+    jobs: Record<string, { 'runs-on': string; steps: Array<{ uses?: string; with?: Record<string, string>; run?: string }> }>
+  }
+  expect(workflow.on).toEqual({ release: { types: ['published'] } })
+  expect(workflow.permissions).toEqual({ contents: 'read' })
+  expect(Object.keys(workflow.jobs).sort()).toEqual(['source-unit', 'windows-bootstrap'])
+  for (const job of Object.values(workflow.jobs)) {
+    expect(['ubuntu-latest', 'windows-latest']).toContain(job['runs-on'])
+    const checkout = job.steps.filter((step) => step.uses?.startsWith('actions/checkout@'))
+    expect(checkout).toHaveLength(1)
+    expect(checkout[0]!.with?.ref).toBe('${{ github.event.release.tag_name }}')
+    expect(job.steps.some((step) => step.run?.includes('test:native'))).toBe(false)
+  }
+  expect(ci).not.toContain('workflow_dispatch')
   expect(ci).not.toContain('run check integration')
   expect(ci).not.toContain('devswha/herdr/releases')
 })

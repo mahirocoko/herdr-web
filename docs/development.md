@@ -52,6 +52,12 @@ bun scripts/bun-project.mjs --bun vite build --outDir .agent-state/qa/client-bui
 
 Choose an owned output directory and keep private artifacts ignored. Tests, builds and source checks do not replace rendered verification, native proof or human acceptance.
 
+## Release-only CI
+
+The active `.github/workflows/ci.yml` runs only on GitHub `release.published`, including published prereleases. Pushes, pull requests, tag pushes alone and saved release drafts do not trigger it; manual workflow dispatch is not enabled. Both hosted jobs check out the release tag explicitly, not the latest default branch. The source/unit and Windows bootstrap checks remain in place; there is no automatic native Herdr job. Local safe checks above remain available before publication.
+
+These checks run **after publication**, not as a pre-release or merge gate. A release tag must contain this workflow revision for the new policy to apply. Changing the workflow does not cancel an already-started run or change branch-protection settings; no release is authorized merely to test the trigger.
+
 ## Native and browser boundaries
 
 `bun run test:native` is an opt-in shell-only native fixture through the source disposable-config isolation. It refuses main/default targets, preserves real HOME and cleans up only receipt-owned resources. It does not start agents or authorize paid provider turns.
