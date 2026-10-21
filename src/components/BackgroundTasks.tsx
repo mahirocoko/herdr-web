@@ -2,6 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type ComponentType
 import { ChevronDown, ChevronRight, Circle, CircleAlert, CircleCheck, CircleDot, CircleSlash, CircleX, Layers, ListChecks, Workflow, type LucideProps } from "lucide-react";
 
 import "./BackgroundTasks.css";
+import { usePiSubagentView, piTaskWord } from "./PiSubagents.tsx";
 
 import { useMachineApi } from "../lib/machineContext.tsx";
 import { clockOffsetMs, endedSummary, formatElapsed, runGoing, spanMs, taskElapsedMs } from "../lib/omoTasks.ts";
@@ -35,8 +36,9 @@ const NODE_ICONS: Record<OmoRunNode["state"], ComponentType<LucideProps>> = {
  * A Claude pane's tasks are its subagents. Most Claude panes have none, so it asks when
  * the pane is shown (and when its count changes), and appears only when there are or were some.
  */
-export function BackgroundTasks({ paneId, count, omo, claude = false, plan = null }: { paneId: string; count: number; omo: boolean; claude?: boolean; plan?: PlanSummary | null }) {
+export function BackgroundTasks({ paneId, count, omo, claude = false, pi = false, plan = null }: { paneId: string; count: number; omo: boolean; claude?: boolean; pi?: boolean; plan?: PlanSummary | null }) {
   const t = useT();
+  const viewSubagent = usePiSubagentView();
   const { fetchPaneOmoActivity, fetchPanePlan } = useMachineApi();
   const [open, setOpen] = useState(false);
   // a phone's Back closes the list, as it closes the other dialogs there (the plan used to be a sheet)
@@ -44,7 +46,7 @@ export function BackgroundTasks({ paneId, count, omo, claude = false, plan = nul
   const [seen, setSeen] = useState(count > 0);
   useEffect(() => { if (count > 0) setSeen(true); }, [count]);
   useEffect(() => {
-    if (!claude || count > 0) return;
+    if ((!claude && !pi) || count > 0) return;
     let alive = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     // The server answers within a second with what it knows, so a pane whose session it is still
@@ -57,7 +59,7 @@ export function BackgroundTasks({ paneId, count, omo, claude = false, plan = nul
     ask(3);
     return () => { alive = false; clearTimeout(timer); };
     // asked when the pane is shown and again when its count changes
-  }, [claude, paneId, count]);
+  }, [claude, pi, paneId, count, fetchPaneOmoActivity]);
   const [tasks, setTasks] = useState<OmoTask[] | null>(null);
   const [runs, setRuns] = useState<OmoRun[]>([]);
   const [failed, setFailed] = useState(false);
@@ -74,7 +76,7 @@ export function BackgroundTasks({ paneId, count, omo, claude = false, plan = nul
   useEffect(() => { if (!open) setShowEnded(false); }, [open]);
 
   // the tasks part shows once a task ran or runs here, or on any OmO pane
-  const tasksShown = count > 0 || seen || omo;
+  const tasksShown = count > 0 || seen || omo || pi;
   useEffect(() => {
     if (!open || !tasksShown) return;
     let alive = true;
@@ -162,8 +164,10 @@ export function BackgroundTasks({ paneId, count, omo, claude = false, plan = nul
     return () => observer.disconnect();
   }, [open]);
 
-  const running = tasks?.filter((task) => task.status === "running") ?? [];
-  const ended = tasks?.filter((task) => task.status !== "running") ?? [];
+  const running = tasks?.filter((task) => task.status === "running" && task.phase !== "queued") ?? [];
+  const queued = tasks?.filter((task) => task.phase === "queued") ?? [];
+  const uncertain = tasks?.filter((task) => task.phase === "unknown") ?? [];
+  const ended = tasks?.filter((task) => task.status !== "running" && task.phase !== "unknown") ?? [];
   const words: Record<OmoTask["status"], string> = {
     running: t("running"), completed: t("done"), failed: t("failed"), cancelled: t("cancelled"), lost: t("lost"),
   };
@@ -172,17 +176,20 @@ export function BackgroundTasks({ paneId, count, omo, claude = false, plan = nul
     const Icon = ICONS[task.status];
     const elapsed = taskElapsedMs(task, now + offset);
     const meta = [
-      task.category, task.model, elapsed === null ? null : formatElapsed(elapsed),
+      task.detail_id ? piTaskWord(task, t) : null, task.category, task.model, elapsed === null ? null : formatElapsed(elapsed),
       task.turns === null ? null : t(task.turns === 1 ? "{n} turn" : "{n} turns", { n: task.turns }),
       task.tool_calls === null ? null : t(task.tool_calls === 1 ? "{n} tool call" : "{n} tool calls", { n: task.tool_calls }),
       task.tokens === null ? null : t("{n} tokens", { n: formatTokens(task.tokens) }),
     ].filter((item) => item !== null).join(" · ");
-    return <li key={task.id} className={`bg-task is-${task.status}`}>
+    const content = <>
       <Icon className="bg-task-icon" aria-hidden="true" />
       <span className="bg-task-main">
-        <span className="bg-task-title">{task.title}<span className="sr-only"> ({words[task.status]})</span></span>
-        {(meta.length > 0 || (task.status !== "running" && task.status !== "completed")) && <span className="bg-task-meta">{[task.status !== "running" && task.status !== "completed" ? words[task.status] : null, meta || null].filter((item) => item !== null).join(" · ")}</span>}
+        <span className="bg-task-title">{task.title}<span className="sr-only"> ({task.detail_id ? piTaskWord(task, t) : words[task.status]})</span></span>
+        {(meta.length > 0 || (task.status !== "running" && task.status !== "completed")) && <span className="bg-task-meta">{[!task.detail_id && task.status !== "running" && task.status !== "completed" ? words[task.status] : null, meta || null].filter((item) => item !== null).join(" · ")}</span>}
       </span>
+    </>;
+    return <li key={task.id} className={`bg-task is-${task.status}${task.detail_id ? " is-inspectable" : ""}`}>
+      {task.detail_id ? <button type="button" className="bg-task-open" onClick={() => { setOpen(false); toggle.current?.focus({ preventScroll: true }); viewSubagent(task.detail_id); }}>{content}</button> : content}
     </li>;
   };
 
@@ -217,7 +224,7 @@ export function BackgroundTasks({ paneId, count, omo, claude = false, plan = nul
 
   const goingRuns = runs.filter(runGoing);
   const endedRuns = runs.filter((run) => !runGoing(run));
-  const summary = endedSummary(tasks ?? [], runs);
+  const summary = endedSummary((tasks ?? []).filter((task) => task.phase !== "unknown"), runs);
 
   // a plan cleared or a PC gone while the list is open: nothing is left to list, so the control goes
   useEffect(() => { if (open && !planShown && !tasksShown) setOpen(false); }, [open, planShown, tasksShown]);
@@ -263,9 +270,11 @@ export function BackgroundTasks({ paneId, count, omo, claude = false, plan = nul
       {failed && tasks !== null && <p className="bg-tasks-note" role="status">{t("Couldn't refresh: this is the list as it last read")}</p>}
       {tasks !== null && tasks.length === 0 && runs.length === 0 && <p className="bg-tasks-note">{t("No background tasks to show yet")}</p>}
       {/* said only of a fresh read that agrees with the pushed count: a stale list must not deny a task that just started */}
-      {tasks !== null && !failed && count === 0 && running.length === 0 && goingRuns.length === 0 && summary.ended > 0 && <p className="bg-tasks-note">{t("Nothing running right now")}</p>}
+      {tasks !== null && !failed && count === 0 && running.length === 0 && uncertain.length === 0 && goingRuns.length === 0 && summary.ended > 0 && <p className="bg-tasks-note">{t("Nothing running right now")}</p>}
       {goingRuns.length > 0 && <><div className="menu-heading">{t("Workflows")}</div><ul className="bg-task-list">{goingRuns.map(runView)}</ul></>}
       {running.length > 0 && <><div className="menu-heading">{t("Running")}</div><ul className="bg-task-list">{running.map(row)}</ul></>}
+      {queued.length > 0 && <><div className="menu-heading">{t("Queued")}</div><ul className="bg-task-list">{queued.map(row)}</ul></>}
+      {uncertain.length > 0 && <><div className="menu-heading">{t("Status unknown")}</div><ul className="bg-task-list">{uncertain.map(row)}</ul></>}
       {summary.ended > 0 && <>
         <button type="button" className="bg-ended-toggle" aria-expanded={showEnded} aria-controls={endedId} onClick={() => setShowEnded(!showEnded)}>
           {showEnded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}

@@ -7,6 +7,7 @@ import type { AgentStatus, HerdrPane, PlanSummary, ServerMessage, SessionSnapsho
 import { alertStatus, paneTitle } from "../../shared/notify-policy.ts";
 import { BackgroundWait } from "../background-wait.ts";
 import { ClaudeSubagentStatus } from "../claude-subagents.ts";
+import { PiSubagentStatus } from "../pi-subagents.ts";
 import { codexOpenRollout, paneCodexHome } from "../codex.ts";
 import { startStatusCollector } from "../collector.ts";
 import { CompletionTracker, type OmoRest } from "../completion.ts";
@@ -99,6 +100,13 @@ export function createStatusHub<Lease>({ options, devices, clients, present, pen
     },
     onChange: (paneId, running, turnRunning, promptAt) => claudeAgentsChanged(paneId, running, turnRunning, promptAt),
   });
+  const piAgents = new PiSubagentStatus(options.stateDir ?? defaultStateDir(), (paneId, count) => {
+    const status = completions.current(paneId);
+    if (status !== undefined) {
+      broadcastAll(paneStatus(paneId, status, { background_tasks: count }));
+      push.onStatus(paneId, alertStatus(status, waitingOf(paneId))).catch(logPushError);
+    }
+  });
   /** the plan each Claude Code, Codex and OmO pane keeps, for the sidebar's progress (server/session-plan.ts) */
   const plans = new SessionPlans({
     claudePath: (paneId) => claudeAgents.sessionOf(paneId)?.path ?? null,
@@ -115,20 +123,22 @@ export function createStatusHub<Lease>({ options, devices, clients, present, pen
     // not waited for: finding a transcript costs process calls, and a snapshot must not wait on them.
     // The plans come after: a Claude pane's transcript is the one the subagent tracker found
     void claudeAgents.refresh(named.panes).catch(() => undefined).then(() => plans.refresh(named.panes)).catch(() => undefined);
+    void piAgents.refresh(named.panes).catch(() => undefined);
     // an agent this server started has had no turn yet: its start screen is no work (launched-agents.ts)
     for (const pane of named.panes) pane.agent_status = launchedAgents.settle(pane.pane_id, pane.agent_status);
     return named;
   };
-  const backgroundOf = (paneId: string): number => omo.backgroundOf(paneId) || claudeAgents.countOf(paneId);
+  const backgroundOf = (paneId: string): number => omo.backgroundOf(paneId) || claudeAgents.countOf(paneId) || piAgents.countOf(paneId);
+  const waitingOf = (paneId: string): boolean => waits.waiting(paneId) || ((completions.current(paneId) === "idle" || completions.current(paneId) === "done") && piAgents.countOf(paneId) > 0);
   /** the snapshot clients get: finishes settled, OmO panes named, background tasks, waits and plan progress */
   const clientSnapshot = async (): Promise<SessionSnapshot> => {
     const snapshot = await completions.readSnapshot(rawSnapshot);
-    if (!snapshot.panes.some((pane) => backgroundOf(pane.pane_id) > 0 || waits.waiting(pane.pane_id) || plans.summaryOf(pane.pane_id) !== null)) return snapshot;
+    if (!snapshot.panes.some((pane) => backgroundOf(pane.pane_id) > 0 || waitingOf(pane.pane_id) || plans.summaryOf(pane.pane_id) !== null)) return snapshot;
     return {
       ...snapshot,
       panes: snapshot.panes.map((pane) => {
         const background = backgroundOf(pane.pane_id);
-        const waiting = waits.waiting(pane.pane_id);
+        const waiting = waitingOf(pane.pane_id);
         const plan = plans.summaryOf(pane.pane_id);
         return background > 0 || waiting || plan !== null ? { ...pane, ...(background > 0 ? { background_tasks: background } : {}), ...(waiting ? { background_wait: true as const } : {}), ...(plan !== null ? { plan } : {}) } : pane;
       }),
@@ -154,7 +164,7 @@ export function createStatusHub<Lease>({ options, devices, clients, present, pen
   }
   /** A pane's status frame: every one says whether the pane waits on its turn's background work. */
   const paneStatus = (paneId: string, status: AgentStatus, about: { background_tasks?: number; plan?: PlanSummary | null } = {}): ServerMessage =>
-    ({ type: "pane-status", pane_id: paneId, agent_status: status, ...about, ...(waits.waiting(paneId) ? { background_wait: true as const } : {}) });
+    ({ type: "pane-status", pane_id: paneId, agent_status: status, ...about, ...(waitingOf(paneId) ? { background_wait: true as const } : {}) });
   const machines = options.machines === false ? null : new MachineManager(options.stateDir ?? defaultStateDir(), push, completions, clientSnapshot, options.remoteOperations);
   if (machines && options.herdrProfiles) machines.watchHerdrProfiles(options.herdrProfiles);
 
@@ -274,8 +284,8 @@ export function createStatusHub<Lease>({ options, devices, clients, present, pen
         try { claudeAgents.poll(paneId); } finally { settling = null; }
         waits.status(paneId, status);
       } else waits.forget(paneId);
-      broadcastAll(paneStatus(paneId, status, claude ? { background_tasks: claudeAgents.countOf(paneId) } : {}));
-      push.onStatus(paneId, alertStatus(status, waits.waiting(paneId))).catch(logPushError);
+      broadcastAll(paneStatus(paneId, status, claude ? { background_tasks: claudeAgents.countOf(paneId) } : agent === "pi" ? { background_tasks: piAgents.countOf(paneId) } : {}));
+      push.onStatus(paneId, alertStatus(status, waitingOf(paneId))).catch(logPushError);
     },
     // a finish reported as done, now in front at herdr's terminal: seen, idle again
     onFocus: (paneId) => {
@@ -327,9 +337,10 @@ export function createStatusHub<Lease>({ options, devices, clients, present, pen
   omo.start();
   gjc.start();
   claudeAgents.start();
+  piAgents.start(sessionSnapshot);
   const waitTimer = setInterval(waitsRanOut, 1000);
   waitTimer.unref?.();
   plans.start();
 
-  return { push, omo, gjc, claudeAgents, plans, clientSnapshot, countVisit, machines, broadcastAll, logPushError, collector, waitTimer };
+  return { push, omo, gjc, claudeAgents, piAgents, plans, clientSnapshot, countVisit, machines, broadcastAll, logPushError, collector, waitTimer };
 }

@@ -4,7 +4,7 @@ This page separates **retained implementation**, **observed behavior**, **blocke
 
 ## Source and document ownership
 
-The root application adopts `devswha/herdr-web-ui` at **d918448647e41079c52047ffc96cdaac50ccba32** (upstream package 0.4.12). Fork package version is **0.10.3**. [SOURCE_MANIFEST.json](../SOURCE_MANIFEST.json) records the complete source inventory, exclusions, mapped readmes and explicit promotion exceptions. `scripts/verify-upstream.ts` derives the pinned Git tree independently; a manifest edit cannot authorize itself. Acquisition and promotion are not routine update commands.
+The root application adopts `devswha/herdr-web-ui` at **d918448647e41079c52047ffc96cdaac50ccba32** (upstream package 0.4.12). The current fork version is defined in [`package.json`](../package.json); release history belongs in [CHANGELOG](../CHANGELOG.md). [SOURCE_MANIFEST.json](../SOURCE_MANIFEST.json) records the complete source inventory, exclusions, mapped readmes and explicit promotion exceptions. `scripts/verify-upstream.ts` derives the pinned Git tree independently; a manifest edit cannot authorize itself. Acquisition and promotion are not routine update commands.
 
 The fork retains [Apache-2.0](../LICENSE) for its license scope, [upstream MIT](../UPSTREAM_LICENSE), [third-party notices](../THIRD_PARTY_NOTICES.md) and both dependency patches. No documentation rewrite changes these terms.
 
@@ -62,6 +62,8 @@ Letta history uses `letta.ts`, `letta-store.ts` and `letta-parser.ts` through th
 A separately authorized fresh Letta conversation demonstrated Send/reply, Stop/interruption and one new manual recovery Send through `letta-stop.ts` while native Working was stale. The bounded witness is not a native presence repair, automatic queue recovery or approval for further turns. Pending uncertain/in-flight rows stay held; the statusline thinking TTL is paint only. No other-provider completeness follows from that observation.
 
 Windows native bootstrap CI covered frozen setup, typechecks, launcher help and focused data-drive/profile NTFS/private-ACL fixtures on the checked source candidate. It did not start the app against a real user's Windows Herdr host. A real data-drive startup failed the unsafe-ancestor check; the actual ACL cause is unknown. Profile-local NTFS outside OneDrive is a recommended next attempt, not passed host evidence. Physical Android install/launch and Push delivery remain open despite the 0.10.3 source launch-redirect correction.
+
+Pi subagents use `pi-subagents.ts`, `pi-subagent-routes.ts` and `components/PiSubagents.tsx` for parent-scoped inline cards, live activity and read-only child conversations. A scoped local Mac session demonstrated running-to-completed transitions and the inline/detail presentation received human acceptance. This is not universal provider/device certification. Live status requires a compatible [mahiro-pi](https://github.com/mahirocoko/mahiro-pi) observer explicitly enabled for that session; unknown/stale evidence never becomes a completion claim. Windows live snapshot writing, child controls, image/full-output retrieval and token streaming are not established by this feature. See the [user guide](guide.md#pi-subagents) and [observer contract](development.md#pi-subagent-observer).
 
 ## Evidence gates and unresolved decisions
 

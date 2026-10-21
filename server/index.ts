@@ -27,6 +27,8 @@ import { claudePaneSession } from "./conversation.ts";
 import { processAlive } from "./omo-status.ts";
 import { omoRuns, omoTasks } from "./omo-tasks.ts";
 import { claudeSubagents, within } from "./claude-subagents.ts";
+import { piParentForPane, readPiActivity } from "./pi-subagents.ts";
+import { piSubagentResponse } from "./pi-subagent-routes.ts";
 import { SHELL_AGENTS, shellAgentExecutable } from "./shell-agent.ts";
 import { claudeForegroundSession, claudeSessionTempDir } from "./claude-store.ts";
 import { fileResponse, findFile, crossSiteFileRead, forgetPageMedia, pageMediaResponse, pageMediaSource, PAGE_MEDIA_PATH } from "./file-view.ts";
@@ -555,7 +557,7 @@ export function createServer(
     return true;
   }
 
-  const { push, omo, gjc, claudeAgents, plans, clientSnapshot, countVisit, machines, broadcastAll, logPushError, collector, waitTimer } = createStatusHub({ options, devices, clients, present, pending, drainPending, holdPendingPane, usage, usageLogin });
+  const { push, omo, gjc, claudeAgents, piAgents, plans, clientSnapshot, countVisit, machines, broadcastAll, logPushError, collector, waitTimer } = createStatusHub({ options, devices, clients, present, pending, drainPending, holdPendingPane, usage, usageLogin });
   const bridgeToken = randomBytes(32).toString("hex");
 
   type PortalStartup = { ok: true } | { ok: false; error: unknown };
@@ -951,10 +953,21 @@ export function createServer(
       const paneResponse = await handlePaneRequest(request, url, pathname, options);
       if (paneResponse) return paneResponse;
 
+      if (pathname === "/api/pane/pi-subagent") return piSubagentResponse(request, options.stateDir ?? defaultStateDir());
+
       if (pathname === "/api/pane/omo-tasks") {
         if (request.method !== "GET") return badRequest("method_not_allowed", "use GET");
         const paneId = url.searchParams.get("pane_id");
         if (!paneId) return badRequest("missing_pane_id", "pane_id query parameter is required");
+        try {
+          const parent = await piParentForPane(paneId);
+          if (parent) {
+            const activity = readPiActivity(parent, options.stateDir ?? defaultStateDir());
+            const fresh = await piParentForPane(paneId);
+            if (!fresh || fresh.path !== parent.path || fresh.id !== parent.id) return jsonResponse({ tasks: [], runs: [], server_time: new Date().toISOString() });
+            return jsonResponse({ tasks: activity.tasks, runs: [], server_time: new Date().toISOString() }, 200, { "cache-control": "no-store" });
+          }
+        } catch { return jsonResponse({ error: { code: "pi_activity_unavailable", message: "Couldn't read Pi subagent activity" } }, 503); }
         const session = omo.sessionOf(paneId);
         // server_time: the browser's clock can differ from this PC's, and the list says how long tasks ran
         const server_time = new Date().toISOString();
@@ -1612,6 +1625,7 @@ export function createServer(
       omo.stop();
       gjc.stop();
       claudeAgents.stop();
+      piAgents.stop();
       clearInterval(waitTimer);
       plans.stop();
       machines?.stop();

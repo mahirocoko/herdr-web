@@ -8,6 +8,34 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-21
+
+### Added
+
+- Support compatible Pi subagents in Chat with inline cards at their dispatch
+  positions, per-child running/queued/completed/unknown states, and read-only
+  Markdown conversations, code blocks and expandable tool arguments/results.
+- Connect live activity to the optional session-scoped mahiro-pi worker observer;
+  document its opt-in commands, compatibility and shared private runtime contract.
+- Parent-scoped opaque child references and GET-only transcript paging with
+  current parent/process and child-header validation. Main Send/Stop stays separate.
+
+### Fixed
+
+- Recognize the native macOS foreground Pi metadata shape without requiring full
+  argv; reject generic process names and contradictory executable evidence.
+- Preserve numeric/null task token counts through presentation serialization
+  without widening the native metadata-token allowlist.
+
+### Boundaries
+
+- Live status requires a compatible, explicitly enabled POSIX observer; reload
+  requires another start. Missing or expired evidence is unknown, not completion.
+- Child details follow recorded activity, not guaranteed token streaming. No
+  child Send/Stop/steer controls, Windows live writer or universal device proof.
+- Source-only release. Pi integration source/publication remains separately
+  owned by mahiro-pi; Web neither provisions it nor changes global profiles.
+
 ## [0.10.4] - 2026-10-20
 
 ### Changed
@@ -5024,7 +5052,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.10.4...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/mahirocoko/herdr-web/compare/v0.10.3...v0.11.0
 [0.10.4]: https://github.com/mahirocoko/herdr-web/compare/v0.10.3...v0.10.4
 [0.10.3]: https://github.com/mahirocoko/herdr-web/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/mahirocoko/herdr-web/compare/v0.10.1...v0.10.2

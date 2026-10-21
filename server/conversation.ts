@@ -50,6 +50,7 @@ import { processStartedAt } from "./process-start.ts";
 import { ompHeldTranscript } from "./omp.ts";
 import { forgetOpencodeRead, forgetOpencodeState, OPENCODE_IMAGE_REF, opencodeConversation, opencodeDatabasePath, opencodeImage, opencodeReadKey, opencodeSessionId, opencodeToolOutput } from "./opencode.ts";
 import { piTranscriptInStore, piTranscriptPath, unwrittenSession } from "./pi.ts";
+import { piSubagentTurns } from "./pi-subagents.ts";
 import { defaultDevinDbPath, DevinHistoryUnavailable, devinConversation, forgetDevinState } from "./devin.ts";
 import { forgetGrokState, grokProjection, grokToolOutput, parseGrokTranscript, GrokUnavailable } from "./grok.ts";
 import { resolveGrokStore } from "./grok-store.ts";
@@ -934,7 +935,8 @@ function parseTurns(source: RecognizedConversation["source"], path: string, text
     // only pi keeps a tool's images in the entry as base64; omp, omo and gjc are read the same
     // way but would carry image refs nothing can answer, so the option stays with pi alone
     : source === "claude-transcript" ? parseClaudeTranscript(text, Infinity, { subagents: subagentsOnPage(path, text), noticed })
-      : parseOmpTranscript(text, Infinity, { toolImages: source === "pi-transcript", taskTitles });
+      : source === "pi-transcript" ? piSubagentTurns(parseOmpTranscript(text, Infinity, { toolImages: true, taskTitles }), path)
+        : parseOmpTranscript(text, Infinity, { taskTitles });
 }
 
 interface LiveCodexTurn {

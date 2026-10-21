@@ -1,0 +1,54 @@
+/* Reuses the app's modal/focus/sheet contract; no second Chat or composer is mounted. */
+.pi-subagent-dialog {
+  width: min(820px, calc(100vw - var(--space-6) * 2));
+  max-height: calc(100dvh - var(--space-6) * 2);
+}
+.pi-subagent-dialog .modal-header { gap: var(--space-2); }
+.pi-subagent-dialog .modal-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pi-subagent-body { overflow-y: auto; min-height: 0; }
+.pi-subagent-note { display: block; color: var(--text-dim); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.pi-subagent-list { list-style: none; margin: 0; padding: 0; }
+.pi-subagent-row {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-2);
+  width: 100%; min-height: var(--row-h); padding: var(--space-2);
+  background: transparent; border: 0; border-radius: var(--radius-sm); color: var(--text); text-align: left; cursor: pointer;
+}
+.pi-subagent-row > span { min-width: 0; overflow-wrap: anywhere; }
+.pi-subagent-row > svg { width: 16px; height: 16px; flex: none; }
+.pi-subagent-row:hover { background: var(--bg-hover); }
+.pi-subagent-transcript { display: flex; flex-direction: column; gap: var(--space-4); }
+.pi-subagent-turn { min-width: 0; overflow-wrap: anywhere; }
+.pi-subagent-turn.is-user { padding: var(--space-2); background: var(--bg-input); border-radius: var(--radius-sm); }
+.pi-subagent-body pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto; font-size: var(--fs-xs); }
+.pi-subagent-pages { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block: var(--space-2); }
+.pi-subagent-calls { display: grid; gap: var(--space-2); list-style: none; margin: var(--space-2) 0; padding: 0; }
+.pi-subagent-card { display: flex; align-items: center; gap: var(--space-2); width: 100%; min-height: var(--row-h); padding: var(--space-2) var(--space-3); border: var(--hairline) solid var(--border); border-radius: var(--radius-sm); background: var(--bg-input); color: var(--text); text-align: left; cursor: pointer; }
+.pi-subagent-card:hover:not(:disabled) { background: var(--bg-hover); }
+.pi-subagent-card:disabled { cursor: default; }
+.pi-subagent-card-main { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pi-subagent-card > svg { width: 16px; height: 16px; flex: none; }
+.pi-subagent-card.is-active .pi-subagent-status-icon { animation: pulse var(--dur-pulse) var(--ease-pulse) infinite; }
+@media (prefers-reduced-motion: reduce) { .pi-subagent-card.is-active .pi-subagent-status-icon { animation: none; } }
+.pi-subagent-turn-head { display: flex; gap: var(--space-2); align-items: baseline; margin-bottom: var(--space-2); font-size: var(--fs-xs); }
+.pi-subagent-turn-head time { color: var(--text-dim); margin-inline-start: auto; }
+.pi-subagent-tool { border: var(--hairline) solid var(--border); border-radius: var(--radius-sm); padding: 0; margin-block: var(--space-2); }
+.pi-subagent-tool > summary { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); padding: var(--space-2); cursor: pointer; }
+.pi-subagent-tool > summary > span { min-width: 0; overflow-wrap: anywhere; }
+.pi-subagent-tool > summary > svg { width: 16px; height: 16px; flex: none; }
+.pi-subagent-tool[open] > summary > svg { rotate: 90deg; }
+.pi-subagent-tool-body { border-top: var(--hairline) solid var(--border); padding: var(--space-2); }
+.pi-subagent-tool-body h3 { font-size: var(--fs-xs); color: var(--text-dim); margin-block: var(--space-2); }
+.pi-subagent-tool.is-error { border-color: var(--status-blocked); }
+.pi-subagent-arguments { margin: 0; }
+.pi-subagent-arguments > div { margin-block: var(--space-2); min-width: 0; }
+.pi-subagent-arguments dt { color: var(--text-dim); font-size: var(--fs-xs); }
+.pi-subagent-arguments dd { margin: 0; }
+.pi-subagent-notice { border-inline-start: var(--hairline) solid var(--border); padding-inline-start: var(--space-2); }
+.bg-task.is-inspectable { padding: 0; }
+.bg-task-open { display: flex; align-items: flex-start; gap: var(--space-2); padding: var(--space-1) var(--space-2); min-height: 32px; width: 100%; background: transparent; border: 0; color: inherit; text-align: left; cursor: pointer; }
+.bg-task-open:hover { background: var(--bg-hover); }
+@media (pointer: coarse) { .bg-task-open, .pi-subagent-row, .pi-subagent-card { min-height: var(--touch-target); } }
+@media (max-width: 640px) {
+  .pi-subagent-scrim { padding: 0; }
+  .pi-subagent-dialog { width: 100%; height: 100%; max-height: 100dvh; border-radius: 0; padding-bottom: env(safe-area-inset-bottom); }
+}

@@ -10,6 +10,18 @@
  * Placeholders in braces keep their English names.
  */
 export const ZH: Record<string, string> = {
+  "Input": "输入",
+  "Pi subagents": "Pi 子代理",
+  "Back to subagents": "返回子代理列表",
+  "Read-only · updates from recorded activity": "只读 · 根据已记录的活动更新",
+  "Couldn't refresh subagents. Previously read activity may be out of date.": "无法刷新子代理。之前读取的活动可能已过时。",
+  "Live status unavailable. This transcript does not prove the agent is still running.": "实时状态不可用。此记录不能证明代理仍在运行。",
+  "Load earlier activity": "加载更早的活动",
+  "Latest activity": "最新活动",
+  "No recorded activity yet": "尚无活动记录",
+  "Status unknown": "状态未知",
+  "Queued": "排队中",
+  "Task": "任务",
   "Could not load sign-in options": "无法加载登录方式",
   "On the server PC": "在服务器 PC 上登录",
   "Install {cli} on the server PC first.": "请先在服务器 PC 上安装 {cli}。",

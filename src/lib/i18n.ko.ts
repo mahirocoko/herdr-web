@@ -6,6 +6,18 @@
  * braces keep their English names.
  */
 export const KO: Record<string, string> = {
+  "Input": "입력",
+  "Pi subagents": "Pi 하위 에이전트",
+  "Back to subagents": "하위 에이전트 목록으로",
+  "Read-only · updates from recorded activity": "읽기 전용 · 기록된 활동으로 업데이트됩니다",
+  "Couldn't refresh subagents. Previously read activity may be out of date.": "하위 에이전트를 새로 고치지 못했습니다. 표시된 활동은 최신 정보가 아닐 수 있습니다.",
+  "Live status unavailable. This transcript does not prove the agent is still running.": "실시간 상태를 확인할 수 없습니다. 이 기록만으로 에이전트가 아직 실행 중인지 알 수 없습니다.",
+  "Load earlier activity": "이전 활동 보기",
+  "Latest activity": "최근 활동",
+  "No recorded activity yet": "아직 기록된 활동이 없습니다",
+  "Status unknown": "상태 알 수 없음",
+  "Queued": "대기 중",
+  "Task": "작업",
   "Could not load sign-in options": "로그인 방법을 불러오지 못했습니다",
   "On the server PC": "서버 PC에서 로그인",
   "Install {cli} on the server PC first.": "먼저 서버 PC에 {cli}를 설치하세요.",

@@ -692,6 +692,11 @@ async function route(url: URL, method: string, init: RequestInit | undefined, in
     return json(result);
   }
   if (path === "/api/pane/omo-tasks") return json({ tasks: [], runs: [] });
+  // Fictional fixtures have no native Pi children. Do not invent a transcript or live receipt.
+  if (path === "/api/pane/pi-subagent") {
+    if (method !== "GET") return error("method_not_allowed", "use GET", 400);
+    return error("subagent_unavailable", "This child transcript is not available for the current pane", 404);
+  }
   if (path === "/api/pane/files") {
     const q = (query.get("q") ?? "").toLowerCase();
     return json({ files: DEMO_FILES.filter((file) => file.toLowerCase().includes(q)).slice(0, Number(query.get("limit") ?? 20)) });

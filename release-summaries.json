@@ -1,4 +1,10 @@
 {
+  "0.11.0": {
+    "en": { "new": ["Show Pi subagents inline in Chat with live task states and readable child conversations."], "improved": ["Connect compatible mahiro-pi observers without changing Main Send/Stop permissions."] },
+    "ko": { "new": ["Chat 안에서 Pi 하위 에이전트의 작업 상태와 읽기 쉬운 대화를 확인합니다."], "improved": ["메인의 Send/Stop 권한을 유지하며 호환되는 mahiro-pi 관찰자와 연결합니다."] },
+    "ja": { "new": ["Chat内でPiサブエージェントのタスク状態と読みやすい子会話を表示します。"], "improved": ["メインのSend/Stop権限を維持し、互換性のあるmahiro-piオブザーバーに接続します。"] },
+    "zh": { "new": ["在 Chat 中就地显示 Pi 子代理的任务状态与易读的子会话。"], "improved": ["连接兼容的 mahiro-pi 观察器，同时保持主代理的 Send/Stop 权限不变。"] }
+  },
   "0.10.4": {
     "en": {
       "improved": [

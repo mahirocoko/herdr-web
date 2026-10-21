@@ -8,6 +8,8 @@
     "scripts/acquire-upstream.ts",
     "scripts/promote-upstream.ts",
     "scripts/run-local.ts",
+    "scripts/pi-subagents-extension.ts",
+    "scripts/pi-subagents-extension.test.ts",
     "scripts/fork-native-check.ts",
     "scripts/herdr-themes.ts",
     "scripts/herdr-theme-proposal.ts",

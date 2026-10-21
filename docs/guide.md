@@ -18,6 +18,14 @@ Reader availability varies by provider and platform. Source contains Claude, Cod
 
 Letta supports bounded newest/older history pages. Image entries currently show an unavailable-preview notice, and full-output fetching is not implemented. Native records with distinct identities may display repeated text; the reader does not delete them by guessing that matching text is a duplicate.
 
+### Pi subagents
+
+Pi's `subagent` calls appear as inline task cards at the position where Main dispatched them, outside folded work blocks. Adjacent calls form a group. Each card keeps its own title and current running, queued, completed or unknown state; completed cards stay at the same position. There is no trailing Chat history button. The activity chip beside the composer also lists children. Select a card to read its Markdown messages, code blocks, expandable tool arguments/results and errors in a separate read-only dialog; Main's Chat stays mounted. Use earlier/latest activity controls for bounded history pages. This view has no Send, Stop, steer or resume controls, and does not expose the child's native session identity as a browser control.
+
+Historical outcomes come from the parent's `subagents:record` entries. A background launch without a current live receipt is **Status unknown**, not proof that the child is still running or finished. The child reader requires the parent's own tasks directory and a matching native parent header; unavailable or unpersisted child transcripts cannot be opened.
+
+Accurate running/queued counts need the optional observer described in [development](development.md#pi-subagent-observer). With a compatible [mahiro-pi](https://github.com/mahirocoko/mahiro-pi) revision and its optional worker-activity resource already configured, run `/mh-herdr-web-observer start` in the Pi session you want to observe, then `status` to check it. Use `stop` to disable publication; reload requires another explicit start. An unknown command means that integration needs separate provisioning or an update, not that Web can install it for you. With a fresh verified receipt, Main at rest plus active children reads **BG**, and the corresponding inline cards update their own statuses. This changes presentation only, never Main's native Send/Stop permission. The observer is not automatically installed or loaded. Without it, history/details remain available where records exist, but live counts are unavailable. Updates follow recorded activity rather than every streamed token. Native/browser/device acceptance is separate from source and fixture checks.
+
 ## Sending, stopping and drafts
 
 The composer belongs to the selected pane. Supported native approval/question cards appear in Chat; confirm the target and meaning before answering. Drafts and held messages are not evidence of delivery. Explicit queueing, holding and sending are different actions, and reconnection must not silently turn a draft into a send.

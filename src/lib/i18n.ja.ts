@@ -8,6 +8,18 @@
  * in English. Placeholders in braces keep their English names.
  */
 export const JA: Record<string, string> = {
+  "Input": "入力",
+  "Pi subagents": "Pi サブエージェント",
+  "Back to subagents": "サブエージェント一覧に戻る",
+  "Read-only · updates from recorded activity": "読み取り専用 · 記録された活動を表示",
+  "Couldn't refresh subagents. Previously read activity may be out of date.": "サブエージェントを更新できませんでした。表示中の活動は古い可能性があります。",
+  "Live status unavailable. This transcript does not prove the agent is still running.": "現在の状態を確認できません。この記録だけでは、エージェントが実行中かどうかは分かりません。",
+  "Load earlier activity": "以前の活動を読み込む",
+  "Latest activity": "最新の活動",
+  "No recorded activity yet": "まだ活動の記録がありません",
+  "Status unknown": "状態不明",
+  "Queued": "待機中",
+  "Task": "タスク",
   "Could not load sign-in options": "ログイン方法を読み込めませんでした",
   "On the server PC": "サーバーPCでログイン",
   "Install {cli} on the server PC first.": "先にサーバーPCに{cli}をインストールしてください。",

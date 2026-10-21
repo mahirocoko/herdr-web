@@ -398,6 +398,12 @@ export const PROMOTION_PATCHES = [
   'site/demo/transport.ts',
   'site/demo/index.html',
   'site/demo/history.ts',
+  'server/pi.ts',
+  'src/components/ChatView.tsx',
+  'src/components/Composer.tsx',
+  'src/components/BackgroundTasks.tsx',
+  'src/lib/api.ts',
+  'src/lib/machineContext.tsx',
 ]
 export const PROMOTION_ADDITIONS = [
   'scripts/docs-contracts.test.ts',
@@ -435,6 +441,15 @@ export const PROMOTION_ADDITIONS = [
   'scripts/brand.test.ts',
   'scripts/browser-lane.test.ts',
   'scripts/upstream-cleanup.test.ts',
+  'shared/pi-subagents.ts',
+  'server/pi-subagents.ts',
+  'server/pi-subagents.test.ts',
+  'server/pi-subagent-routes.ts',
+  'scripts/pi-subagents-extension.ts',
+  'scripts/pi-subagents-extension.test.ts',
+  'src/components/PiSubagents.tsx',
+  'src/components/PiSubagents.css',
+  'src/components/PiSubagents.test.tsx',
 ]
 const promotedPath = (path: string) =>
   path === 'LICENSE'

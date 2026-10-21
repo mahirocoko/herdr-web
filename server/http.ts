@@ -22,6 +22,8 @@ export function forkBrowserReplacer(key: string, value: unknown): unknown {
   // These raw native records are server-only; the source browser consumes neither.
   if (key === "agent_session" || key === "state_labels") return undefined;
   if (key !== "tokens") return value;
+  // Task/usage token counts are scalars, not native presentation metadata maps.
+  if (value === null || typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return value;
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return Object.fromEntries(Object.entries(value).filter(([name, text]) =>
     presentationTokens.has(name) && typeof text === "string" && text.length <= 512 && !/[\x00-\x1f\x7f]/.test(text)));

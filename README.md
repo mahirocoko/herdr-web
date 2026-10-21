@@ -24,6 +24,14 @@ The default listener is loopback. An already configured, verified owner-only Tai
 
 Windows bootstrap and NTFS privacy fixtures have passed native CI, but actual Windows Herdr-host startup remains unverified. Physical Android installation and Push receipt are also pending. Scoped source, fixture or rendered checks must not be read as all-provider or all-device certification. See [coverage and limits](docs/upstream-parity.md) for the distinction.
 
+## Pi subagent support
+
+This fork supports **Pi subagents in Chat** with compatible `@gotgenes/pi-subagents` sessions: inline task cards at the original dispatch position, running/queued/completed/unknown states, and clickable read-only child conversations. Details render Markdown, highlighted code and expandable tool arguments, results and errors. Main's Send/Stop authority stays separate from child activity.
+
+For live status, use a compatible [mahiro-pi](https://github.com/mahirocoko/mahiro-pi) revision with the optional worker-activity observer command. In an already configured session, explicitly run `/mh-herdr-web-observer start`; `status` reports observation health and `stop` disables it. Reloading Pi requires another explicit start. Herdr Web does not install or enable the resource, and older Pi integrations may not provide this command. The producer and Web must share the checkout/runtime root and pass its privacy checks.
+
+Without a fresh verified observer receipt, recorded history can still be read, but an unfinished child is **Status unknown**, not assumed running or completed. Updates follow Pi's recorded activity, not guaranteed token streaming. The live observer is POSIX-only; Windows live activity is not supported. See the [Pi user guide](docs/guide.md#pi-subagents) and [integration contract](docs/development.md#pi-subagent-observer) for compatibility, setup and limits.
+
 ## Find your way
 
 - [User guide](docs/guide.md): workspaces, Chat, terminal, settings and current limitations.

@@ -281,10 +281,12 @@ test("HTTP and WS/SSE serialization keep presentation tokens but never native id
         },
       ],
       token: "separate auth contract",
+      tasks: [{ tokens: null }, { tokens: 123 }, { tokens: "not-a-count" }, { tokens: -1 }],
     };
     const expected = {
       panes: [{ tokens: { summary: "Readable status", progress: "50%" } }],
       token: "separate auth contract",
+      tasks: [{ tokens: null }, { tokens: 123 }, { tokens: {} }, { tokens: {} }],
     };
     expect(JSON.parse(JSON.stringify(value, forkBrowserReplacer))).toEqual(
       expected,

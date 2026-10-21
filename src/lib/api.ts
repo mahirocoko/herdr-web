@@ -4,6 +4,7 @@ import type {
   AgentKind,
   AgentRenameRequest,
   ConversationResponse,
+  PiSubagentResponse,
   CreateWorktreeRequest,
   CreateTabRequest,
   CreateWorkspaceRequest,
@@ -728,6 +729,13 @@ export async function removeWorktree(request: RemoveWorktreeRequest, machineId =
 /** GET /api/pane/commands: the slash commands the pane's agent understands (built-in + custom). */
 export async function fetchPaneCommands(paneId: string, machineId = "local"): Promise<SlashCommand[]> {
   return (await getJson<{ commands: SlashCommand[] }>(machinePath(machineId, `pane/commands?pane_id=${encodeURIComponent(paneId)}`))).commands;
+}
+
+/** Read-only child history. The id is an opaque parent-scoped reference, never a path. */
+export async function fetchPiSubagent(paneId: string, id: string, before?: string, machineId = "local"): Promise<PiSubagentResponse> {
+  const query = new URLSearchParams({ pane_id: paneId, id });
+  if (before) query.set("before", before);
+  return getJson<PiSubagentResponse>(machinePath(machineId, `pane/pi-subagent?${query}`));
 }
 
 /** GET /api/pane/omo-tasks: the background tasks and workflows the pane's OmO session started, and that PC's clock. */

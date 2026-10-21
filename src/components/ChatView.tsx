@@ -11,6 +11,7 @@ import "./ChatView.css";
 import "./ChatTimeline.css";
 
 import { AgentMark } from "./AgentMark.tsx";
+import { PiSubagentCalls, piWorkItems } from "./PiSubagents.tsx";
 import { AnimatedHeight } from "./AnimatedHeight.tsx";
 import { Markdown, ReservedImage } from "./Markdown.tsx";
 import { ImageLightbox } from "./ImageLightbox.tsx";
@@ -467,9 +468,9 @@ function PendingWorkHead({ title, className = "" }: { title: string; className?:
   </div>;
 }
 
-function WorkBlockView({ paneId, parts, duration, live, waiting, defaultOpen, showThinking, pendingHead }: { paneId: string; parts: ConversationPart[]; duration: string | null; live: boolean; waiting: boolean; defaultOpen: boolean; showThinking: boolean; pendingHead: boolean }) {
+function WorkBlockView({ paneId, parts, duration, live, waiting, defaultOpen, showThinking, pendingHead, blockKey = "work" }: { paneId: string; parts: ConversationPart[]; duration: string | null; live: boolean; waiting: boolean; defaultOpen: boolean; showThinking: boolean; pendingHead: boolean; blockKey?: string }) {
   const t = useT();
-  const [chosenOpen, setOpen] = useChatRowToggle("work", null);
+  const [chosenOpen, setOpen] = useChatRowToggle(blockKey, null);
   const open = chosenOpen ?? defaultOpen;
   // reading or working inside the block is a choice to keep it: the fold at the end of the turn
   // must not take the rows from under the reader's focus or close the row they opened
@@ -491,9 +492,9 @@ function WorkBlockView({ paneId, parts, duration, live, waiting, defaultOpen, sh
     {/* the rows open and fold at the block's measured height; folded and settled, they are not drawn */}
     <AnimatedHeight open={open} animateContent={false}>
       <div className="work-block-rows" onFocus={keepOpen} onClick={keepOpen}>{visible.map((part, index) =>
-        part.kind === "thinking" ? <ThinkingRow key={index} stateKey={`thinking:${parts.indexOf(part)}`} text={part.text} />
+        part.kind === "thinking" ? <ThinkingRow key={index} stateKey={`${blockKey === "work" ? "" : `${blockKey}:`}thinking:${parts.indexOf(part)}`} text={part.text} />
           : part.kind === "text" ? <div key={index} className="work-narration"><Markdown>{part.text}</Markdown></div>
-            : part.kind === "tool" ? <WorkRow key={index} stateKey={`tool:${parts.indexOf(part)}`} paneId={paneId} part={part} /> : null)}
+            : part.kind === "tool" ? <WorkRow key={index} stateKey={`${blockKey === "work" ? "" : `${blockKey}:`}tool:${parts.indexOf(part)}`} paneId={paneId} part={part} /> : null)}
       </div>
     </AnimatedHeight>
   </section>;
@@ -608,6 +609,7 @@ function UserMessage({ text, skills = null }: { text: string; skills?: SkillMatc
 
 interface TurnProps {
   paneId: string;
+  pi?: boolean;
   turn: ConversationTurn;
   /** the last turn while the agent runs: its work block reads "Working…" */
   live: boolean;
@@ -689,7 +691,7 @@ function noticeLabel(t: ReturnType<typeof useT>, notice: Extract<ConversationPar
 }
 
 // a turn that did not change keeps its object across polls: skip re-rendering it
-const Turn = memo(function Turn({ paneId, turn, live, waiting, showThinking, skills = null, userSkills = null }: TurnProps) {
+const Turn = memo(function Turn({ paneId, turn, live, waiting, showThinking, pi = false, skills = null, userSkills = null }: TurnProps) {
   const t = useT();
   // under the turn, not in its meta row: that row fades out once the pointer and focus leave
   const [copyFailed, setCopyFailed] = useChatRowToggle("copy-failed", false);
@@ -744,13 +746,17 @@ const Turn = memo(function Turn({ paneId, turn, live, waiting, showThinking, ski
     </article>;
   }
   const { work, answer } = splitTurn(turn.parts);
+  const workItems = pi ? piWorkItems(work) : work.length ? [{ index: 0, calls: [], work }] : [];
   const answerText = answer.map((part) => part.text).join("\n\n");
   const goal = turnGoal(turn.parts);
   return <article className="chat-turn chat-turn-agent">
     <SkillActivityList parts={turn.parts} />
     {goal !== null && <GoalActivity goal={goal} />}
     {/* the pending head stands only above no answer: one above words would leave a gap when the turn ends */}
-    {(work.length > 0 || (live && answer.length === 0)) && <WorkBlockView paneId={paneId} parts={work} duration={formatWorkDuration(turn.ts, turn.end_ts ?? null)} live={live} waiting={waiting} defaultOpen={workStartsOpen(live, turn.parts)} showThinking={showThinking} pendingHead={answer.length === 0} />}
+    {workItems.map((item, index) => item.calls.length > 0
+      ? <PiSubagentCalls key={`calls:${item.index}`} parts={item.calls} />
+      : <WorkBlockView key={`work:${item.index}`} blockKey={pi ? `work:${item.index}` : "work"} paneId={paneId} parts={item.work} duration={formatWorkDuration(turn.ts, turn.end_ts ?? null)} live={live && index === workItems.length - 1} waiting={waiting && index === workItems.length - 1} defaultOpen={workStartsOpen(live, turn.parts)} showThinking={showThinking} pendingHead={answer.length === 0} />)}
+    {live && !waiting && answer.length === 0 && (workItems.length === 0 || workItems.at(-1)!.calls.length > 0) && <PendingWorkHead title={t("Working…")} />}
     {answer.map((part, index) => <Markdown key={index} skills={skills}>{part.text}</Markdown>)}
     {answerText.length > 0 && <div className="chat-turn-meta chat-agent-meta">
       {/* a mouse reads one copy glyph and the words "Plain text"; touch reads the two formats */}
@@ -1445,9 +1451,9 @@ export const ChatView = memo(function ChatView({ paneId, active = true, visible:
     const { turn } = row;
     const live = isLiveWorkTurn(turn, index === shownTurns.length - 1, workStatus, finishedBeforeSend);
     return <RenderBoundary resetKey={turnRevision(turn, true)} fallback={() => <p className="chat-inline-state chat-inline-error">{t("This message can't be shown here. The terminal has it.")}</p>}>
-      <Turn paneId={paneId} turn={turn} live={live} waiting={isWaitingWorkTurn(live, agentStatus)} showThinking={settings.showThinking} skills={skillMatcher} userSkills={skillMatcher} />
+      <Turn paneId={paneId} pi={agent === "pi"} turn={turn} live={live} waiting={isWaitingWorkTurn(live, agentStatus)} showThinking={settings.showThinking} skills={skillMatcher} userSkills={skillMatcher} />
     </RenderBoundary>;
-  }, [shownTurns.length, workStatus, finishedBeforeSend, t, paneId, agentStatus, settings.showThinking, skillMatcher]);
+  }, [shownTurns.length, workStatus, finishedBeforeSend, t, paneId, agent, agentStatus, settings.showThinking, skillMatcher]);
   // displayPaneTitle falls back to the pane id for a pane with nothing else to call it
   const shownTitle = title?.trim() ?? "";
   const logLabel = shownTitle !== "" && shownTitle !== paneId ? t("conversation of {pane}", { pane: shownTitle }) : t("Conversation");

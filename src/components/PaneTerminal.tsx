@@ -41,6 +41,7 @@ import { secretPrompt } from "../../shared/secret-prompt.ts";
 import { ChatView } from "./ChatView.tsx";
 import { RenderBoundary } from "./RenderBoundary.tsx";
 import { Composer } from "./Composer.tsx";
+import { PiSubagentProvider } from "./PiSubagents.tsx";
 import { ComposerNotices, type ComposerNoticeRow } from "./ComposerNotices.tsx";
 import { PendingMessages } from "./PendingMessages.tsx";
 import type { AgentStatus, ClientRole, ConversationMetadata, InteractivePrompt, PlanSummary, ServerMessage } from "../../shared/protocol.ts";
@@ -2819,6 +2820,7 @@ export function PaneTerminal({
 
   return (
     // data-direct-typing: xterm's own field raises the soft keyboard here (lib/viewport.ts)
+    <PiSubagentProvider paneId={paneId} visible={presented} enabled={agent === "pi"}>
     <div ref={stackRef} className={`terminal-stack${chatView ? " is-chat" : ""}${greeted ? " is-greeted" : ""}`} data-pane-owner={paneId === null ? undefined : paneStorageId(machineId, paneId)} data-direct-typing={coarse && directTyping && !chatView ? "" : undefined}>
       {paneId === null && restoreError !== null && (
         <div className="terminal-placeholder is-restore-error" role="status">
@@ -3127,5 +3129,6 @@ export function PaneTerminal({
         modifiers={modifiers} onToggleModifier={toggleModifier} items={settings.keyBarItems}
         {...(coarse ? { directTyping, onToggleDirect: toggleDirect, directDisabled: lineComposing } : {})} />}
     </div>
+    </PiSubagentProvider>
   );
 }
