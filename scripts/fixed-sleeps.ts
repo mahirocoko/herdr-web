@@ -29,7 +29,7 @@ const MARKER = /\/\/\s*fixed wait:\s*\S/;
 
 /** The files the rule covers. Media takes are timed by hand. */
 export const sleepFiles = (): string[] => files("{server,src,shared,scripts,site,telemetry}/**/*.{ts,tsx,mjs,js}")
-  .filter((file) => !file.startsWith("scripts/film/") && !file.startsWith("scripts/readme-media/") && file !== "scripts/fixed-sleeps.ts" && file !== "scripts/conventions.test.ts");
+  .filter((file) => file !== "scripts/fixed-sleeps.ts" && file !== "scripts/conventions.test.ts");
 
 /** Whether the innermost loop around `at` (within its function) is bounded. `code` has comments and strings blanked. */
 function inBoundedLoop(code: string, at: number): boolean {

@@ -16,7 +16,7 @@ it("the demo refuses draft clearing, drains accepted pending IDs once, and never
       fetch, WebSocket, EventSource: class {},
       localStorage: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) },
     };
-    await import("../site/demo/transport.ts");
+    await import("./fixtures/demo/transport.ts");
     const demo = (globalThis as any).window;
     const runTimer = (ms: number) => {
       const [id, timer] = [...timers].find(([, timer]) => timer.ms === ms) ?? [];

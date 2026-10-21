@@ -19,8 +19,9 @@ are not fidelity evidence. Runtime URLs use `mahiro2`; the service-worker cache 
 This icon family includes the unchanged, vendored official Letta provider PNG.
 Manifest identity, start URL, scope and push identity are unchanged.
 
-`icon-source.png` is **upstream's** supplied ram artwork, not Mahiro's brand
-source. It remains pinned reference material. The existing social preview,
-`docs/media/banner.png`, `site/assets/og.png`, marketing/site and imported
-upstream reference documents remain upstream material. This checkpoint does not
-rebrand the marketing site, remote bridge messages or provider/native names.
+The upstream ram source artwork, marketing site and README/film media pipeline
+have been removed from this fork; their original paths and blobs remain in the
+source manifest. They are not inputs to the runtime brand generator. The existing
+`public/social-preview.png` and pinned upstream reference documents retain their
+upstream provenance. Remote bridge messages and provider/native names are not
+application-brand assets.

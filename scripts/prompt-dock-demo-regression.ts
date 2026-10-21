@@ -6,7 +6,7 @@ import { chromium, type Page } from "playwright-core";
 import { browserEvidencePage, browserEvidenceTracing, startBrowserEvidence } from "./browser-evidence.ts";
 import type { BrowserEvidenceSession } from "./browser-evidence.ts";
 import { appFaces } from "./app-faces.ts";
-import panes from "../site/demo/fixtures/panes.json";
+import panes from "./fixtures/demo/fixtures/panes.json";
 import { buildDemoApp } from "./demo-build.ts";
 import { chromePath } from "./chrome-path.ts";
 

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { chromium, type Page } from "playwright-core";
 import { buildDemoApp } from "./demo-build.ts";
 import { openSettingsPage } from "./settings-page.ts";
-import panes from "../site/demo/fixtures/panes.json";
+import panes from "./fixtures/demo/fixtures/panes.json";
 
 const screenshotDir = process.env.SHORTCUT_SCREENSHOT_DIR;
 const app = mkdtempSync(join(tmpdir(), "herdr-exact-shortcuts-demo-"));

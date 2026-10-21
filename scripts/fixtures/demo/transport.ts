@@ -1,8 +1,8 @@
 /**
  * The browser demo's stand-in for the server. Loaded before the app on the demo page, it answers
  * `fetch("/api/…")`, `new EventSource("/api/machines/events")` and `new WebSocket("…/ws")` from
- * fixtures (site/demo/fixtures/, captured by scripts/demo-fixtures.ts from the staged fictional
- * session) instead of the network. The app's own code is unchanged: it believes it talks to a
+ * committed fictional fixtures (scripts/fixtures/demo/fixtures/) instead of the network.
+ * The app's own code is unchanged: it believes it talks to a
  * herdr web ui server on a PC called "workstation".
  *
  * What works: the sidebar (two repositories, each with two agent worktrees) and its live statuses,
@@ -12,14 +12,14 @@
  * one notice instead of a TUI. A message sent from a chat gets a demo answer.
  * What does not: files, images, push and remote PCs, which need a real machine.
  */
-import type { AgentIntegration, AgentStatus, ConversationTurn, IntegrationsResponse, Machine, MachineEvent, PaneDirection, PaneFindMatch, PaneFindRequest, PanePlan, PaneResized, PaneSplit, PaneSwapped, PaneZoomed, PendingMessage, PlanStep, PluginActionResult, PluginActions, PluginActionsResponse, PortalStatus, ServerMessage, SessionSnapshot, TabMoved, UsageReport, WorkspaceCreated, WorkspaceInfo, WorktreeEntry, WorktreeListing, WorktreeOpened, WorktreeRemoved } from "../../shared/protocol.ts";
-import type { RepoDiffFile, RepoDiffFileList, RepoDiffFilePatch, RepoDiffRepository, RepoDiffScope } from "../../shared/protocol.ts";
-import { VOICE_DEFAULTS, type VoiceStatus } from "../../shared/voice.ts";
-import { isAgentName } from "../../shared/agent-name.ts";
-import { neighborPane } from "../../src/lib/layoutMap.ts";
-import { closeLayoutPane, resizeLayout, setLayoutSplitRatio, splitLayout, swapLayoutPanes } from "../../src/lib/layoutTree.ts";
-import { rollupStatus } from "../../src/lib/status.ts";
-import { movedTabOrder } from "../../src/lib/tabOrder.ts";
+import type { AgentIntegration, AgentStatus, ConversationTurn, IntegrationsResponse, Machine, MachineEvent, PaneDirection, PaneFindMatch, PaneFindRequest, PanePlan, PaneResized, PaneSplit, PaneSwapped, PaneZoomed, PendingMessage, PlanStep, PluginActionResult, PluginActions, PluginActionsResponse, PortalStatus, ServerMessage, SessionSnapshot, TabMoved, UsageReport, WorkspaceCreated, WorkspaceInfo, WorktreeEntry, WorktreeListing, WorktreeOpened, WorktreeRemoved } from "../../../shared/protocol.ts";
+import type { RepoDiffFile, RepoDiffFileList, RepoDiffFilePatch, RepoDiffRepository, RepoDiffScope } from "../../../shared/protocol.ts";
+import { VOICE_DEFAULTS, type VoiceStatus } from "../../../shared/voice.ts";
+import { isAgentName } from "../../../shared/agent-name.ts";
+import { neighborPane } from "../../../src/lib/layoutMap.ts";
+import { closeLayoutPane, resizeLayout, setLayoutSplitRatio, splitLayout, swapLayoutPanes } from "../../../src/lib/layoutTree.ts";
+import { rollupStatus } from "../../../src/lib/status.ts";
+import { movedTabOrder } from "../../../src/lib/tabOrder.ts";
 import { CHATS, PROMPT, SPECS, type DemoSpec } from "./fixtures.ts";
 import { DemoHistory } from "./history.ts";
 import machinesFixture from "./fixtures/machines.json";

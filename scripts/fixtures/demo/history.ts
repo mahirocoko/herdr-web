@@ -1,6 +1,6 @@
 /** Fictional, in-memory terminal history for the demo transport only. */
-import type { PaneFindMatch, PaneFindRequest, PaneFindResponse, PaneScrollInfo } from "../../shared/protocol.ts";
-import { herdrWidthProvider } from "../../src/lib/terminalWidths.ts";
+import type { PaneFindMatch, PaneFindRequest, PaneFindResponse, PaneScrollInfo } from "../../../shared/protocol.ts";
+import { herdrWidthProvider } from "../../../src/lib/terminalWidths.ts";
 
 const widths = herdrWidthProvider();
 interface Cell { text: string; from: number; to: number; width: number }

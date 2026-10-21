@@ -11,7 +11,7 @@ it("the demo relabels automatic tab names by place and leaves custom numeric nam
       fetch, WebSocket, EventSource: class {},
       localStorage: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) },
     };
-    const transport = "../site/demo/transport.ts?tabs";
+    const transport = "./fixtures/demo/transport.ts?tabs";
     await import(transport);
     const demo = (globalThis as any).window;
     const post = async (url: string, body: unknown) => (await demo.fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })).json();

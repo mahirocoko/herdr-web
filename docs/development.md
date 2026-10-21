@@ -56,7 +56,7 @@ Choose an owned output directory and keep private artifacts ignored. Tests, buil
 
 `bun run test:native` is an opt-in shell-only native fixture through the source disposable-config isolation. It refuses main/default targets, preserves real HOME and cleans up only receipt-owned resources. It does not start agents or authorize paid provider turns.
 
-Broader integration, browser, SSH, remote-build and updater scripts are imported engineering tools, not routine setup steps. Some can create stand-in agents, install software, change remote hosts or exercise native input. Read the exact owner and obtain separate approval for a bounded disposable lane before executing them. Never feed a user's existing pane or infer permission from an old test receipt.
+Broader integration, browser, SSH and updater scripts are imported engineering tools, not routine setup steps. Some can create stand-in agents, install software, change remote hosts or exercise native input. Read the exact owner and obtain separate approval for a bounded disposable lane before executing them. Never feed a user's existing pane or infer permission from an old test receipt.
 
 Run app/reference servers only in verified named visible project terminals. Do not clear browser storage, disturb the normal browser profile or launch hidden detached servers for convenience. Independent QA has a separately assigned owner; the implementation author cannot certify their own work as independent or human-approved.
 
@@ -66,10 +66,27 @@ Theme colors live in `src/styles.css`. Inspect `scripts/generate-themes.ts`, the
 
 Keep imported double-quote/semicolon style and component anatomy. New UI strings need the existing Korean, Japanese and Simplified Chinese entries with matching placeholders. Format only touched owners with already available tooling; do not install formatters or reformat the repository as incidental work.
 
+## Retired upstream distribution and retained test owners
+
+The fork does not ship upstream's marketing site, README/film production pipeline, one-line installers, remote-bundle builders, Cloudflare telemetry receiver, release/deploy guards or self-hosted runner provisioning. Their exact retired paths and the original-to-current fixture mapping are recorded in `SOURCE_MANIFEST.json` and independently enforced by `scripts/verify-upstream.ts`. The pin and original blob inventory remain unchanged; deletion is not a broad source exception.
+
+| Retained owner | Why it remains |
+| --- | --- |
+| `scripts/fixtures/demo/`, `scripts/demo-build.ts` | Fictional transport/history/fixtures used by app regression tests, not a deployed website. JSON fixtures are committed data; no native-session capture pipeline remains. |
+| `scripts/preview-build.ts` | Optional offline fictional app preview and isolation tests; no marketing build, installer, account or deployment. |
+| `scripts/browser-lane.test.ts`, `scripts/ci-browser*`, `scripts/ci-tests.ts`, `scripts/check.ts` | Local runner behavior, input-safety guards and test orchestration. They do not assert the pinned upstream's Pages deployment/cache policy. |
+| `herdr-plugin.toml`, `scripts/plugin*`, `scripts/preflight*`, `scripts/with-bun*` | Compatibility fixtures exercised by plugin/runtime, pairing and platform tests. Normal fork startup never registers or starts this plugin. Retention is not install permission. |
+| `server/machines.ts`, `server/machine-api.ts`, `shared/machines.ts`, SSH fixtures | Shared local-machine/protocol owners and guarded remote compatibility. Removing a remote bundle builder does not enable or remove local PC functionality. |
+| `server/telemetry.ts`, `shared/telemetry.ts` | Optional wire/schema compatibility used by server/client tests. The normal fork launcher supplies no telemetry instance; this fork deploys no receiver. |
+| `scripts/release-notes.ts`, `scripts/changelog-fold.ts`, `release-summaries.json` | Patch-note parsing/folding and app-visible release history, not authorization for plugin/remote/Worker publishing. |
+| `docs/upstream-reference/`, `docs/history/legacy/` | Pinned provenance and dated history, not active commands or current deployment policy. |
+
+`build:site` and `build:remote` are intentionally absent from package scripts. New features belong to runtime owners above, not retired marketing/deployment tools. Before deleting any retained compatibility owner, trace its test and runtime consumers; disabled capability is not proof of dead code.
+
 ## Provenance, references and publishing
 
 The manifest records the source pin and exact approved promotion patches/additions; it cannot authorize its own changes. Update the independent verifier policy and focused fixtures when a new approved owner requires it. Do not replace exact entries with broad Markdown exemptions or rerun promotion for routine work. Licenses, notices, dependency patches and pinned upstream README blobs remain protected.
 
-This page and the guides linked from the root README are current fork documentation. Other imported technical notes, website/demo tools and upstream-reference readmes are pinned reference material, not current deployment, release or support authority. Historical guides and release entries retain their original context. See [coverage](upstream-parity.md) before treating a source feature as verified.
+This page and the guides linked from the root README are current fork documentation. Other imported technical notes and upstream-reference readmes are pinned reference material, not current deployment, release or support authority. Historical guides and release entries retain their original context. See [coverage](upstream-parity.md) before treating a source feature as verified.
 
-Fork releases are source-only and require explicit publication authorization. Imported plugin manifests, remote bundles and release scripts do not define this fork's publishing process. Do not assume upstream workflows, review templates or nested agent-instruction files exist in this checkout. External CI run approval is distinct from review and merge protection; no enforced branch-protection setting is promised by these docs.
+Fork releases are source-only and require explicit publication authorization. The retained plugin compatibility manifest and patch-note helpers do not define this fork's publishing process. Do not assume upstream workflows, review templates or nested agent-instruction files exist in this checkout. External CI run approval is distinct from review and merge protection; no enforced branch-protection setting is promised by these docs.

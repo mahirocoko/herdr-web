@@ -171,7 +171,7 @@ const THEME_SIDE_VALIDATORS = {
   lightTheme: oneOf(TELEMETRY_THEME_IDS),
 } satisfies Record<TelemetryThemeSideKey, (value: unknown) => boolean>;
 
-/** Every key the Worker (telemetry/worker.ts) requires in a snapshot. */
+/** Allowlisted settings keys for the optional telemetry wire contract; no receiver is deployed by this fork. */
 export const TELEMETRY_SETTINGS_KEYS = Object.keys(TELEMETRY_SETTINGS_VALIDATORS) as (keyof TelemetrySettings)[];
 /** The keys the Worker also accepts, only together: a snapshot is exactly TELEMETRY_SETTINGS_KEYS, or those and both of these. */
 export const TELEMETRY_THEME_SIDE_KEYS = Object.keys(THEME_SIDE_VALIDATORS) as TelemetryThemeSideKey[];

@@ -3,13 +3,13 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
-import panes from "../site/demo/fixtures/panes.json";
+import panes from "./fixtures/demo/fixtures/panes.json";
 import { buildDemoApp } from "./demo-build.ts";
 import { chromePath } from "./chrome-path.ts";
 
 // Settings → Agents order (Activity) and the Agents list's pins, on the unmodified app over the
 // demo's fixture transport, whose agents carry herdr's state_change_seq and bump it on every state
-// change. The demo's Claude pane finishes by itself 4.5s in (site/demo/transport.ts), and a message
+// change. The demo's Claude pane finishes by itself 4.5s in (scripts/fixtures/demo/transport.ts), and a message
 // sent from a chat runs for 2.4s and then finishes. All files and HTTP traffic stay in this
 // disposable, loopback-only app; no herdr session is opened.
 const app = mkdtempSync(join(tmpdir(), "herdr-sidebar-activity-demo-"));

@@ -24,8 +24,6 @@
     "test:ui": "bun scripts/bun-project.mjs scripts/check.ts browser",
     "generate:types": "bun scripts/bun-project.mjs scripts/generate-protocol-types.ts",
     "generate:themes": "bun scripts/bun-project.mjs scripts/generate-themes.ts",
-    "build:remote": "bun scripts/bun-project.mjs scripts/build-remote-bundle.ts",
-    "build:site": "bun scripts/bun-project.mjs scripts/build-site.ts",
     "test:ssh": "bun scripts/bun-project.mjs scripts/ssh-integration.ts"
   },
   "dependencies": {

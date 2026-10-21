@@ -292,7 +292,7 @@ describe("telemetry settings snapshot", () => {
     const sent = Object.keys(telemetrySettingsSnapshot(DEFAULT_SETTINGS));
     expect([
       ...sent.filter((key) => !([...TELEMETRY_SETTINGS_KEYS, ...TELEMETRY_THEME_SIDE_KEYS] as string[]).includes(key)).map((key) =>
-        `${key}: the app sends it and the Worker refuses the whole snapshot. Add it to TelemetrySettings and TELEMETRY_SETTINGS_VALIDATORS in shared/telemetry.ts and to the full snapshot in telemetry/worker.test.ts, then deploy the Worker before releasing (telemetry/README.md).`),
+        `${key}: keep the optional telemetry snapshot aligned with TelemetrySettings and TELEMETRY_SETTINGS_VALIDATORS in shared/telemetry.ts. This fork does not deploy an upstream receiver.`),
       ...TELEMETRY_SETTINGS_KEYS.filter((key) => !sent.includes(key)).map((key) =>
         `${key}: the Worker requires it and telemetrySettingsSnapshot in src/lib/settings.ts does not send it. Send it, or remove it from shared/telemetry.ts and deploy the Worker before releasing.`),
     ]).toEqual([]);

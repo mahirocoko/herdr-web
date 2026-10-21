@@ -1,10 +1,10 @@
 /**
- * The fictional session behind the README media (scripts/readme-media/stage.ts) and the browser
- * demo (site/demo/transport.ts): two repositories with two agent worktrees each, a shell tab, their
+ * The fictional session for the browser regression harness and optional static preview:
+ * two repositories with two agent worktrees each, a shell tab, their
  * curated chats and one Codex approval. Nothing here comes from a real machine. It imports no server
  * code, so the browser bundle can take it.
  */
-import type { ConversationTurn, InteractivePrompt } from "../../shared/protocol.ts";
+import type { ConversationTurn, InteractivePrompt } from "../../../shared/protocol.ts";
 
 export interface DemoSpec {
   key: string;

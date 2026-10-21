@@ -19,7 +19,7 @@ const suite = process.argv[2];
 if (suite !== "unit" && suite !== "integration") throw new Error("Usage: bun scripts/ci-tests.ts unit|integration");
 const files = [
   ...new Bun.Glob(
-    "{src,shared,server,scripts,telemetry}/**/*.test.{ts,tsx}",
+    "{src,shared,server,scripts}/**/*.test.{ts,tsx}",
   ).scanSync({ cwd: process.cwd() }),
 ].sort();
 // The legacy updater suite mixes Git-only cases with real bridge restart/rollback cases.

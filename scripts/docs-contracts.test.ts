@@ -16,6 +16,7 @@ const activeDocs = [
   'docs/upstream-parity.md',
   'docs/app-updates.md',
   'docs/remote-pcs.md',
+  'docs/brand/README.md',
 ]
 const scripts: Record<string, string> = JSON.parse(
   readFileSync(resolve(root, 'package.json'), 'utf8'),

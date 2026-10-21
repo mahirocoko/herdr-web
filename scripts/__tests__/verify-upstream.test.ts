@@ -18,7 +18,9 @@ import {
   verifyPromoted,
   PROMOTION_ADDITIONS,
   PROMOTION_PATCHES,
-  PROMOTION_REFERENCES
+  PROMOTION_REFERENCES,
+  PROMOTION_REMOVALS,
+  PROMOTION_RELOCATIONS
 } from '../verify-upstream.ts'
 
 const fixture = (run: (root: string, tree: string, manifest: any) => void) => {
@@ -198,7 +200,9 @@ const promotedFixture = (
     manifest.promotion = {
       patches: [...PROMOTION_PATCHES],
       additions: [...PROMOTION_ADDITIONS],
-      references: [...PROMOTION_REFERENCES]
+      references: [...PROMOTION_REFERENCES],
+      removals: [...PROMOTION_REMOVALS],
+      relocations: { ...PROMOTION_RELOCATIONS }
     }
     save(root, manifest)
     run(root, tree, manifest)
@@ -244,6 +248,50 @@ test('approved active documentation patches do not exempt other Markdown source'
   }
 })
 
+test('cleanup policy rejects unauthorized omissions and restored retired owners', () => {
+  promotedFixture((root, tree, manifest) => {
+    manifest.promotion.removals.push('src/App.tsx')
+    save(root, manifest)
+    expect(() => verifyPromoted(root, tree)).toThrow('Promoted fork policy mismatch')
+  })
+  promotedFixture((root, tree, manifest) => {
+    manifest.promotion.removals.pop()
+    save(root, manifest)
+    expect(() => verifyPromoted(root, tree)).toThrow('Promoted fork policy mismatch')
+  })
+  promotedFixture((root, tree, manifest) => {
+    manifest.promotion.relocations['site/demo/history.ts'] = 'scripts/forged.ts'
+    save(root, manifest)
+    expect(() => verifyPromoted(root, tree)).toThrow('Promoted fork policy mismatch')
+  })
+  for (const path of ['scripts/build-site.ts', 'telemetry/worker.ts', 'site/demo/history.ts']) {
+    promotedFixture((root, tree) => {
+      mkdirSync(dirname(join(root, path)), { recursive: true })
+      writeFileSync(join(root, path), 'restored retired owner')
+      expect(() => verifyPromoted(root, tree)).toThrow('Retired upstream surface still present')
+    })
+  }
+})
+
+test('relocated fixtures remain byte-checked against the original pin', () => {
+  promotedFixture((root, tree, manifest) => {
+    const path = 'site/demo/fixtures/panes.json'
+    const target = PROMOTION_RELOCATIONS[path]!
+    const data = Buffer.from('pinned fixture history\n')
+    const blob = createHash('sha1').update(`blob ${data.length}\0`).update(data).digest('hex')
+    manifest.entries.push({ path, blob, mode: '100644', disposition: 'acquired' })
+    save(root, manifest)
+    mkdirSync(dirname(join(root, target)), { recursive: true })
+    writeFileSync(join(root, target), data)
+    const candidateTree = tree + `100644 blob ${blob}\t${path}\0`
+    expect(verifyPromoted(root, candidateTree).dependencyPatches).toBe(2)
+    writeFileSync(join(root, target), 'unapproved fixture change')
+    expect(() => verifyPromoted(root, candidateTree)).toThrow('Unapproved promoted source patch')
+    rmSync(join(root, target))
+    expect(() => verifyPromoted(root, candidateTree)).toThrow()
+  })
+})
+
 test('promoted manifest cannot authorize its own extra UI patch', () => {
   promotedFixture((root, tree, manifest) => {
     manifest.promotion.patches.push('src/App.tsx')
@@ -271,6 +319,8 @@ for (const [name, mutate] of [
       writeFileSync(join(root, 'src/surprise.ts'), 'unexpected owner')
   ],
   ['retired app directory', (root: string) => mkdirSync(join(root, 'app'))],
+  ['unexpected website directory', (root: string) => mkdirSync(join(root, 'site'))],
+  ['unexpected receiver directory', (root: string) => mkdirSync(join(root, 'telemetry'))],
   [
     'source mode change',
     (root: string) => chmodSync(join(root, 'src/App.tsx'), 0o755)

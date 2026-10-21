@@ -10,7 +10,7 @@ it("the demo preserves native split paths, explicit swaps and focus while zoomed
       fetch, WebSocket, EventSource: class {},
       localStorage: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) },
     };
-    const transport = "../site/demo/transport.ts?pane-layout";
+    const transport = "./fixtures/demo/transport.ts?pane-layout";
     await import(transport);
     const demo = (globalThis as any).window;
     const post = async (path: string, body: unknown): Promise<Response> => demo.fetch(`/api/${path}`, { method: "POST", body: JSON.stringify(body) });

@@ -4,7 +4,7 @@
     {
       "id": "run-tests",
       "label": "Run tests",
-      "fillValue": "bun test",
+      "fillValue": "bun run test:unit",
       "description": "Run unit test suite",
       "category": "Testing",
       "mode": "shell"
@@ -19,9 +19,9 @@
     },
     {
       "id": "run-build",
-      "label": "Build",
-      "fillValue": "bun run build",
-      "description": "Run client and server build",
+      "label": "Build isolated client",
+      "fillValue": "bun scripts/bun-project.mjs --bun vite build --outDir .agent-state/qa/manual-client-build",
+      "description": "Build client without replacing the live dist directory",
       "category": "Build",
       "mode": "shell"
     },

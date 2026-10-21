@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { Terminal } from "@xterm/xterm";
-import { DemoHistory } from "../site/demo/history.ts";
+import { DemoHistory } from "./fixtures/demo/history.ts";
 import { matchHerdrWidths } from "../src/lib/terminalWidths.ts";
 import type { PaneFindRequest, PaneFindResponse } from "../shared/protocol.ts";
 
@@ -52,7 +52,7 @@ it("the demo transport loads log history by shell command and serves scroll/find
       fetch, WebSocket, EventSource: class {},
       localStorage: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) },
     };
-    const transport = "../site/demo/transport.ts?history";
+    const transport = "./fixtures/demo/transport.ts?history";
     await import(transport);
     const demo = (globalThis as any).window;
     const post = async (path: string, body: unknown): Promise<Response> => demo.fetch(`/api/${path}`, { method: "POST", body: JSON.stringify(body) });

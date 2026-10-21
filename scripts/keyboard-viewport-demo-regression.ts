@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium } from "playwright-core";
-import panes from "../site/demo/fixtures/panes.json";
+import panes from "./fixtures/demo/fixtures/panes.json";
 import { checkMobileViewport } from "./mobile-viewport-regression.ts";
 import { buildDemoApp } from "./demo-build.ts";
 import { chromePath } from "./chrome-path.ts";

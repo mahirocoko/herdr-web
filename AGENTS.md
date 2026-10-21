@@ -12,7 +12,9 @@ The adopted pin is `d918448647e41079c52047ffc96cdaac50ccba32` from `devswha/herd
 
 `src/`, its component CSS, fonts and fixtures own the UI. Keep the accepted source shell/anatomy and current fork brand. Imported client code uses double quotes and semicolons; follow each owner's conventions and avoid mass formatting. There is no active legacy React Router/DTO app. Adapt a legacy behavior only for an approved missing capability or a concrete evidence-backed advantage, through current owners rather than a parallel architecture.
 
-Use existing protocol, i18n, theme and focus primitives. Do not hand-edit generated types/themes. Subscription usage is hidden at rendering boundaries, not deleted from backend data. About is fork-owned; app-owned install/update controls are not authorization to enable upstream services. Browser PWA/service-worker functionality remains intact. The Letta integration describes local private history, not installed global hooks.
+Use existing protocol, i18n, theme and focus primitives. Do not hand-edit generated types/themes. Upstream marketing, installer, remote-bundle, telemetry-receiver and deploy/provisioning tools are retired; exact exclusions and fixture relocations are enforced by the source verifier. `scripts/fixtures/demo/` owns the retained fictional test harness, not a website. Do not restore removed tools to fix an obsolete test or treat pinned automation references as live policy. Retained compatibility owners and their consumers are documented in `docs/development.md`.
+
+Subscription usage is hidden at rendering boundaries, not deleted from backend data. About is fork-owned; app-owned install/update controls are not authorization to enable upstream services. Browser PWA/service-worker functionality remains intact. The Letta integration describes local private history, not installed global hooks.
 
 ## Runtime and privacy
 

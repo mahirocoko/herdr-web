@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fail, files as scan, read, repo } from "../scripts/source-scan.ts";
+import { DESIGN_BEGIN, DESIGN_END, renderDesign } from "../scripts/generate-themes.ts";
 
 // Client conventions from AGENTS.md and src/AGENTS.md that used to be prose only. Each failure
 // says what to change; server rules are in server/conventions.test.ts, repo-wide ones in
@@ -101,8 +102,16 @@ describe("DESIGN.md", () => {
       if (actual !== other) offenders.push(`${where} (${column}): DESIGN.md says ${other}, src/styles.css has ${actual ?? "nothing"}`);
     }
     fail(offenders, "DESIGN.md's token tables and src/styles.css disagree. Change both together: the token's value in src/styles.css (`:root`, `[data-theme=\"light\"]` or `[data-density=\"compact\"]`) and its row in DESIGN.md.");
-    // a reformatted table must not quietly turn this test off
-    expect(compared).toBeGreaterThan(150);
+    // The current guide owns a generated palette, not the retired component catalog.
+    // Check its exact generator output and both values of every generated token row;
+    // removing/reformatting a row must fail without a historical document-size threshold.
+    const design = read("DESIGN.md");
+    const generated = renderDesign(css, design);
+    expect(design).toBe(generated);
+    const palette = generated.slice(generated.indexOf(DESIGN_BEGIN), generated.indexOf(DESIGN_END));
+    const rows = [...palette.matchAll(/^\|[^\n]*`--[\w-]+`[^\n]*$/gm)].length;
+    expect(rows).toBeGreaterThan(0);
+    expect(compared).toBeGreaterThanOrEqual(rows * 2);
   });
 });
 

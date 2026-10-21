@@ -20,7 +20,11 @@ import {
   PROMOTION_REFERENCES
 } from './verify-upstream.ts'
 
-// One-time T195 promotion. No daemon, installer, transaction engine or automatic rollback.
+// Historical one-time T195 promotion, not the current cleanup generator.
+// Retired distribution owners must not be resurrected by an old promotion receipt.
+if (JSON.parse(readFileSync(resolve(import.meta.dir, '../SOURCE_MANIFEST.json'), 'utf8')).promotion?.removals?.length)
+  throw new Error('One-time promotion is retired after fork cleanup; use current source owners')
+// No daemon, installer, transaction engine or automatic rollback.
 const root = resolve(import.meta.dir, '..')
 const source = join(root, 'adoption/upstream')
 const backup = join(root, '.agent-state/private-backups/t195/source-cutover')

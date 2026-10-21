@@ -111,17 +111,16 @@ describe("fixed sleeps", () => {
 });
 
 describe("demo transport", () => {
-  // Every push to main redeploys the browser demo, whose server is site/demo/transport.ts: an
-  // endpoint or WS frame it does not answer is a 404 or a dropped frame there (AGENTS.md,
-  // Changing a contract).
-  const demo = stripComments(read("site/demo/transport.ts"));
+  // The fictional browser regression harness stands in for the server. Keep its
+  // route/frame coverage aligned with the app, independently of website deployment.
+  const demo = stripComments(read("scripts/fixtures/demo/transport.ts"));
   const exact = new Set([...demo.matchAll(/["'](\/api\/[^"'?]*)["']/g)].map((match) => match[1]!));
   const prefixes = [...demo.matchAll(/\.startsWith\(\s*["'](\/api\/[^"']+)["']\s*\)/g)].map((match) => match[1]!).filter((prefix) => prefix !== "/api/");
   const answered = (route: string) => exact.has(route) || prefixes.some((prefix) => route.startsWith(prefix));
 
   /**
    * Routes the demo leaves to its catch-all 404, each with its reason. A new route gets an answer in
-   * site/demo/transport.ts; add an entry here only for a route the browser never asks the demo for
+   * scripts/fixtures/demo/transport.ts; add an entry here only for a route the browser never asks the demo for
    * (server to server, or behind a state the demo never reaches).
    */
   const DEMO_404: Record<string, string> = {
@@ -144,7 +143,7 @@ describe("demo transport", () => {
     "/api/updates/check": "the demo's /api/updates says managed: false, so Settings offers no check",
     "/api/updates/install": "the demo's /api/updates says managed: false, so Settings offers no install",
   };
-  /** Client frames the demo needs no case for, each with its reason; any other frame gets a case in site/demo/transport.ts. */
+  /** Client frames the demo needs no case for, each with its reason; any other frame gets a case in scripts/fixtures/demo/transport.ts. */
   const DEMO_IGNORES: Record<string, string> = {
     "pty-ack": "the demo has no output flow control to release; its switch's default branch drops it",
   };
@@ -154,7 +153,7 @@ describe("demo transport", () => {
       .flatMap((file) => [...stripComments(read(file)).matchAll(/["'`](\/api\/[\w./-]*[\w.-])["'`]/g)].map((match) => match[1]!)));
     expect(routes.size).toBeGreaterThan(60);
     fail([...routes].filter((route) => !answered(route) && !(route in DEMO_404)).sort(),
-      "Answer these routes in route() in site/demo/transport.ts (with fixtures from site/demo/fixtures.ts), so the demo does not 404. Only a route the browser never asks the demo for (server to server, or behind a state the demo never reaches) goes into DEMO_404 in scripts/conventions.test.ts instead, with its reason.");
+      "Answer these routes in route() in scripts/fixtures/demo/transport.ts (with fixtures from scripts/fixtures/demo/fixtures.ts), so the demo does not 404. Only a route the browser never asks the demo for (server to server, or behind a state the demo never reaches) goes into DEMO_404 in scripts/conventions.test.ts instead, with its reason.");
     fail(Object.keys(DEMO_404).filter((route) => answered(route) || !routes.has(route)),
       "Remove these entries from DEMO_404 in scripts/conventions.test.ts: the demo answers them now, or the server no longer has them.");
   });
@@ -166,7 +165,7 @@ describe("demo transport", () => {
     expect(frames.length).toBeGreaterThan(10);
     const cases = new Set([...demo.matchAll(/\bcase\s+"([\w-]+)"\s*:/g)].map((match) => match[1]!));
     fail(frames.filter((frame) => !cases.has(frame) && !(frame in DEMO_IGNORES)),
-      "Handle these ClientMessage frames (shared/protocol.ts) in the demo socket's switch in site/demo/transport.ts, answering the way the server would. A frame that needs no answer goes into DEMO_IGNORES in scripts/conventions.test.ts with its reason.");
+      "Handle these ClientMessage frames (shared/protocol.ts) in the demo socket's switch in scripts/fixtures/demo/transport.ts, answering the way the server would. A frame that needs no answer goes into DEMO_IGNORES in scripts/conventions.test.ts with its reason.");
     fail(Object.keys(DEMO_IGNORES).filter((frame) => cases.has(frame) || !frames.includes(frame)),
       "Remove these entries from DEMO_IGNORES in scripts/conventions.test.ts: the demo handles them now, or the protocol no longer has them.");
   });

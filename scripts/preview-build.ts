@@ -12,7 +12,7 @@ import { build } from './demo-build.ts'
 
 const root = join(import.meta.dir, '..')
 
-// Keep the same sequence as scripts/build-site.ts without its marketing/network work.
+// Fixture transport runs before the app module; this preview has no install manifest.
 export const preparePreviewHtml = (input: string): string => {
   let html = input.replace(/\s*<link rel="manifest"[^>]*>/, '')
   html = html.replace(/(href|src)="\/(?!\/)/g, '$1="./')
@@ -59,7 +59,7 @@ export async function buildPreview(): Promise<void> {
     )
   }
   mkdirSync(out, { recursive: true })
-  copyFileSync(join(root, 'site/demo/index.html'), join(demo, 'index.html'))
+  copyFileSync(join(root, 'scripts/fixtures/demo/index.html'), join(demo, 'index.html'))
   copyPreviewRootAssets(out)
   const manifest = JSON.parse(
     readFileSync(join(root, 'SOURCE_MANIFEST.json'), 'utf8')

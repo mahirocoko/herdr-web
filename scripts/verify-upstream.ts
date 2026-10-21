@@ -169,6 +169,124 @@ export const verifyCandidate = (root: string, tree: string) => {
   }
 }
 
+// Human-approved fork cleanup. Exact paths only; original pinned inventory stays intact.
+export const PROMOTION_REMOVALS = [
+  'docs/brand/icon-source.png',
+  'docs/media/banner.png',
+  'docs/media/chat-loop.gif',
+  'docs/media/look-chat.png',
+  'docs/media/look-prompt.png',
+  'docs/media/look-terminal.png',
+  'docs/media/readme/alerts.webp',
+  'docs/media/readme/attach.webp',
+  'docs/media/readme/layout.webp',
+  'docs/media/readme/open.webp',
+  'docs/media/readme/terminal.webp',
+  'docs/media/readme/worktree.webp',
+  'install.ps1',
+  'install.sh',
+  'scripts/build-remote-bundle.ts',
+  'scripts/build-site.ts',
+  'scripts/ci-preinstalled-tools.sh',
+  'scripts/ci-runner-route.sh',
+  'scripts/ci-runner-route.test.ts',
+  'scripts/ci-setup.test.ts',
+  'scripts/demo-fixtures.ts',
+  'scripts/film/camera.ts',
+  'scripts/film/capture.ts',
+  'scripts/film/footage.ts',
+  'scripts/film/hand.ts',
+  'scripts/film/render.ts',
+  'scripts/film/site-assets.ts',
+  'scripts/film/stage.ts',
+  'scripts/film/timeline.ts',
+  'scripts/fresh-install-docker.ts',
+  'scripts/install-star.test.ts',
+  'scripts/readme-media/banner.html',
+  'scripts/readme-media/banner.ts',
+  'scripts/readme-media/capture.ts',
+  'scripts/readme-media/compose.ts',
+  'scripts/readme-media/record.ts',
+  'scripts/readme-media/stage.ts',
+  'scripts/release-guards.test.ts',
+  'scripts/release-guards.ts',
+  'scripts/remote-bundle-smoke.ts',
+  'scripts/self-hosted-runner.test.ts',
+  'scripts/self-hosted-runner/Dockerfile',
+  'scripts/self-hosted-runner/README.md',
+  'scripts/self-hosted-runner/entrypoint.sh',
+  'scripts/self-hosted-runner/run.sh',
+  'scripts/telemetry-deployed.test.ts',
+  'scripts/pages-gate.test.ts',
+  'scripts/windows-host-qa.ts',
+  'scripts/windows-install-e2e.ps1',
+  'scripts/windows-install.test.ps1',
+  'site/assets/chat-folded.jpg',
+  'site/assets/chat-folded.webp',
+  'site/assets/chat-step-1.jpg',
+  'site/assets/chat-step-1.webp',
+  'site/assets/chat-step-2.jpg',
+  'site/assets/chat-step-2.webp',
+  'site/assets/chat-step-3.jpg',
+  'site/assets/chat-step-3.webp',
+  'site/assets/chat-step-4.jpg',
+  'site/assets/chat-step-4.webp',
+  'site/assets/chat-step-5.jpg',
+  'site/assets/chat-step-5.webp',
+  'site/assets/chat-todo.jpg',
+  'site/assets/chat-todo.webp',
+  'site/assets/chat-worked-open.jpg',
+  'site/assets/chat-worked-open.webp',
+  'site/assets/grain.png',
+  'site/assets/mark-ink.png',
+  'site/assets/mark-paper.png',
+  'site/assets/og.png',
+  'site/assets/phone-approve.png',
+  'site/assets/phone-approve.webp',
+  'site/assets/phone-chat.png',
+  'site/assets/phone-chat.webp',
+  'site/assets/phone-sessions.png',
+  'site/assets/phone-sessions.webp',
+  'site/assets/phone-terminal.png',
+  'site/assets/phone-terminal.webp',
+  'site/assets/prompt.jpg',
+  'site/assets/prompt.webp',
+  'site/assets/sidebar.jpg',
+  'site/assets/sidebar.webp',
+  'site/assets/strip-dark.jpg',
+  'site/assets/strip-dark.webp',
+  'site/assets/strip-korean.jpg',
+  'site/assets/strip-korean.webp',
+  'site/assets/strip-light.jpg',
+  'site/assets/strip-light.webp',
+  'site/assets/terminal.jpg',
+  'site/assets/terminal.webp',
+  'site/googlec8861932279eca6b.html',
+  'site/index.html',
+  'site/media/chat-loop.jpg',
+  'site/media/chat-loop.mp4',
+  'site/media/herdr-web-ui-film.jpg',
+  'site/media/herdr-web-ui-film.mp4',
+  'site/zh/index.html',
+  'telemetry/README.md',
+  'telemetry/deployed.json',
+  'telemetry/schema.sql',
+  'telemetry/worker.test.ts',
+  'telemetry/worker.ts',
+  'telemetry/wrangler.toml',
+]
+export const PROMOTION_RELOCATIONS: Record<string, string> = {
+  'site/demo/fixtures.ts': 'scripts/fixtures/demo/fixtures.ts',
+  'site/demo/fixtures/agents.json': 'scripts/fixtures/demo/fixtures/agents.json',
+  'site/demo/fixtures/commands.json': 'scripts/fixtures/demo/fixtures/commands.json',
+  'site/demo/fixtures/machines.json': 'scripts/fixtures/demo/fixtures/machines.json',
+  'site/demo/fixtures/panes.json': 'scripts/fixtures/demo/fixtures/panes.json',
+  'site/demo/fixtures/terminal.json': 'scripts/fixtures/demo/fixtures/terminal.json',
+  'site/demo/history.ts': 'scripts/fixtures/demo/history.ts',
+  'site/demo/index.html': 'scripts/fixtures/demo/index.html',
+  'site/demo/transport.ts': 'scripts/fixtures/demo/transport.ts',
+}
+
 export const PROMOTION_REFERENCES = [
   '.github/actions/setup-ci/action.yml',
   '.github/workflows/ci.yml',
@@ -195,9 +313,6 @@ export const PROMOTION_PATCHES = [
   'src/lib/i18n.ja.ts',
   'src/lib/i18n.zh.ts',
   'scripts/conventions.test.ts',
-  'scripts/pages-gate.test.ts',
-  'scripts/ci-setup.test.ts',
-  'scripts/install-star.test.ts',
   'scripts/line-endings.test.ts',
   'src/lib/markdownHtml.test.ts',
   '.gitignore',
@@ -244,6 +359,45 @@ export const PROMOTION_PATCHES = [
   'public/icons/icon-maskable-192.png',
   'public/icons/icon-maskable-512.png',
   'public/icons/badge-96.png',
+  'scripts/agent-skill-menu-demo-regression.ts',
+  'scripts/chat-greeting-demo-regression.ts',
+  'scripts/check.ts',
+  'scripts/composer-fit-demo-regression.ts',
+  'scripts/context-menu-inputs-demo-regression.ts',
+  'scripts/deep-link-demo-regression.ts',
+  'scripts/demo-history.test.ts',
+  'scripts/demo-pane-layout.test.ts',
+  'scripts/demo-submit.test.ts',
+  'scripts/demo-tabs.test.ts',
+  'scripts/droplet-demo-regression.ts',
+  'scripts/fixed-sleeps.json',
+  'scripts/fixed-sleeps.ts',
+  'scripts/font-swap-demo-regression.ts',
+  'scripts/held-rows-demo-regression.ts',
+  'scripts/key-bar-customization-demo-regression.ts',
+  'scripts/key-bar-hold-repeat-regression.ts',
+  'scripts/keyboard-viewport-demo-regression.ts',
+  'scripts/narrow-pane-demo-regression.ts',
+  'scripts/palette-machines-demo-regression.ts',
+  'scripts/pane-input-focus-demo-regression.ts',
+  'scripts/pane-paging-demo-regression.ts',
+  'scripts/phone-split-grid-demo-regression.ts',
+  'scripts/plugin-actions-demo-regression.ts',
+  'scripts/prompt-dock-demo-regression.ts',
+  'scripts/render-crash-demo-regression.ts',
+  'scripts/restored-draft-demo-regression.ts',
+  'scripts/settings-pages-demo-regression.ts',
+  'scripts/shortcut-exact-modifiers-demo-regression.ts',
+  'scripts/sidebar-activity-demo-regression.ts',
+  'scripts/sidebar-branch-line-demo-regression.ts',
+  'scripts/sidebar-tokens-demo-regression.ts',
+  'scripts/touch-long-press-demo-regression.ts',
+  'shared/telemetry.ts',
+  'src/lib/settings.test.ts',
+  'site/demo/fixtures.ts',
+  'site/demo/transport.ts',
+  'site/demo/index.html',
+  'site/demo/history.ts',
 ]
 export const PROMOTION_ADDITIONS = [
   'scripts/docs-contracts.test.ts',
@@ -279,6 +433,8 @@ export const PROMOTION_ADDITIONS = [
   'src/lib/terminalFitPause.test.ts',
   'src/components/SettingsDialog.test.tsx',
   'scripts/brand.test.ts',
+  'scripts/browser-lane.test.ts',
+  'scripts/upstream-cleanup.test.ts',
 ]
 const promotedPath = (path: string) =>
   path === 'LICENSE'
@@ -312,9 +468,17 @@ export const verifyPromoted = (root: string, tree: string) => {
   if (
     !same(manifest.promotion?.patches, PROMOTION_PATCHES) ||
     !same(manifest.promotion?.additions, PROMOTION_ADDITIONS) ||
-    !same(manifest.promotion?.references, PROMOTION_REFERENCES)
+    !same(manifest.promotion?.references, PROMOTION_REFERENCES) ||
+    !same(manifest.promotion?.removals, PROMOTION_REMOVALS) ||
+    JSON.stringify(manifest.promotion?.relocations) !== JSON.stringify(PROMOTION_RELOCATIONS)
   )
     throw new Error('Promoted fork policy mismatch')
+  // A manifest cannot authorize extra exclusions or restore retired distribution code.
+  for (const path of [...PROMOTION_REMOVALS, ...Object.keys(PROMOTION_RELOCATIONS)]) {
+    safePath(path)
+    if (lstatSync(join(root, path), { throwIfNoEntry: false }))
+      throw new Error(`Retired upstream surface still present: ${path}`)
+  }
   const expected = new Map<string, { blob: string; mode: string }>()
   const entries = tree
     .split('\0')
@@ -375,13 +539,14 @@ export const verifyPromoted = (root: string, tree: string) => {
       throw new Error(
         `Excluded upstream automation was activated: ${entry.path}`,
       )
+    if (PROMOTION_REMOVALS.includes(entry.path)) continue
     const inert =
       entry.disposition === 'excluded' &&
       PROMOTION_REFERENCES.includes(entry.path)
     if (entry.disposition === 'excluded' && !inert) continue
     const path = inert
       ? `docs/upstream-reference/automation/${entry.path}`
-      : promotedPath(entry.path)
+      : (PROMOTION_RELOCATIONS[entry.path] ?? promotedPath(entry.path))
     if (!inert) expected.set(path, entry)
     const absolute = join(root, path)
     const stat = lstatSync(absolute)
@@ -469,6 +634,8 @@ export const verifyPromoted = (root: string, tree: string) => {
       throw new Error(`Missing fork owner: ${path}`)
   for (const path of [
     'app',
+    'site',
+    'telemetry',
     'adoption/upstream',
     'react-router.config.ts',
     'tsconfig.node.json',

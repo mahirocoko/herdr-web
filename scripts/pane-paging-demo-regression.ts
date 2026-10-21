@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium, type Page } from "playwright-core";
-import panes from "../site/demo/fixtures/panes.json";
+import panes from "./fixtures/demo/fixtures/panes.json";
 import { buildDemoApp } from "./demo-build.ts";
 import { openSettingsPage } from "./settings-page.ts";
 import { appFaces } from "./app-faces.ts";
@@ -26,7 +26,7 @@ const scrollGeometry = (page: Page) => page.evaluate(() => {
     returnControls: [...document.querySelectorAll<HTMLElement>(".pane-frame.is-current .chat-new-messages")].map((button) => ({ label: button.getAttribute("aria-label"), text: button.textContent, className: button.className, height: button.getBoundingClientRect().height })),
     loading: node.querySelector(".chat-inline-state")?.textContent ?? null };
 });
-// The demo's api pane opens mid-turn and ends that turn 4.5 s later (site/demo/transport.ts): the
+// The demo's api pane opens mid-turn and ends that turn 4.5 s later (scripts/fixtures/demo/transport.ts): the
 // answer lands and the work block folds, so the transcript's height changes under the reader. Paging
 // asserts exact scroll positions, so it starts only once that turn has ended and its fold has settled.
 async function demoTurnEnded(page: Page): Promise<void> {

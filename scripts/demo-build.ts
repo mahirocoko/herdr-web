@@ -32,7 +32,7 @@ export async function build(app: string, testHooks = true): Promise<void> {
   const client = Bun.spawnSync([process.execPath, "--bun", join(repo, "node_modules/.bin/vite"), "build", "--base", "./", "--outDir", app, "--emptyOutDir", "--logLevel", "warn"], { cwd: repo, env: { ...process.env, HERDR_TEST_HOOKS: testHooks ? "1" : "0" } });
   if (client.exitCode !== 0) throw new Error(`the demo's client did not build:\n${new TextDecoder().decode(client.stderr)}`);
   const transport = await Bun.build({
-    entrypoints: [join(repo, "site/demo/transport.ts")], outdir: app,
+    entrypoints: [join(repo, "scripts/fixtures/demo/transport.ts")], outdir: app,
     naming: "demo-transport.js", target: "browser",
     define: { __APP_VERSION__: JSON.stringify(JSON.parse(readFileSync(join(repo, "package.json"), "utf8")).version) },
   });

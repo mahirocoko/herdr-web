@@ -194,7 +194,7 @@ export function maxRuns(env: Record<string, string | undefined>, cores = availab
 
 /**
  * What a run calls its checkout to the runs that share its slots. A self-hosted CI runner shares its
- * loopback with the other runner containers of its PC (scripts/self-hosted-runner/run.sh), and every
+ * loopback with other runners of its PC, and every
  * one of them checks out to the same path, so there the runner's name (RUNNER_NAME, set by the
  * Actions runner) is part of it: two runners are two checkouts.
  */

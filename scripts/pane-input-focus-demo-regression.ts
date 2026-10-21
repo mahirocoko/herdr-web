@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { chromium } from "playwright-core";
 import { buildDemoApp } from "./demo-build.ts";
 import { openSettingsPage } from "./settings-page.ts";
-import panes from "../site/demo/fixtures/panes.json";
+import panes from "./fixtures/demo/fixtures/panes.json";
 
 const app = mkdtempSync(join(tmpdir(), "herdr-input-focus-demo-"));
 try {
