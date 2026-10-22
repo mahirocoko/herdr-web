@@ -292,6 +292,31 @@ test('relocated fixtures remain byte-checked against the original pin', () => {
   })
 })
 
+test('hardening backports permit only their exact source and test owners', () => {
+  const backports = [
+    'server/pty/session.ts', 'server/pty/pty-host.mjs', 'server/pty/session.test.ts',
+    'server/paste.ts', 'server/paste.test.ts',
+    'server/codex-images.ts', 'server/codex-images.test.ts',
+    'server/files.ts', 'server/files.test.ts'
+  ]
+  for (const path of [...backports, 'server/unapproved-hardening.ts']) {
+    promotedFixture((root, tree, manifest) => {
+      const data = Buffer.from('pinned backend fixture\n')
+      const blob = createHash('sha1').update(`blob ${data.length}\0`).update(data).digest('hex')
+      manifest.entries.push({ path, blob, mode: '100644', disposition: 'acquired' })
+      save(root, manifest)
+      mkdirSync(dirname(join(root, path)), { recursive: true })
+      writeFileSync(join(root, path), 'focused hardening backport\n')
+      const candidateTree = tree + `100644 blob ${blob}\t${path}\0`
+      if (backports.includes(path)) {
+        expect(verifyPromoted(root, candidateTree).patched).toContain(path)
+      } else {
+        expect(() => verifyPromoted(root, candidateTree)).toThrow('Unapproved promoted source patch')
+      }
+    })
+  }
+})
+
 test('promoted manifest cannot authorize its own extra UI patch', () => {
   promotedFixture((root, tree, manifest) => {
     manifest.promotion.patches.push('src/App.tsx')

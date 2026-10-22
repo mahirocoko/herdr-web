@@ -1,4 +1,10 @@
 {
+  "0.11.2": {
+    "en": { "fixed": ["Isolate terminal tokens, validate raster uploads and bound Git file listings."] },
+    "ko": { "fixed": ["터미널 자식 프로세스에 Web 토큰을 전달하지 않고, 이미지 업로드를 검증하며 Git 파일 목록의 크기와 실행 시간을 제한합니다."] },
+    "ja": { "fixed": ["端末の子プロセスへのWebトークン継承を防ぎ、画像アップロードを検証し、Gitファイル一覧のサイズと実行時間を制限しました。"] },
+    "zh": { "fixed": ["防止终端子进程继承 Web 令牌，验证图片上传，并限制 Git 文件列表的大小和执行时间。"] }
+  },
   "0.11.1": {
     "en": { "fixed": ["Keep Letta Chat readable by fitting complete turns and tool results within page limits."] },
     "ko": { "fixed": ["완전한 턴과 도구 결과가 페이지 제한 안에 들어가도록 하여 Letta Chat을 읽을 수 있게 유지합니다."] },

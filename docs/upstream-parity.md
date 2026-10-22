@@ -55,6 +55,29 @@ Owners here are relative to `server/` except shared contracts.
 
 ## Fork adaptations and observations
 
+### Focused upstream hardening backports
+
+The snapshot pin remains `d918448647e41079c52047ffc96cdaac50ccba32`. Three
+bounded fixes are backported from candidate
+`818c461710e3765f5ef2c4dd4dbc119deab0b015`; this is not a full snapshot upgrade:
+
+- [#1562](https://github.com/devswha/herdr-web-ui/pull/1562): remove
+  `HERDR_WEB_TOKEN` after merging the PTY sidecar environment and again in the
+  real-Node host before spawning its attach child.
+- [#1599](https://github.com/devswha/herdr-web-ui/pull/1599): name raster uploads
+  from exact byte signatures and refuse unsupported raster claims before pane
+  lookup or writes. This is signature validation, not decoding or malware scanning;
+  generic named uploads keep their existing behavior.
+- [#1570](https://github.com/devswha/herdr-web-ui/pull/1570): isolate Git file
+  inventories from inherited repository variables, disable fsmonitor, and bound
+  both listing paths to 16 MiB and three seconds. Failed, oversized or incomplete
+  listings fall back to the existing bounded filesystem walk.
+
+Exact source/test paths are declared in the promotion patch policy and its
+independent verifier. These changes do not alter native input authority, private
+state identity, Pi subagent support, branding or the source-only launcher. Unit
+fixtures do not establish physical-device or real-host acceptance.
+
 The fork preserves the source shell and restores its own terminal-mark brand. Letta's official provider mark is locally vendored with provenance. Terminal Pause fit detaches/unwatches and retains the drained grid without stopping the process; Resume Live obtains fresh source authority. Scoped desktop/mobile and light/dark rendered checks covered the selected settings and pause/resume behavior, not every inventory state.
 
 Letta history uses `letta.ts`, `letta-store.ts` and `letta-parser.ts` through the source conversation path. Read-only HTTP checks covered newest/older pages, 304 and 409; separate rendered checks covered desktop/mobile and visible older history. Image previews and full-output fetching remain unavailable. Distinct native message identities are preserved even when text repeats; native serialization/display duplication remains unresolved.

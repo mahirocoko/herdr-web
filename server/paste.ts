@@ -15,6 +15,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { imageType } from "./codex-images.ts";
 import { paneGet } from "./herdr/client.ts";
 import { MAX_ATTACHMENT_BYTES } from "../shared/attachments.ts";
 
@@ -111,6 +112,11 @@ export class PasteImageError extends Error {
  * path the prompt should reference. Validation failures are PasteImageError (the
  * route maps them to the error envelope); an unknown pane is the herdr-shaped
  * `pane_not_found` HerdrError like every other pane route.
+ *
+ * A PNG, JPEG, GIF or WebP claim is named after the signature of its bytes, since the
+ * browser often infers the type from the file name; bytes with none of those signatures
+ * are refused before the pane is looked up or anything is written. This is a signature
+ * check, not a decode: it does not prove the rest of the file is a valid image.
  */
 export async function savePaneImage(options: {
   paneId: string;
@@ -119,8 +125,8 @@ export async function savePaneImage(options: {
   /** the file's own name: any type is accepted, and one that is not a pasted image keeps it */
   name?: string;
 }): Promise<string> {
-  const imageExtension = EXTENSIONS[options.contentType];
-  const named = imageExtension === undefined ? storedName(options.name) : null;
+  const rasterClaim = EXTENSIONS[options.contentType] !== undefined;
+  const named = rasterClaim ? null : storedName(options.name);
   // cheap pre-check: reject the ENCODED length before allocating the decode buffer,
   // so an oversized body never costs a second copy of itself in memory
   if (options.dataBase64.length > MAX_ENCODED_BYTES) throw tooLarge();
@@ -129,6 +135,11 @@ export async function savePaneImage(options: {
     throw new PasteImageError("empty_image", "file is empty", 400);
   }
   if (data.byteLength > MAX_IMAGE_BYTES) throw tooLarge();
+  const detected = rasterClaim ? imageType(data) : null;
+  const imageExtension = detected === null ? undefined : EXTENSIONS[detected];
+  if (rasterClaim && imageExtension === undefined) {
+    throw new PasteImageError("invalid_image", "file does not contain a supported raster image", 400);
+  }
 
   const pane = await paneGet(options.paneId);
 

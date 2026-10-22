@@ -8,6 +8,23 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.11.2] - 2026-10-22
+
+### Fixed
+
+- Keep the Web bearer token out of PTY sidecar and attach-child environments,
+  while preserving the native socket and terminal configuration.
+- Validate PNG, JPEG, GIF and WebP upload signatures before pane lookup or writes,
+  naming raster files by their bytes rather than their declared MIME type.
+- Bound Git file inventories by output size and deadline, isolate inherited
+  repository variables and disable fsmonitor hooks; retain bounded-walk fallback.
+
+### Boundaries
+
+- Focused upstream backports (#1562, #1599 and #1570), not a snapshot upgrade.
+  Preserve the source pin, fork brand, Pi subagents, native input guards and Push
+  identity. Source-only release; publication does not update running instances.
+
 ## [0.11.1] - 2026-10-22
 
 ### Fixed
@@ -5067,7 +5084,9 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.11.2...HEAD
+[0.11.2]: https://github.com/mahirocoko/herdr-web/compare/v0.11.1...v0.11.2
+[0.11.1]: https://github.com/mahirocoko/herdr-web/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/mahirocoko/herdr-web/compare/v0.10.3...v0.11.0
 [0.10.4]: https://github.com/mahirocoko/herdr-web/compare/v0.10.3...v0.10.4
 [0.10.3]: https://github.com/mahirocoko/herdr-web/compare/v0.10.2...v0.10.3
