@@ -8,6 +8,21 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-10-22
+
+### Fixed
+
+- Keep Letta Chat readable when the latest 50 turns exceed the parser budget by
+  selecting fewer complete turns within the existing byte and record limits.
+- Include exact tool results in page budgets and preserve cursor bridging and
+  retained-history invalidation as page boundaries shrink or expand.
+
+### Boundaries
+
+- A single turn that exceeds the page budget still reports an explicit history
+  limit; records are not silently skipped or split. Source-only release, with no
+  change to native agent input, private history identity or Push subscriptions.
+
 ## [0.11.0] - 2026-10-21
 
 ### Added
