@@ -114,6 +114,107 @@ test("streams a >8MiB store, pages all turns without omission, keeps append iden
   expect(appended.version).not.toBe(newest.version);
   expect(appended.turns).toHaveLength(50);
 });
+test("byte-bounded pages and before/since bridges preserve every turn", () => {
+  const { root, file } = fixture(40, "x".repeat(250_000));
+  const newest = lettaConversationPage(pane, root);
+  expect(newest.turns.length).toBeLessThan(50);
+  const all = [...newest.turns];
+  let cursor = newest.cursor;
+  while (cursor) {
+    const older = lettaConversationPage(pane, root, { before: cursor });
+    expect(older.turns.length).toBeGreaterThan(0);
+    all.unshift(...older.turns);
+    cursor = older.cursor;
+  }
+  expect(all.map((turn) => turn.parts[0])).toEqual(
+    Array.from({ length: 40 }, (_, n) => [
+      { kind: "text", text: `question ${n}` } as const,
+      { kind: "text", text: `answer ${n}`, phase: "commentary" } as const,
+    ]).flat(),
+  );
+  expect(
+    lettaConversationPage(pane, root, { from: newest.cursor! }).turns,
+  ).toEqual(newest.turns);
+  appendFileSync(
+    file,
+    message("u40", "user", text("new question"), {
+      padding: "x".repeat(1_000_000),
+    }),
+  );
+  const poll = lettaConversationPage(pane, root, { from: newest.cursor! });
+  expect(poll.history_id).toBe(newest.history_id);
+  const bridge = lettaConversationPage(pane, root, {
+    before: poll.cursor!,
+    since: newest.cursor!,
+  });
+  expect(bridge.cursor).toBe(newest.cursor);
+  expect([...bridge.turns, ...poll.turns]).toHaveLength(newest.turns.length + 1);
+});
+test("tool result bytes participate in whole-turn page selection", () => {
+  const { root, file } = fixture(30);
+  for (let n = 0; n < 30; n++) {
+    appendFileSync(file, message(`a${n}`, "assistant", [{
+      type: "toolCall",
+      id: `call-${n}`,
+      name: "Bash",
+      arguments: {},
+    }]));
+    appendFileSync(
+      file,
+      message(`r${n}`, "toolResult", text(`output ${n}`), {
+        toolCallId: `call-${n}`,
+        padding: "x".repeat(400_000),
+      }),
+    );
+  }
+  let page = lettaConversationPage(pane, root);
+  expect(page.turns.length).toBeLessThan(50);
+  const outputs: string[] = [];
+  for (;;) {
+    for (const turn of page.turns)
+      for (const part of turn.parts)
+        if (part.kind === "tool") outputs.push(part.output!);
+    if (!page.cursor) break;
+    page = lettaConversationPage(pane, root, { before: page.cursor });
+  }
+  expect(outputs.sort()).toEqual(
+    Array.from({ length: 30 }, (_, n) => `output ${n}`).sort(),
+  );
+});
+test("entry-bounded pages preserve complete assistant groups", () => {
+  const { root, file } = fixture(0);
+  for (let n = 0; n < 6; n++) {
+    appendFileSync(file, message(`u${n}`, "user", text(`question ${n}`)));
+    for (let k = 0; k < 900; k++)
+      appendFileSync(file, message(`a${n}-${k}`, "assistant", text("work")));
+  }
+  const newest = lettaConversationPage(pane, root);
+  expect(newest.cursor).not.toBeNull();
+  const older = lettaConversationPage(pane, root, { before: newest.cursor! });
+  expect(older.cursor).toBeNull();
+  expect([...older.turns, ...newest.turns]).toHaveLength(12);
+});
+test("edits outside a reduced newest page invalidate held history", () => {
+  const { root, file } = fixture(40, "x".repeat(250_000));
+  const first = lettaConversationPage(pane, root);
+  // a16 belongs to the nominal last 50 turns, but not the byte-bounded page.
+  appendFileSync(file, message("a16", "assistant", text("revised older answer")));
+  expect(() =>
+    lettaConversationPage(pane, root, { from: first.cursor! }),
+  ).toThrow(HistoryChanged);
+});
+test("expanding newest pages still invalidate edits to previously held older turns", () => {
+  const { root, file } = fixture(40, "x".repeat(250_000));
+  const first = lettaConversationPage(pane, root);
+  for (let n = 20; n < 40; n++) {
+    appendFileSync(file, message(`u${n}`, "user", text(`question ${n}`)));
+    appendFileSync(file, message(`a${n}`, "assistant", text(`answer ${n}`)));
+  }
+  appendFileSync(file, message("a16", "assistant", text("revised older answer")));
+  expect(() =>
+    lettaConversationPage(pane, root, { from: first.cursor! }),
+  ).toThrow(HistoryChanged);
+});
 test("later revision of old assistant stays before its tool result across pages", () => {
   const { root, file } = fixture(80);
   appendFileSync(
@@ -373,8 +474,8 @@ test("source paneTranscript resolves validated internal watch path without cwd/s
   );
   expect(resolved).toMatchObject({ source: "letta-transcript", path: file });
 });
-test("generic authenticated route emits only public fields, ETag/304 and 409", async () => {
-  const { root } = fixture();
+test("generic authenticated route emits byte-bounded pages, only public fields, ETag/304 and 409", async () => {
+  const { root } = fixture(40, "x".repeat(250_000));
   stubSnapshot();
   const call = async (query = "", authenticated = true, etag?: string) => {
     const request = new Request(
@@ -410,6 +511,8 @@ test("generic authenticated route emits only public fields, ETag/304 and 409", a
     "turns",
   ]);
   expect(value.source).toBe("letta-transcript");
+  expect(value.turns.length).toBeGreaterThan(0);
+  expect(value.turns.length).toBeLessThan(50);
   for (const privateValue of [
     id,
     scope,

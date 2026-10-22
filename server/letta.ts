@@ -57,6 +57,7 @@ interface Index {
   bytes: number;
   records: number;
   topology: string[];
+  newestStart: number;
 }
 const indexes = new Map<string, Index>();
 const object = (value: unknown): value is Record<string, unknown> =>
@@ -181,6 +182,7 @@ function scan(store: LettaStoreRead, previous?: Index): Scan {
         bytes: 0,
         records: 0,
         topology: [],
+        newestStart: 0,
       };
   let pending = Buffer.alloc(0);
   let base = index.end;
@@ -272,16 +274,56 @@ function project(
   changes: Scan["changes"],
 ): RecognizedConversation {
   const turns = groups(index);
+  const results = new Map<string, Row>();
+  let model: string | null = null;
+  for (const row of index.rows.values()) {
+    if (row.result) results.set(row.result, row);
+    if (row.model) model = row.model;
+  }
+  // Admit whole turns, including their exact tool results, from newest to oldest.
+  // A single oversized turn is still unsupported; never skip or split its records.
+  const window = (end: number, floor: number) => {
+    let start = end;
+    let bytes = 0;
+    const selected = new Set<Row>();
+    while (start > Math.max(floor, end - LETTA_PAGE_TURNS)) {
+      const additions = new Set<Row>();
+      for (const row of turns[start - 1]!) {
+        if (!selected.has(row)) additions.add(row);
+        for (const call of row.calls) {
+          const result = results.get(call);
+          if (result && !selected.has(result)) additions.add(result);
+        }
+      }
+      const addedBytes = [...additions].reduce(
+        (sum, row) => sum + row.length + 1,
+        0,
+      );
+      if (
+        selected.size + additions.size > LETTA_PARSE_ENTRIES ||
+        bytes + addedBytes > LETTA_PARSE_BYTES
+      ) {
+        if (start === end) limit();
+        break;
+      }
+      for (const row of additions) selected.add(row);
+      bytes += addedBytes;
+      start--;
+    }
+    return { start, selected };
+  };
+  const newest = window(turns.length, 0);
   // The pinned consumer only polls its newest held page. It retains older pages
   // until a 409/history change, so an out-of-window logical edit must invalidate
   // their generation before accepting ANY held cursor. Recent streaming updates
-  // remain in the response window and must not cause this reload loop.
+  // remain in the response window and must not cause this reload loop. Use both
+  // boundaries: a shrinking or expanding byte window can expose retained edits.
   if (changes.size > 0) {
     const olderRows = new Set<string>();
     const olderCalls = new Set<string>();
     for (const turn of turns.slice(
       0,
-      Math.max(0, turns.length - LETTA_PAGE_TURNS),
+      Math.max(index.newestStart, newest.start),
     )) {
       for (const row of turn) {
         olderRows.add(row.id);
@@ -300,6 +342,7 @@ function project(
       }
     }
   }
+  index.newestStart = newest.start;
   const cursorOf = (cursor: string): number => {
     const separator = cursor.lastIndexOf(":");
     const offset = Number(cursor.slice(separator + 1));
@@ -314,35 +357,17 @@ function project(
     return offset;
   };
   let end = turns.length;
-  let start: number;
+  let chosen = newest;
   if (page.before !== undefined) {
     end = cursorOf(page.before);
     const floor = page.since === undefined ? 0 : cursorOf(page.since);
     if (floor > end) throw new HistoryChanged();
-    start = Math.max(floor, end - LETTA_PAGE_TURNS);
-  } else {
-    const held = page.from === undefined ? null : cursorOf(page.from);
-    const newest = Math.max(0, end - LETTA_PAGE_TURNS);
-    start = held !== null && held >= newest ? held : newest;
+    chosen = window(end, floor);
+  } else if (page.from !== undefined) {
+    chosen = window(end, Math.max(cursorOf(page.from), newest.start));
   }
-  const selected = new Set(turns.slice(start, end).flat());
-  const results = new Map<string, Row>();
-  let model: string | null = null;
-  for (const row of index.rows.values()) {
-    if (row.result) results.set(row.result, row);
-    if (row.model) model = row.model;
-  }
-  for (const row of [...selected])
-    for (const call of row.calls) {
-      const result = results.get(call);
-      if (result) selected.add(result);
-    }
+  const { start, selected } = chosen;
   const rows = [...index.rows.values()].filter((row) => selected.has(row));
-  if (
-    rows.length > LETTA_PARSE_ENTRIES ||
-    rows.reduce((sum, row) => sum + row.length + 1, 0) > LETTA_PARSE_BYTES
-  )
-    limit();
   const parsed = parseLettaTranscript(
     rows.map((row) => readRecord(store, row)).join("\n") + "\n",
   );
