@@ -36,7 +36,7 @@ describe("changelog fold", () => {
   test("the folded section is what the release notes read, and nothing of it leaks into Unreleased", () => {
     const folded = foldChangelog(changelog, [fragment("a.md", "### Fixed\n- New fix.\n")], "1.2.3", "2026-02-03");
     const told = { fixed: ["Fix."] };
-    const summaries = JSON.stringify({ "1.2.3": { en: told, ko: told, ja: told, zh: told, tr: told } });
+    const summaries = JSON.stringify({ "1.2.3": { en: told, th: told, tr: told } });
     expect(releaseNotes("1.2.3", "1.2.3", 'version = "1.2.3"', folded, summaries)).toEndWith(
       `<details><summary>Full changelog</summary>\n\n### Added\n- Old feature. ([#1](${pull(1)}))\n\n### Fixed\n- Old fix.\n  Continued.\n- New fix.\n\n</details>`);
     expect(folded).toContain("## [Unreleased]\n\n## [1.2.3]");

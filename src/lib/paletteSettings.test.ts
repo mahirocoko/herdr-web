@@ -45,7 +45,7 @@ describe("settings entries", () => {
 
   it("finds Appearance by the literal word palette in every language, and by the language's own word", () => {
     // the translated alias is a bag of search words, so it keeps the English word next to its own, as it keeps openai and ssh
-    const words = { en: "palette", ko: "팔레트", ja: "パレット", zh: "调色板" } as const;
+    const words = { en: "palette", th: "พาเลต" } as const;
     for (const [language, word] of Object.entries(words) as [keyof typeof words, string][]) {
       const pages = pagesIn((key, vars) => translate(language, key, vars));
       expect({ language, literal: rankByTitle("palette", pages), own: rankByTitle(word, pages) }).toEqual({ language, literal: ["appearance"], own: ["appearance"] });

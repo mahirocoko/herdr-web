@@ -68,8 +68,8 @@ describe("rankPanes", () => {
     ] satisfies TabInfo[];
     const roster = [...panes, pane("delta", { label: "Logs", tab_id: "t1b" })];
     expect(ids(rankPanes("Tab 2", roster, workspaces, { tabs: numbered }))).toEqual(["delta"]);
-    expect(ids(rankPanes("탭 2", roster, workspaces, { tabs: numbered, t: (key, vars) => translate("ko", key, vars) }))).toEqual(["delta"]);
-    expect(ids(rankPanes("탭 2", roster, workspaces, { tabs: numbered }))).toEqual([]);
+    expect(ids(rankPanes("แท็บ 2", roster, workspaces, { tabs: numbered, t: (key, vars) => translate("th", key, vars) }))).toEqual(["delta"]);
+    expect(ids(rankPanes("แท็บ 2", roster, workspaces, { tabs: numbered }))).toEqual([]);
     // the shown name adds to the label herdr holds, it does not replace it
     expect(ids(rankPanes("2", roster, workspaces, { tabs: numbered }))).toContain("delta");
     expect(ids(rankPanes("Tab 2", roster, workspaces, { tabs }))).toEqual([]);

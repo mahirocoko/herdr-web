@@ -182,9 +182,7 @@ describe("replaceIfUnchanged", () => {
 
 describe("dictationLocale", () => {
   it("maps the UI language to a recognition locale when the browser names none", () => {
-    expect(dictationLocale("auto", "system", "ko", [])).toBe("ko-KR");
-    expect(dictationLocale("auto", "system", "ja", [])).toBe("ja-JP");
-    expect(dictationLocale("auto", "system", "zh", [])).toBe("zh-CN");
+    expect(dictationLocale("auto", "system", "th", [])).toBe("th-TH");
     expect(dictationLocale("auto", "system", "en", [])).toBe("en-US");
   });
 
@@ -192,7 +190,7 @@ describe("dictationLocale", () => {
     // a Hungarian browser gets an English UI, but is heard in Hungarian
     expect(dictationLocale("auto", "system", "en", ["hu-HU", "en-US"])).toBe("hu-HU");
     expect(dictationLocale("auto", "system", "en", ["de"])).toBe("de");
-    expect(dictationLocale("auto", "system", "ko", ["de-DE", "ko-KR"])).toBe("de-DE");
+    expect(dictationLocale("auto", "system", "th", ["de-DE", "th-TH"])).toBe("de-DE");
     // not a language tag: the UI language
     expect(dictationLocale("auto", "system", "en", ["*"])).toBe("en-US");
     expect(dictationLocale("auto", "system", "en", ["hu"])).toBe("hu");
@@ -200,16 +198,14 @@ describe("dictationLocale", () => {
   });
 
   it("keeps the UI language's locale on auto when the browser's first language is a UI language", () => {
-    expect(dictationLocale("auto", "system", "ko", ["ko", "en"])).toBe("ko-KR");
+    expect(dictationLocale("auto", "system", "th", ["th", "en"])).toBe("th-TH");
+    expect(dictationLocale("auto", "system", "th", ["th-TH"])).toBe("th-TH");
     expect(dictationLocale("auto", "system", "en", ["en-GB"])).toBe("en-US");
-    expect(dictationLocale("auto", "system", "ja", ["ja"])).toBe("ja-JP");
-    expect(dictationLocale("auto", "system", "zh", ["zh-TW"])).toBe("zh-CN");
-    expect(dictationLocale("auto", "system", "zh", ["zh-Hant-TW"])).toBe("zh-CN");
     expect(dictationLocale("auto", "system", "en", ["en-US", "hu"])).toBe("en-US");
   });
 
   it("keeps a UI language chosen by hand on auto, and a chosen dictation language over both", () => {
-    expect(dictationLocale("auto", "ko", "ko", ["hu-HU"])).toBe("ko-KR");
+    expect(dictationLocale("auto", "th", "th", ["hu-HU"])).toBe("th-TH");
     expect(dictationLocale("hu-HU", "en", "en", ["en-US"])).toBe("hu-HU");
     expect(dictationLocale("pt-BR", "system", "en", ["de-DE"])).toBe("pt-BR");
   });
@@ -219,7 +215,7 @@ describe("transcribeLanguage", () => {
   it("sends the two-letter subtag, or the UI language for a tag without one", () => {
     expect(transcribeLanguage("hu-HU", "en")).toBe("hu");
     expect(transcribeLanguage("zh-TW", "en")).toBe("zh");
-    expect(transcribeLanguage("DE", "ko")).toBe("de");
+    expect(transcribeLanguage("DE", "th")).toBe("de");
     expect(transcribeLanguage("fil-PH", "en")).toBe("en");
   });
 });

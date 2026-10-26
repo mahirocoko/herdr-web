@@ -23,17 +23,17 @@ const render = (code: string, message: string, languages: string[], serverOwned 
 
 describe("a pending row's refusal note", () => {
   it("says a held-input refusal in the reader's language, not the raw English reason", () => {
-    const held = translate("ko", "Not sent: send or discard the held input first.");
+    const held = translate("th", "Not sent: send or discard the held input first.");
     expect(held).not.toBe("Not sent: send or discard the held input first.");
-    const html = render("held_input", "send or discard the held input first", ["ko"]);
+    const html = render("held_input", "send or discard the held input first", ["th"]);
     expect(html).toContain(held);
     expect(html).not.toContain("send or discard the held input first");
   });
 
   it("keeps Send now on a saved copy whose send never left the browser, and says it was not sent (regression #541)", () => {
-    const note = translate("ko", "Not sent: the connection dropped before this message left. Send it again.");
+    const note = translate("th", "Not sent: the connection dropped before this message left. Send it again.");
     expect(note).not.toBe("Not sent: the connection dropped before this message left. Send it again.");
-    const html = render("not_transmitted", "the connection dropped before this message was sent", ["ko"], false);
+    const html = render("not_transmitted", "the connection dropped before this message was sent", ["th"], false);
     expect(html).toContain(note);
     expect(html).toContain("pending-message-send");
     expect(html).not.toContain("the connection dropped before this message was sent");

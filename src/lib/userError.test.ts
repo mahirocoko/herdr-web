@@ -69,8 +69,8 @@ describe("userErrorMessage", () => {
   });
 
   it("answers in the UI language", () => {
-    setCurrentLanguage("ko");
-    expect(userErrorMessage(new TypeError("Failed to fetch")).message).toBe(translate("ko", "Can't reach the PC. Check your connection, then try again."));
+    setCurrentLanguage("th");
+    expect(userErrorMessage(new TypeError("Failed to fetch")).message).toBe(translate("th", "Can't reach the PC. Check your connection, then try again."));
     expect(userErrorMessage(new TypeError("Failed to fetch")).message).not.toBe("Can't reach the PC. Check your connection, then try again.");
   });
 });
@@ -113,8 +113,8 @@ describe("userFailure", () => {
   });
 
   it("answers in the UI language", () => {
-    setCurrentLanguage("ko");
-    expect(userFailure(api(500, "disk full")).cause).toBe(translate("ko", "PC disk is full"));
+    setCurrentLanguage("th");
+    expect(userFailure(api(500, "disk full")).cause).toBe(translate("th", "PC disk is full"));
     expect(userFailure(api(500, "disk full")).cause).not.toBe("PC disk is full");
   });
 });

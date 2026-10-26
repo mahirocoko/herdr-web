@@ -123,16 +123,16 @@ describe("notes as they arrive", () => {
 });
 
 describe("a release's summary", () => {
-  const summary = { en: { new: ["A thing."] }, ko: { new: ["기능 하나."] } };
+  const summary = { en: { new: ["A thing."] }, th: { new: ["ฟีเจอร์ใหม่"] } };
 
   it("is told in the app's language, else in English", () => {
-    expect(summaryFor({ summary }, "ko")).toEqual({ new: ["기능 하나."] });
-    expect(summaryFor({ summary }, "ja")).toEqual({ new: ["A thing."] });
+    expect(summaryFor({ summary }, "th")).toEqual({ new: ["ฟีเจอร์ใหม่"] });
+    expect(summaryFor({ summary: { en: summary.en } }, "th")).toEqual({ new: ["A thing."] });
   });
 
   it("is none for a release that wrote none: its changelog section is what there is", () => {
-    expect(summaryFor({}, "ko")).toBeNull();
-    expect(summaryFor({ summary: { ko: { new: ["기능 하나."] } } }, "ja")).toBeNull();
+    expect(summaryFor({}, "th")).toBeNull();
+    expect(summaryFor({ summary: { th: { new: ["ฟีเจอร์ใหม่"] } } }, "en")).toBeNull();
   });
 
   it("is written in the languages the app has", () => {
@@ -141,7 +141,7 @@ describe("a release's summary", () => {
 
   it("arrives with its release, and without what is not a line under a list of such a language", () => {
     const sent = { revision: "b".repeat(40), omitted: 0, releases: [
-      { version: "0.4.0", date: null, notes: "text", summary: { en: { new: ["A thing.", 7, " "], fixed: "A fix." }, ko: 7, fr: { new: ["Une chose."] }, ja: { new: [] } } },
+      { version: "0.4.0", date: null, notes: "text", summary: { en: { new: ["A thing.", 7, " "], fixed: "A fix." }, th: 7, fr: { new: ["Une chose."] }, ja: { new: [] } } },
       { version: "0.3.9", date: null, notes: "text", summary: "short" },
       { version: "0.3.8", date: null, notes: "text", summary: { en: "In short." } },
     ] };

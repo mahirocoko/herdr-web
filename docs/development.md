@@ -11,6 +11,7 @@ The root is one source-native application adopted from the pinned upstream tree,
 | React shell and selection                             | `src/App.tsx`, `src/main.tsx`                                                                                |
 | Sidebar, Chat, composer, terminal, files and settings | `src/components/` and adjacent component CSS                                                                 |
 | Shared styling, themes and settings                   | `src/styles.css`, `src/lib/`                                                                                 |
+| Display localization                                  | `src/lib/i18n.ts`, `src/lib/i18n.th.ts`; release languages in `shared/update.ts`                             |
 | HTTP/WebSocket server and source composition          | `server/index.ts`, `server/core/`                                                                            |
 | Fork ingress/capability policy                        | `server/fork-policy.ts`                                                                                      |
 | Native RPC and Node PTY                               | `server/herdr/`, `server/pty/`                                                                               |
@@ -23,6 +24,8 @@ The root is one source-native application adopted from the pinned upstream tree,
 | Source provenance                                     | `SOURCE_MANIFEST.json`, `scripts/verify-upstream.ts`                                                         |
 
 Herdr owns native processes and sessions. Real Node owns `@lydell/node-pty`; do not import that native addon into Bun. Browser serialization exposes presentation tokens, not raw native session/state-label records. Put HTTP/WS changes in shared contracts and both consumers, with a focused regression test.
+
+The fork's display languages are English and Thai. `system` resolves only those two browser languages and otherwise falls back to English; stored upstream `ko`, `ja` and `zh` choices sanitize back to `system`. Dictation locale remains a separate setting and may use other supported speech locales. Every literal `t(…)`/`tt(…)` key must exist in `i18n.th.ts` with identical placeholders. App-visible release notes require English for historical fallback, while every newly cut release must provide both English and Thai summaries.
 
 ## Safe checks
 
@@ -92,7 +95,7 @@ Run app/reference servers only in verified named visible project terminals. Do n
 
 Theme colors live in `src/styles.css`. Inspect `scripts/generate-themes.ts`, then use `bun run generate:themes --check` to detect drift. A deliberate regeneration updates the generated theme module, DESIGN's marked table, HTML theme-color and manifest colors. Do not edit generated copies by hand. Protocol generation similarly belongs to `scripts/generate-protocol-types.ts` and `bun run generate:types --check`.
 
-Keep imported double-quote/semicolon style and component anatomy. New UI strings need the existing Korean, Japanese and Simplified Chinese entries with matching placeholders. Format only touched owners with already available tooling; do not install formatters or reformat the repository as incidental work.
+Keep imported double-quote/semicolon style and component anatomy. New UI strings need a natural Thai entry with matching placeholders in `src/lib/i18n.th.ts`; English remains the source key and fallback. Format only touched owners with already available tooling; do not install formatters or reformat the repository as incidental work.
 
 ## Retired upstream distribution and retained test owners
 

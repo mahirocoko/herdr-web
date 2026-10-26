@@ -181,13 +181,13 @@ describe("telemetry settings snapshot", () => {
       chatFontSize: 11,
       chatWidth: "wide",
       autoSendQueued: false,
-      language: "ko",
+      language: "th",
       alertDone: "always",
       usageCount: "left",
       usageGlance: "session",
       defaultView: "chat",
       voiceInput: "on",
-      voiceLanguage: "ko-KR",
+      voiceLanguage: "th-TH",
       wrapCode: true,
       markdownWidth: "full",
       paletteLight: "catppuccin",
@@ -214,13 +214,13 @@ describe("telemetry settings snapshot", () => {
       chatFontSize: 11,
       chatWidth: "wide",
       autoSendQueued: false,
-      language: "ko",
+      language: "th",
       alertDone: "always",
       usageCount: "left",
       usageGlance: "session",
       defaultView: "chat",
       voiceInput: "on",
-      voiceLanguage: "ko-KR",
+      voiceLanguage: "th-TH",
       wrapCode: true,
       markdownWidth: "full",
       paletteLight: "catppuccin",
@@ -661,9 +661,12 @@ describe("quick replies row", () => {
 });
 
 describe("language", () => {
-  it("keeps a listed language and loads a removed one (Turkish) as System", () => {
-    expect(sanitizeSettings({ language: "ko" }).language).toBe("ko");
-    expect(sanitizeSettings({ language: "tr" }).language).toBe("system");
+  it("keeps English and Thai, and migrates removed languages to System", () => {
+    expect(sanitizeSettings({ language: "en" }).language).toBe("en");
+    expect(sanitizeSettings({ language: "th" }).language).toBe("th");
+    for (const language of ["ko", "ja", "zh", "tr"]) {
+      expect(sanitizeSettings({ language }).language).toBe("system");
+    }
   });
 });
 

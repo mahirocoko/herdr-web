@@ -154,7 +154,7 @@ describe("a release told as patch notes", () => {
   const written = JSON.stringify({
     "0.4.0": {
       en: { new: ["  A new thing.  ", "", 7, "Another."], fixed: ["A fix."], removed: ["Not a list the app has."] },
-      ko: { new: ["새 기능."], improved: [], fixed: "수정." },
+      th: { new: ["ฟีเจอร์ใหม่"], improved: [], fixed: "แก้ไข" },
       ja: {},
       fr: { new: ["Une chose."] },
     },
@@ -167,7 +167,7 @@ describe("a release told as patch notes", () => {
 
   it("reads each release's lines, under the lists and in the languages the app has", () => {
     expect([...releaseSummaries(written)]).toEqual([
-      ["0.4.0", { en: { new: ["A new thing.", "Another."], fixed: ["A fix."] }, ko: { new: ["새 기능."] } }],
+      ["0.4.0", { en: { new: ["A new thing.", "Another."], fixed: ["A fix."] }, th: { new: ["ฟีเจอร์ใหม่"] } }],
       ["0.3.10", { en: { improved: ["Ten is better."] } }],
     ]);
   });
@@ -188,7 +188,7 @@ describe("a release told as patch notes", () => {
   it("puts a release's summary beside its notes, and leaves a release without one as it was", () => {
     const notes = releaseNotes(CHANGELOG, "0.3.8", "0.4.0", undefined, releaseSummaries(written));
     expect(notes.releases.map((release) => [release.version, release.summary])).toEqual([
-      ["0.4.0", { en: { new: ["A new thing.", "Another."], fixed: ["A fix."] }, ko: { new: ["새 기능."] } }],
+      ["0.4.0", { en: { new: ["A new thing.", "Another."], fixed: ["A fix."] }, th: { new: ["ฟีเจอร์ใหม่"] } }],
       ["0.3.10", { en: { improved: ["Ten is better."] } }],
       ["0.3.9", undefined],
     ]);
@@ -213,21 +213,22 @@ describe("this repository's own summaries", () => {
   /** patch notes are read at a glance: a line longer than this is a sentence from the changelog */
   const LINE = 90;
 
-  it("tells every release since in every language the app has", () => {
+  it("tells every release since in English so newer display languages can fall back", () => {
     const missing = released.filter((version) => compareVersions(version, BEFORE)! > 0)
-      .flatMap((version) => SUMMARY_LANGUAGES.filter((language) => !summaries.get(version)?.[language]).map((language) => `${version} ${language}`));
+      .filter((version) => !summaries.get(version)?.en);
     expect(missing).toEqual([]);
   });
 
-  it("holds nothing but short lines for releases the changelog names, the same lists in every language", () => {
+  it("holds only supported languages and matching short lists for every translation present", () => {
     const raw = JSON.parse(text) as Record<string, Record<string, Record<string, string[]>>>;
     for (const [version, entry] of Object.entries(raw)) {
       expect(released).toContain(version);
-      expect(Object.keys(entry).sort()).toEqual([...SUMMARY_LANGUAGES].sort());
+      expect(entry.en).toBeDefined();
+      expect(Object.keys(entry).every((language) => SUMMARY_LANGUAGES.includes(language as typeof SUMMARY_LANGUAGES[number]))).toBe(true);
       // what was read is what was written: nothing dropped, cut or trimmed
       expect(summaries.get(version) as unknown).toEqual(entry);
       const shape = (language: string) => SUMMARY_GROUPS.map((group) => entry[language]![group]?.length ?? 0);
-      for (const language of SUMMARY_LANGUAGES) {
+      for (const language of Object.keys(entry)) {
         expect([version, language, shape(language)]).toEqual([version, language, shape("en")]);
         for (const line of Object.values(entry[language]!).flat()) expect(line.length).toBeLessThanOrEqual(LINE);
       }

@@ -8,6 +8,33 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-26
+
+### Added
+
+- Add a complete Thai interface dictionary and `th-TH` locale support across
+  settings, formatting, voice input, browser fixtures and app-visible update
+  notes.
+
+### Changed
+
+- Keep English and Thai as the fork's display languages. System follows the
+  first supported browser language; saved Korean, Japanese and Simplified
+  Chinese choices migrate back to System.
+- Retire the three acquired upstream dictionaries and keep historical release
+  summaries in English when a Thai summary was not written for that release.
+
+### Fixed
+
+- Keep the app-visible v0.12.0 release summaries within the bounded one-line
+  patch-note limit used by current releases.
+
+### Boundaries
+
+- This changes display language ownership only. Dictation can still use its
+  separately selected supported locale, and runtime/private-state behavior is
+  unchanged from v0.12.0.
+
 ## [0.12.0] - 2026-10-26
 
 ### Added
@@ -5115,7 +5142,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/mahirocoko/herdr-web/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/mahirocoko/herdr-web/compare/v0.11.2...v0.12.0
 [0.11.2]: https://github.com/mahirocoko/herdr-web/compare/v0.11.1...v0.11.2
 [0.11.1]: https://github.com/mahirocoko/herdr-web/compare/v0.11.0...v0.11.1

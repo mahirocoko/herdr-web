@@ -42,7 +42,7 @@ try {
         owned.add(beta.workspace.workspace_id);
         const context = await browser.newContext({
           ...(width === 390 ? devices["iPhone 14"] : {}),
-          viewport: { width, height: 900 }, locale: "ko-KR", reducedMotion: "reduce",
+          viewport: { width, height: 900 }, locale: "th-TH", reducedMotion: "reduce",
         });
         const gate = Promise.withResolvers<void>();
         try {
@@ -53,7 +53,7 @@ try {
               if (this === localStorage && key === "herdr-web-ui:recent-directories:local"
                 && JSON.parse(value).includes(project)) console.info("RECENTS_SEEDED");
             };
-            localStorage.setItem("herdr-web-ui:settings", JSON.stringify({ theme, language: "ko" }));
+            localStorage.setItem("herdr-web-ui:settings", JSON.stringify({ theme, language: "th" }));
             localStorage.setItem("herdr-web-ui:new-session-agent", "codex");
             localStorage.setItem("herdr-web-ui:recent-directories:remote", '["/remote-only/project"]');
             // a folder kept from before: the two the snapshot's panes are in go behind it
@@ -123,7 +123,7 @@ try {
           };
           await openNew();
           const dialog = page.getByRole("dialog");
-          const chip = dialog.getByRole("button", { name: `${project} 폴더 사용`, exact: true });
+          const chip = dialog.getByRole("button", { name: `ใช้โฟลเดอร์ ${project}`, exact: true });
           await chip.waitFor();
           await dialog.locator(".agent-picker-trigger", { hasText: "Codex" }).waitFor();
           const chips = dialog.locator('[role="group"] .new-session-folder-chip:not(.new-session-folder-more)');
@@ -135,7 +135,7 @@ try {
             if (await more.count() === 0) return shown;
             assert.notEqual(width, 390, "a phone swipes its row and has no +N");
             await more.click();
-            const menu = page.getByRole("menu", { name: "최근 폴더", exact: true });
+            const menu = page.getByRole("menu", { name: "โฟลเดอร์ล่าสุด", exact: true });
             await menu.waitFor();
             const rest = await titles(menu.getByRole("menuitem"));
             assert.equal(await more.innerText(), `+${rest.length}`);
@@ -145,10 +145,10 @@ try {
             return [...shown, ...rest];
           };
           const pickFolder = async (path: string): Promise<void> => {
-            const button = dialog.getByRole("button", { name: `${path} 폴더 사용`, exact: true });
+            const button = dialog.getByRole("button", { name: `ใช้โฟลเดอร์ ${path}`, exact: true });
             if (await button.count() > 0) { await button.click(); return; }
             await more.click();
-            await page.getByRole("menu", { name: "최근 폴더", exact: true }).getByRole("menuitem").and(page.locator(`[title="${path}"]`)).click();
+            await page.getByRole("menu", { name: "โฟลเดอร์ล่าสุด", exact: true }).getByRole("menuitem").and(page.locator(`[title="${path}"]`)).click();
           };
           const submit = dialog.locator('button[type="submit"]');
           assert.deepEqual(await offered(), ["/older/one", other, project], "folders only seen in panes come behind the one kept");
@@ -158,7 +158,7 @@ try {
           else assert.equal(await dialog.locator(".new-session-folder-chips").evaluate((node) => node.scrollWidth > node.clientWidth), false);
           assert.equal(await dialog.getByRole("button", { name: /remote-only/ }).count(), 0);
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-          await dialog.getByRole("button", { name: "창 닫기", exact: true }).focus();
+          await dialog.getByRole("button", { name: "ปิดช่อง", exact: true }).focus();
           await page.keyboard.press("Shift+Tab");
           assert.equal(await dialog.evaluate((node) => node.contains(document.activeElement)), true);
           await dialog.screenshot({ path: join(evidence, `recent-folders-${width}-${theme}.png`) });
@@ -202,7 +202,7 @@ try {
           failCreate = true;
           await pickFolder(other);
           await submit.click();
-          await dialog.getByRole("alert").filter({ hasText: "폴더를 찾을 수 없습니다" }).waitFor();
+          await dialog.getByRole("alert").filter({ hasText: "ไม่พบโฟลเดอร์" }).waitFor();
           assert.equal(await chips.first().isEnabled(), true);
           assert.equal(await chips.first().getAttribute("title"), project);
           assert.equal((await offered()).length, 4);

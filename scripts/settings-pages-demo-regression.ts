@@ -7,9 +7,7 @@ import panes from "./fixtures/demo/fixtures/panes.json";
 import { buildDemoApp } from "./demo-build.ts";
 import { DEMO_FILE_PREVIEW_SCRIPT } from "./demo-file-preview.ts";
 import { openSettingsPage } from "./settings-page.ts";
-import { KO } from "../src/lib/i18n.ko.ts";
-import { JA } from "../src/lib/i18n.ja.ts";
-import { ZH } from "../src/lib/i18n.zh.ts";
+import { TH } from "../src/lib/i18n.th.ts";
 import { terminalTheme } from "../src/lib/settings.ts";
 import { THEME_IDS, type ThemeId } from "../src/lib/themes.ts";
 import baseline from "../src/lib/themes.legacy-baseline.json";
@@ -73,9 +71,9 @@ try {
   try {
     const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? chromium.executablePath(), headless: true, args: ["--no-sandbox"] });
     try {
-      for (const [width, language] of [[390, "en"], [320, "en"], [320, "ko"], [320, "ja"], [320, "zh"]] as const) {
+      for (const [width, language] of [[390, "en"], [320, "en"], [320, "th"]] as const) {
         const started = performance.now();
-        const strings: Record<string, string> = language === "ko" ? KO : language === "ja" ? JA : language === "zh" ? ZH : {};
+        const strings: Record<string, string> = language === "th" ? TH : {};
         const label = (name: string): string => strings[name] ?? name;
         const context = await browser.newContext({ viewport: { width, height: 760 }, isMobile: true, hasTouch: true, locale: language });
         try {

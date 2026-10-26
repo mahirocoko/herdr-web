@@ -69,7 +69,7 @@ export interface TelemetrySettings {
   suggestionChip: boolean;
   showThinking: boolean;
   keepScreenOn: boolean;
-  language: "system" | "en" | "zh" | "ja" | "ko";
+  language: "system" | "en" | "th";
   alertsOn: boolean;
   alertInput: boolean;
   alertDone: "off" | "long" | "always";
@@ -139,7 +139,7 @@ const TELEMETRY_SETTINGS_VALIDATORS = {
   suggestionChip: booleanValue,
   showThinking: booleanValue,
   keepScreenOn: booleanValue,
-  language: oneOf(["system", "en", "zh", "ja", "ko"]),
+  language: oneOf(["system", "en", "th"]),
   alertsOn: booleanValue,
   alertInput: booleanValue,
   alertDone: oneOf(["off", "long", "always"]),

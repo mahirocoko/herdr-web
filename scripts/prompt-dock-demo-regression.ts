@@ -904,7 +904,7 @@ try {
         console.log("PASS with a coarse pointer a key (Enter, Space, the card's field) or a mouse press hands the focus to the message box and never leaves it on the page; a tap, an unnamed click or a tap misnamed a mouse does not");
       }
 
-      for (const language of ["ko", "ja", "zh"]) {
+      for (const language of ["th"]) {
         // the translated placeholders fit the phone's message box on one line too
         const { page, close } = await open({ width: 390, height: 844, touch: true, prompt: PLAN, language });
         try {
@@ -912,7 +912,7 @@ try {
           assert.ok(fit.width <= fit.room, `${language}: "${fit.text}" is ${fit.width}px in ${fit.room}px`);
         } catch (error) { await preserveFailure(page, error); } finally { await close(); }
       }
-      console.log("PASS the placeholder with a custom answer fits a 390px message box in ko, ja and zh");
+      console.log("PASS the Thai placeholder with a custom answer fits a 390px message box");
     } finally { await browser.close(); }
   } finally { server.stop(); }
 } finally { rmSync(app, { recursive: true, force: true }); }

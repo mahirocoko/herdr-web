@@ -260,7 +260,7 @@ export function applyDictation(value: string, selection: { start: number; end: n
 export function dictationLocale(setting: DictationLanguage, uiSetting: LanguageSetting, uiLanguage: Language, browserLanguages: readonly string[]): string {
   if (setting !== "auto") return setting;
   const browser = browserLanguages[0]?.trim();
-  if (uiSetting === "system" && browser && /^[a-z]{2}(?:-[a-z0-9]{2,8})*$/i.test(browser) && !/^(?:en|ko|ja|zh)(?:-|$)/i.test(browser)) return browser;
+  if (uiSetting === "system" && browser && /^[a-z]{2}(?:-[a-z0-9]{2,8})*$/i.test(browser) && !/^(?:en|th)(?:-|$)/i.test(browser)) return browser;
   return LOCALE_TAGS[uiLanguage];
 }
 

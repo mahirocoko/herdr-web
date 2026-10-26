@@ -278,7 +278,7 @@ describe("managed source updates with real Git repositories and builds", () => {
     const none = { revision: await git(root, "rev-parse", "HEAD"), version: null, previous_version: null, installed_at: null, releases: [], omitted: 0 };
     expect(versioned.installed).toEqual(none);
 
-    const summary = { en: { new: ["A second release."], fixed: ["The first one."] }, ko: { new: ["두 번째 릴리스."], fixed: ["첫 번째 릴리스."] } };
+    const summary = { en: { new: ["A second release."], fixed: ["The first one."] }, th: { new: ["รุ่นที่สอง"], fixed: ["รุ่นแรก"] } };
     cut("0.2.0", ["0.2.0", "0.1.0"], { "0.2.0": summary, "0.1.0": { en: { new: ["The first."] } } });
     const second = await release("second", "v0.2.0");
     await versioned.request("check");

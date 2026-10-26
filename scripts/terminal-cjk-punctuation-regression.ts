@@ -52,10 +52,11 @@ setInterval(() => {}, 1 << 30);
   server = createServer({ port: 0, hostname: "127.0.0.1", token: "", stateDir: join(state, "server"),
     tailscaleOwner: null, usage: new UsageService(undefined, []) });
   browser = await chromium.launch({ executablePath: chromePath(), headless: true, args: ["--no-sandbox"] });
-  // a Chinese page, as the report's: under zh every fullwidth mark is trimmed, not only ，（）
+  // A Chinese browser locale reproduces the report while the app remains in a supported language:
+  // every fullwidth mark is trimmed, not only ，（）.
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: "zh-CN" });
   await context.addInitScript(() => localStorage.setItem("herdr-web-ui:settings", JSON.stringify({
-    language: "zh", defaultView: "terminal", alertsOn: false,
+    language: "en", defaultView: "terminal", alertsOn: false,
   })));
   const page = await context.newPage();
   page.setDefaultTimeout(10000);
