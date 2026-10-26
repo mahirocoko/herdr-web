@@ -78,6 +78,27 @@ independent verifier. These changes do not alter native input authority, private
 state identity, Pi subagent support, branding or the source-only launcher. Unit
 fixtures do not establish physical-device or real-host acceptance.
 
+Three later changes are also adapted narrowly without repinning the snapshot:
+
+- [#1568](https://github.com/devswha/herdr-web-ui/pull/1568), commit
+  `ee2daec00af8579c3a6c4d0de4fc1b51a317a47e`: durable same-directory private-state
+  replacement for the device registry, VAPID key pair and Push subscriptions.
+  Retired endpoint telemetry keeps its cheaper existing write path.
+- [#1952](https://github.com/devswha/herdr-web-ui/pull/1952), commit
+  `e299f81a1daeddc4c69f967d6c382733705218b0`: compact tool-image previews on work
+  lines. This fork prefetches only immutable opaque refs and retains the existing
+  image route and lightbox; mutable/no-store refs still wait for an opened row.
+- [#1842](https://github.com/devswha/herdr-web-ui/pull/1842), commit
+  `6f322874322201a9644b3bbd92d1cbd05b5c4c8c`: selected bounded-detail and refresh
+  UX ideas applied to the existing Pi owner, not a Claude detail architecture.
+  The Pi route reports page/freshness evidence, revalidates parent and child after
+  reads, and remains GET-only with opaque parent-scoped IDs.
+
+These adaptations do not adopt Ovis branding, Rust PTY/native applications,
+installers, managed updates, public Push relay or release/provisioning tooling.
+They preserve the existing VAPID identity and subscriptions; source/unit checks
+are not physical Push delivery, rendered UI or human acceptance evidence.
+
 The fork preserves the source shell and restores its own terminal-mark brand. Letta's official provider mark is locally vendored with provenance. Terminal Pause fit detaches/unwatches and retains the drained grid without stopping the process; Resume Live obtains fresh source authority. Scoped desktop/mobile and light/dark rendered checks covered the selected settings and pause/resume behavior, not every inventory state.
 
 Letta history uses `letta.ts`, `letta-store.ts` and `letta-parser.ts` through the source conversation path. Read-only HTTP checks covered newest/older pages, 304 and 409; separate rendered checks covered desktop/mobile and visible older history. Image previews and full-output fetching remain unavailable. Distinct native message identities are preserved even when text repeats; native serialization/display duplication remains unresolved.
@@ -86,7 +107,7 @@ A separately authorized fresh Letta conversation demonstrated Send/reply, Stop/i
 
 Windows native bootstrap CI covered frozen setup, typechecks, launcher help and focused data-drive/profile NTFS/private-ACL fixtures on the checked source candidate. It did not start the app against a real user's Windows Herdr host. A real data-drive startup failed the unsafe-ancestor check; the actual ACL cause is unknown. Profile-local NTFS outside OneDrive is a recommended next attempt, not passed host evidence. Physical Android install/launch and Push delivery remain open despite the 0.10.3 source launch-redirect correction.
 
-Pi subagents use `pi-subagents.ts`, `pi-subagent-routes.ts` and `components/PiSubagents.tsx` for parent-scoped inline cards, live activity and read-only child conversations. A scoped local Mac session demonstrated running-to-completed transitions and the inline/detail presentation received human acceptance. This is not universal provider/device certification. Live status requires a compatible [mahiro-pi](https://github.com/mahirocoko/mahiro-pi) observer explicitly enabled for that session; unknown/stale evidence never becomes a completion claim. Windows live snapshot writing, child controls, image/full-output retrieval and token streaming are not established by this feature. See the [user guide](guide.md#pi-subagents) and [observer contract](development.md#pi-subagent-observer).
+Pi subagents use `pi-subagents.ts`, `pi-subagent-routes.ts` and `components/PiSubagents.tsx` for parent-scoped inline cards, live activity and read-only child conversations. Detail reads now distinguish initial load, refresh, stale retained content, unreadable/missing identity, empty pages and bounded/earlier pages; the response carries successful-read and omitted-branch evidence without exposing native paths. A scoped local Mac session previously demonstrated running-to-completed transitions and the earlier inline/detail presentation received human acceptance; the new detail and thumbnail adaptations have source/unit evidence only. This is not universal provider/device certification. Live status requires a compatible [mahiro-pi](https://github.com/mahirocoko/mahiro-pi) observer explicitly enabled for that session; unknown/stale evidence never becomes a completion claim. Windows live snapshot writing, child controls, image/full-output retrieval and token streaming are not established by this feature. See the [user guide](guide.md#pi-subagents) and [observer contract](development.md#pi-subagent-observer).
 
 ## Evidence gates and unresolved decisions
 

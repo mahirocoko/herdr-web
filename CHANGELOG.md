@@ -8,6 +8,37 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-26
+
+### Added
+
+- Show up to four immutable tool-image thumbnails on folded work blocks and open
+  work rows, with lazy loading, coarse-pointer sizing and the existing lightbox.
+- Report bounded Pi child pages, omitted branch turns and successful-read
+  freshness in the read-only detail view.
+
+### Changed
+
+- Keep Pi child detail content in place during background refreshes, distinguish
+  loading, stale, unreadable, empty and earlier-page states, and present a concise
+  status summary with structured prompt, prose, tool input, output and errors.
+
+### Fixed
+
+- Flush paired-device authorization state, VAPID keys and Push subscriptions
+  before atomic replacement; failed writes no longer publish unpersisted keys or
+  commit subscription changes in memory.
+
+### Boundaries
+
+- Focused adaptations from upstream #1568 and #1952, plus read-only Pi UX and
+  hardening ideas from #1842; this is not a snapshot upgrade or upstream repin.
+  Pi details remain GET-only with opaque parent-scoped child IDs and no child
+  Send, Stop, steer, retry, image/full-output fetch or provider turn.
+- Source-only release. Automated checks and the restarted loopback instance do
+  not establish rendered UI, physical Push delivery, native Windows or human
+  acceptance.
+
 ## [0.11.2] - 2026-10-22
 
 ### Fixed
@@ -5084,7 +5115,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.11.2...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/mahirocoko/herdr-web/compare/v0.11.2...v0.12.0
 [0.11.2]: https://github.com/mahirocoko/herdr-web/compare/v0.11.1...v0.11.2
 [0.11.1]: https://github.com/mahirocoko/herdr-web/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/mahirocoko/herdr-web/compare/v0.10.3...v0.11.0

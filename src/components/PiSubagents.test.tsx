@@ -2,7 +2,7 @@ import { expect, it } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { BackgroundTasks } from "./BackgroundTasks.tsx";
-import { piTaskWord, piWorkItems, PiSubagentCard, PiSubagentCalls, PiSubagentProvider, PiSubagentTranscript } from "./PiSubagents.tsx";
+import { piTaskSummary, piTaskWord, piWorkItems, PiSubagentCard, PiSubagentCalls, PiSubagentProvider, PiSubagentTranscript } from "./PiSubagents.tsx";
 import { paneStatus } from "../lib/status.ts";
 import { SettingsProvider } from "../lib/settings.ts";
 
@@ -50,12 +50,14 @@ it("does not open an unrelated history list for a call without a verified child 
   expect(html).toContain('disabled=""');
   expect(html).toContain("Status unknown");
 });
-it("renders child prose/code, structured tool arguments and errors instead of a raw transcript dump", () => {
+it("renders child prompt/prose, structured tool arguments, output and errors as a readable timeline", () => {
   const html = render(createElement(PiSubagentTranscript, { category: "Explore", turns: [
     { role: "user", ts: null, parts: [{ kind: "text", text: "Inspect **parser**" }] },
     { role: "assistant", ts: null, parts: [{ kind: "text", text: "## Findings\n\n```ts\nconst ok = true;\n```" },
       { kind: "tool", name: "bash", summary: "Run check", input: '{"command":"bun check","cwd":"/fixture"}', output: "<script>not executable</script>", error: true }] },
   ] }));
+  expect(html).toContain("<strong>Task</strong>");
+  expect(html).toContain("pi-subagent-turn-body");
   expect(html).toContain("<strong><span>parser</span></strong>");
   expect(html).toContain('data-markdown-heading="2"');
   expect(html).toContain("Findings");
@@ -79,6 +81,12 @@ it("shows the existing activity chip and count while Pi children run", () => {
   expect(html).toContain('class="bg-tasks-count"');
   expect(html).toContain(">2</span>");
   expect(html).not.toContain("bg-tasks-toggle is-idle");
+});
+it("summarizes status, tool count and elapsed time without inventing liveness", () => {
+  const translate = ((key: string, vars?: Record<string, string | number>) => key.replace(/\{(\w+)\}/g, (_, name: string) => String(vars?.[name] ?? `{${name}}`))) as import("../lib/i18n.ts").Translate;
+  const summary = piTaskSummary({ ...task, started_at: new Date(1000).toISOString(), ended_at: new Date(4000).toISOString(), tool_calls: 2 }, translate, 5000);
+  expect(summary).toContain("Explore · Running · 2 tool calls");
+  expect(summary).toContain("4s");
 });
 it("labels queue and missing live evidence without claiming completion or liveness", () => {
   expect(piTaskWord(task)).toBe("Running");

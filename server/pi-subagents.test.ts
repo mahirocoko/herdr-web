@@ -155,8 +155,14 @@ describe("Pi read-only child route", () => {
     const response = await piSubagentResponse(request(piTaskId(f.parent.path, "child")), f.state, async () => f.parent);
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    const text = await response.text();
+    const result = await response.json() as { turns: unknown[]; bounds: { has_earlier: boolean; showing_latest: boolean; incomplete: boolean; omitted_turns: number }; freshness: { read_at: string; transcript_updated_at: string | null; revision: string; observer_live: boolean } };
+    const text = JSON.stringify(result);
     expect(text).toContain("Parser inspected");
+    expect(result.bounds).toEqual({ has_earlier: false, showing_latest: true, incomplete: false, omitted_turns: 0 });
+    expect(Number.isFinite(Date.parse(result.freshness.read_at))).toBe(true);
+    expect(Number.isFinite(Date.parse(result.freshness.transcript_updated_at!))).toBe(true);
+    expect(result.freshness.revision.length).toBeGreaterThan(0);
+    expect(result.freshness.observer_live).toBe(false);
     expect(text).not.toContain(f.child);
     expect(text).not.toContain("child-session");
   });
@@ -167,7 +173,9 @@ describe("Pi read-only child route", () => {
     expect((await piSubagentResponse(request(encodeURIComponent(f.child)), f.state, resolve)).status).toBe(400);
     expect((await piSubagentResponse(request(piTaskId("another-parent", "child")), f.state, resolve)).status).toBe(404);
     let calls = 0;
-    expect((await piSubagentResponse(request(piTaskId(f.parent.path, "child")), f.state, async () => calls++ ? { ...f.parent, id: "replacement" } : f.parent)).status).toBe(404);
+    const rebound = await piSubagentResponse(request(piTaskId(f.parent.path, "child")), f.state, async () => calls++ ? { ...f.parent, id: "replacement" } : f.parent);
+    expect(rebound.status).toBe(409);
+    expect((await rebound.json()).error.code).toBe("subagent_changed");
   });
   it("requires both child directory containment and native parent identity", () => {
     const f = fixture();
@@ -182,9 +190,11 @@ describe("Pi read-only child route", () => {
     const link = join(f.child, "..", "link.jsonl"); symlinkSync(other.child, link);
     expect(piChildPath(f.parent, link)).toBeNull();
   });
-  it("rejects a cursor from another child", async () => {
+  it("rejects a cursor from another child as changed, not as an empty transcript", async () => {
     const f = fixture();
-    expect((await piSubagentResponse(request(piTaskId(f.parent.path, "child"), "GET", "&before=invalid"), f.state, async () => f.parent)).status).toBe(404);
+    const response = await piSubagentResponse(request(piTaskId(f.parent.path, "child"), "GET", "&before=invalid"), f.state, async () => f.parent);
+    expect(response.status).toBe(409);
+    expect((await response.json()).error.code).toBe("subagent_changed");
   });
   it("permits the exact machine read route, not child controls", () => {
     expect(MACHINE_PROXY_PATH.test("pane/pi-subagent")).toBe(true);

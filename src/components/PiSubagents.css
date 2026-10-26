@@ -1,12 +1,22 @@
 /* Reuses the app's modal/focus/sheet contract; no second Chat or composer is mounted. */
 .pi-subagent-dialog {
   width: min(820px, calc(100vw - var(--space-6) * 2));
+  height: min(720px, calc(100dvh - var(--space-6) * 2));
   max-height: calc(100dvh - var(--space-6) * 2);
 }
 .pi-subagent-dialog .modal-header { gap: var(--space-2); }
 .pi-subagent-dialog .modal-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .pi-subagent-body { overflow-y: auto; min-height: 0; }
 .pi-subagent-note { display: block; color: var(--text-dim); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.pi-subagent-summary { margin: var(--space-2) 0 0; color: var(--text); font-size: var(--fs-sm); font-weight: var(--fw-medium); }
+.pi-subagent-freshness { margin: var(--space-1) 0 var(--space-3); color: var(--text-dim); font-size: var(--fs-xs); }
+.pi-subagent-refresh { margin: var(--space-2) 0; color: var(--text-dim); font-size: var(--fs-xs); }
+.pi-subagent-state { margin: var(--space-3) 0; color: var(--text-dim); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.pi-subagent-state strong, .pi-subagent-state span { display: block; }
+.pi-subagent-state strong { color: var(--text); }
+.pi-subagent-state.is-error, .pi-subagent-state.is-stale, .pi-subagent-state.is-bounded { padding: var(--space-2) var(--space-3); border-inline-start: 2px solid var(--border); background: var(--bg-input); }
+.pi-subagent-state.is-error { border-inline-start-color: var(--status-blocked); }
+.pi-subagent-state.is-bounded { border-inline-start-color: var(--text-dim); }
 .pi-subagent-list { list-style: none; margin: 0; padding: 0; }
 .pi-subagent-row {
   display: flex; align-items: center; justify-content: space-between; gap: var(--space-2);
@@ -16,9 +26,11 @@
 .pi-subagent-row > span { min-width: 0; overflow-wrap: anywhere; }
 .pi-subagent-row > svg { width: 16px; height: 16px; flex: none; }
 .pi-subagent-row:hover { background: var(--bg-hover); }
-.pi-subagent-transcript { display: flex; flex-direction: column; gap: var(--space-4); }
-.pi-subagent-turn { min-width: 0; overflow-wrap: anywhere; }
-.pi-subagent-turn.is-user { padding: var(--space-2); background: var(--bg-input); border-radius: var(--radius-sm); }
+.pi-subagent-transcript { display: flex; flex-direction: column; gap: var(--space-4); margin-top: var(--space-2); }
+.pi-subagent-turn { position: relative; min-width: 0; padding-inline-start: var(--space-3); border-inline-start: var(--hairline) solid var(--border); overflow-wrap: anywhere; }
+.pi-subagent-turn.is-user { padding: var(--space-3); border: var(--hairline) solid var(--border); background: var(--bg-input); border-radius: var(--radius-sm); }
+.pi-subagent-turn-body { display: flex; flex-direction: column; gap: var(--space-2); }
+.pi-subagent-text > .markdown > :last-child { margin-bottom: 0; }
 .pi-subagent-body pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto; font-size: var(--fs-xs); }
 .pi-subagent-pages { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block: var(--space-2); }
 .pi-subagent-calls { display: grid; gap: var(--space-2); list-style: none; margin: var(--space-2) 0; padding: 0; }
@@ -34,6 +46,7 @@
 .pi-subagent-tool { border: var(--hairline) solid var(--border); border-radius: var(--radius-sm); padding: 0; margin-block: var(--space-2); }
 .pi-subagent-tool > summary { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); padding: var(--space-2); cursor: pointer; }
 .pi-subagent-tool > summary > span { min-width: 0; overflow-wrap: anywhere; }
+.pi-subagent-tool-summary { display: flex; flex-direction: column; gap: var(--space-1); }
 .pi-subagent-tool > summary > svg { width: 16px; height: 16px; flex: none; }
 .pi-subagent-tool[open] > summary > svg { rotate: 90deg; }
 .pi-subagent-tool-body { border-top: var(--hairline) solid var(--border); padding: var(--space-2); }
@@ -51,4 +64,6 @@
 @media (max-width: 640px) {
   .pi-subagent-scrim { padding: 0; }
   .pi-subagent-dialog { width: 100%; height: 100%; max-height: 100dvh; border-radius: 0; padding-bottom: env(safe-area-inset-bottom); }
+  .pi-subagent-turn { padding-inline-start: var(--space-2); }
+  .pi-subagent-turn.is-user { padding: var(--space-3); }
 }

@@ -543,6 +543,21 @@ export interface PiSubagentResponse {
   task: OmoTask;
   turns: ConversationTurn[];
   cursor: string | null;
+  /** Exact evidence about this bounded read; never a claim that omitted activity completed. */
+  bounds: {
+    has_earlier: boolean;
+    showing_latest: boolean;
+    incomplete: boolean;
+    omitted_turns: number;
+  };
+  freshness: {
+    read_at: string;
+    transcript_updated_at: string | null;
+    /** Opaque content revision for distinguishing one successful read from another. */
+    revision: string;
+    /** A fresh parent observer snapshot was available; not proof that this child is running. */
+    observer_live: boolean;
+  };
   live: boolean;
 }
 

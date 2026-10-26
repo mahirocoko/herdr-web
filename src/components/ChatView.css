@@ -710,11 +710,27 @@
   cursor: pointer;
 }
 
-/* the header, its rows and the prose around them start on one line: the hover plate overhangs it */
+/* the header, its rows and the prose around them start on one line: the hover plate overhangs it.
+   A work-line wrapper leaves room for independent image buttons without nesting buttons. */
 .work-block-head,
-.work-row-head {
+.work-row-head,
+.work-line {
   width: calc(100% + 2 * var(--space-1));
   margin-inline: calc(-1 * var(--space-1));
+}
+
+.work-line {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.work-line > .work-block-head,
+.work-line > .work-row-head {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  margin-inline: 0;
 }
 
 .work-block-head:hover,
@@ -787,6 +803,48 @@
   flex: none;
   white-space: nowrap;
 }
+
+/* Tool pictures on a work line use immutable opaque refs only (lib/workImages.ts). They reserve a
+   stable square, load lazily through ReservedImage, and open the same lightbox as other chat images. */
+.work-line-images {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: var(--space-1);
+}
+
+.work-line-image {
+  display: block;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  overflow: hidden;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: var(--fs-xs);
+  cursor: zoom-in;
+}
+
+.work-line-image:hover,
+.work-line-image:focus-visible {
+  border-color: var(--accent);
+}
+
+.work-line-image img,
+.work-line-image .image-slot.is-loading,
+.work-line-image .image-slot.is-failed {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.work-line-image img { object-fit: cover; }
+.work-line-image .image-slot-note { display: none; }
+.work-line-image.is-more { cursor: pointer; }
 
 /* rows hang under the header on its own left edge. The space under the header is the rows' own
    (not the block's gap): it opens and folds with them, and a folded block holds none of it */
@@ -1316,6 +1374,11 @@
   .chat-new-messages.is-icon {
     width: var(--touch-target);
     min-height: var(--touch-target);
+  }
+
+  .work-line-image {
+    width: var(--touch-target);
+    height: var(--touch-target);
   }
 }
 

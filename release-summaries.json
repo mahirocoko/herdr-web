@@ -1,4 +1,22 @@
 {
+  "0.12.0": {
+    "en": {
+      "new": ["Preview immutable tool images on Chat work lines and read bounded Pi child activity in a clearer detail view."],
+      "fixed": ["Persist paired devices, VAPID keys and Push subscriptions before publishing state in memory."]
+    },
+    "ko": {
+      "new": ["Chat 작업 줄에서 변경되지 않는 도구 이미지를 미리 보고, 범위가 제한된 Pi 하위 에이전트 활동을 더 읽기 쉬운 상세 화면에서 확인합니다."],
+      "fixed": ["페어링 기기, VAPID 키, Push 구독을 메모리에 반영하기 전에 안전하게 저장합니다."]
+    },
+    "ja": {
+      "new": ["Chatの作業行で不変のツール画像をプレビューし、範囲が限定されたPiサブエージェントの活動を読みやすい詳細画面で確認できます。"],
+      "fixed": ["ペアリング済みデバイス、VAPIDキー、Push購読をメモリへ反映する前に永続化します。"]
+    },
+    "zh": {
+      "new": ["在 Chat 工作行中预览不可变的工具图片，并在更清晰的详情视图中查看有范围限制的 Pi 子代理活动。"],
+      "fixed": ["先持久化配对设备、VAPID 密钥和 Push 订阅，再更新内存状态。"]
+    }
+  },
   "0.11.2": {
     "en": { "fixed": ["Isolate terminal tokens, validate raster uploads and bound Git file listings."] },
     "ko": { "fixed": ["터미널 자식 프로세스에 Web 토큰을 전달하지 않고, 이미지 업로드를 검증하며 Git 파일 목록의 크기와 실행 시간을 제한합니다."] },

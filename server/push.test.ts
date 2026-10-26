@@ -1,11 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { AlertPrefs } from "../shared/notify-policy.ts";
 import type { AgentStatus, HerdrPane, SessionSnapshot } from "../shared/protocol.ts";
 import { CompletionTracker } from "./completion.ts";
+import { privateStateFs } from "./private-state.ts";
 import { createPushService, handlePushRequest, parseSubscription, type PushService } from "./push.ts";
 import { startFakePushService, type FakePushService } from "./push.fake.ts";
 
@@ -106,6 +107,38 @@ describe("push state", () => {
     const restarted = createPushService({ loopbackHttp: true, stateDir });
     expect(await restarted.sendTest(fake.subscription.endpoint)).toEqual({ ok: true });
     expect(fake.received).toHaveLength(1);
+  });
+
+  it("does not publish an unpersisted VAPID key", () => {
+    const push = createPushService({ loopbackHttp: true, stateDir });
+    const fsync = spyOn(privateStateFs, "fsyncSync").mockImplementation(() => { throw Object.assign(new Error("EIO: i/o error, fsync"), { code: "EIO" }); });
+    try {
+      expect(() => push.publicKey()).toThrow("EIO");
+      expect(() => push.publicKey()).toThrow("EIO");
+    } finally { fsync.mockRestore(); }
+    expect(readdirSync(stateDir)).toEqual([]);
+    const key = push.publicKey();
+    expect(createPushService({ loopbackHttp: true, stateDir }).publicKey()).toBe(key);
+  });
+
+  it("keeps the subscriptions in use unchanged when their write fails", async () => {
+    const push = createPushService({ loopbackHttp: true, stateDir });
+    const rename = spyOn(privateStateFs, "renameSync").mockImplementation(() => { throw new Error("EXDEV: rename refused"); });
+    try {
+      expect(() => push.subscribe(fake.subscription, undefined, "0123456789abcdef")).toThrow("EXDEV");
+    } finally { rename.mockRestore(); }
+    expect(await push.sendTest(fake.subscription.endpoint)).toBeNull();
+    expect(existsSync(join(stateDir, "push-subscriptions.json"))).toBe(false);
+    expect(readdirSync(stateDir).filter((name) => name.endsWith(".tmp"))).toEqual([]);
+
+    push.subscribe(fake.subscription, undefined, "0123456789abcdef");
+    const fsync = spyOn(privateStateFs, "fsyncSync").mockImplementation(() => { throw Object.assign(new Error("EIO: i/o error, fsync"), { code: "EIO" }); });
+    try {
+      expect(() => push.revokeDevice("0123456789abcdef")).toThrow("EIO");
+      expect(() => push.unsubscribe(fake.subscription.endpoint)).toThrow("EIO");
+    } finally { fsync.mockRestore(); }
+    expect(await push.sendTest(fake.subscription.endpoint)).toEqual({ ok: true });
+    expect(await createPushService({ loopbackHttp: true, stateDir }).sendTest(fake.subscription.endpoint)).toEqual({ ok: true });
   });
 });
 

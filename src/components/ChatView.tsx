@@ -32,6 +32,7 @@ import { attachmentFileName, mentionFileName, type GalleryImage } from "../lib/i
 import { useMachineApi } from "../lib/machineContext.tsx";
 import { toTranscriptMessages, type TranscriptMessage } from "../lib/transcript.ts";
 import { isLiveWorkTurn, isWaitingWorkTurn, formatWorkDuration, splitTurn, visibleWorkParts, workFailed, workStartsOpen, workSummary, type ToolPart as ToolPartType } from "../lib/workBlocks.ts";
+import { LINE_IMAGES_SHOWN, LINE_IMAGES_SHOWN_TOUCH, lineImages, linePictures, workImages, type WorkImage } from "../lib/workImages.ts";
 import { phaseRows, planRows, taskRows, todoRows, type ChecklistRow } from "../lib/checklist.ts";
 import { isTodoTool, parseTodoAnswer, todoCallSummary, type TodoItem, type TodoStatus } from "../lib/todos.ts";
 import { formatGoalTime, turnGoal, type GoalState, type GoalStatus } from "../lib/goals.ts";
@@ -372,12 +373,12 @@ function useWholeOutput(ref: string | undefined): { text: string | null; state: 
 }
 
 /** A chat thumbnail: a tap opens the message's pictures over the page (ImageLightbox), this one first. */
-function ImageThumb({ image, onOpen }: { image: GalleryImage; onOpen: () => void }) {
+function ImageThumb({ image, onOpen, className = "chat-user-image" }: { image: GalleryImage; onOpen: () => void; className?: string }) {
   const t = useT();
   // the focus is placed on the thumbnail before the viewer opens, so the viewer's focus trap
   // records it as the opener and gives the focus back here on close (Safari does not focus a
   // clicked button on its own)
-  return <button type="button" className="chat-user-image" title={t("Open image")} onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); onOpen(); }}>
+  return <button type="button" className={className} title={t("Open image")} onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); onOpen(); }}>
     <ReservedImage src={image.src} alt={image.name} slot />
   </button>;
 }
@@ -390,18 +391,37 @@ function ImageGallery({ images, className }: { images: GalleryImage[]; className
   </div>;
 }
 
+/** A tool picture as the existing viewer shows it, fetched by its opaque pane-scoped ref. */
+function toolGalleryImage(machineId: string, paneId: string, image: WorkImage, t: ReturnType<typeof useT>): GalleryImage {
+  return {
+    src: machinePath(machineId, `pane/conversation/image?${new URLSearchParams({ pane_id: paneId, ref: image.ref }).toString()}`),
+    name: t("Image {n} from {tool}", { n: image.ordinal + 1, tool: image.part.name }),
+    file: attachmentFileName(image.mediaType, image.ordinal),
+  };
+}
+
+/** Small lazy thumbnails at the end of a folded block or tool row; a press uses the shared lightbox. */
+function LineImages({ paneId, images }: { paneId: string; images: WorkImage[] }) {
+  const t = useT();
+  const machineId = useMachineId();
+  const openViewer = useContext(ImageViewerContext);
+  const touch = useMediaQuery("(pointer: coarse)");
+  if (images.length === 0) return null;
+  const gallery = images.map((image) => toolGalleryImage(machineId, paneId, image, t));
+  const visible = lineImages(gallery, touch ? LINE_IMAGES_SHOWN_TOUCH : LINE_IMAGES_SHOWN);
+  return <div className="work-line-images">
+    {visible.hidden > 0 && <button type="button" className="work-line-image is-more" aria-label={`${t("Open image")} · +${visible.hidden}`} onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); openViewer(gallery, 0); }}>+{visible.hidden}</button>}
+    {visible.shown.map((image, index) => <ImageThumb key={image.src} image={image} className="work-line-image" onOpen={() => openViewer(gallery, visible.hidden + index)} />)}
+  </div>;
+}
+
 /** Images a tool returned (pi reads a picture into the result); opened with the row. */
 function ToolImages({ paneId, part }: { paneId: string; part: ToolPartType }) {
   const t = useT();
   const machineId = useMachineId();
-  if (part.images === undefined || part.images.length === 0) return null;
-  const images = part.images.map((image, index): GalleryImage => ({
-    src: machinePath(machineId, `pane/conversation/image?${new URLSearchParams({ pane_id: paneId, ref: image.ref }).toString()}`),
-    // a tool's picture carries no file name: it is named by its place and the tool that read it
-    name: t("Image {n} from {tool}", { n: index + 1, tool: part.name }),
-    file: attachmentFileName(image.media_type, index),
-  }));
-  return <ImageGallery images={images} className="chat-tool-images" />;
+  const images = workImages([part]);
+  if (images.length === 0) return null;
+  return <ImageGallery images={images.map((image) => toolGalleryImage(machineId, paneId, image, t))} className="chat-tool-images" />;
 }
 
 /**
@@ -419,18 +439,22 @@ function WorkRow({ paneId, part, stateKey }: { paneId: string; part: ToolPartTyp
   const summary = part.arguments_omitted ? t("Arguments omitted (too large)") : todoCallSummary(part) ?? part.summary;
   // reads the call's input: once per call, not on every poll of the transcript
   const { verb, narration } = useMemo(() => workRowLabel({ name: part.name, input: part.input }, summary), [part.name, part.input, summary]);
+  const images = useMemo(() => linePictures([part]), [part]);
   // the list is the answer of a todo call: its raw text would say it twice
   const output = isTodoTool(part.name) && parseTodoAnswer(part.output) !== null ? "" : whole.text ?? part.output;
   return <div className={`work-row${part.error ? " is-error" : ""}`}>
-    <button type="button" className="work-row-head" aria-expanded={open} title={narration || verb !== null ? `${part.name} · ${summary}` : undefined} onClick={() => setOpen(!open)}>
-      <span className="work-row-caret" aria-hidden="true">{open ? <ChevronDown /> : <ChevronRight />}</span>
-      {!narration && (verb !== null ? <span className="work-row-name is-verb">{t(verb)}</span> : <span className="work-row-name">{part.name}</span>)}
-      {/* the spaces are for a screen reader: the row is read as words, not "Ranbun test" */}
-      {!narration && part.error && verb === null && <>{" "}<span className="work-row-failed">{t("failed")}</span></>}
-      {summary.length > 0 && summary !== part.name && <>{" "}<span className="work-row-summary">{summary}</span></>}
-      {/* after a verb, or the agent's own sentence, the word follows it: "Ran pnpm test failed", not "Ran failed pnpm test" */}
-      {part.error && (narration || verb !== null) && <>{" "}<span className="work-row-failed">{t("failed")}</span></>}
-    </button>
+    <div className="work-line">
+      <button type="button" className="work-row-head" aria-expanded={open} title={narration || verb !== null ? `${part.name} · ${summary}` : undefined} onClick={() => setOpen(!open)}>
+        <span className="work-row-caret" aria-hidden="true">{open ? <ChevronDown /> : <ChevronRight />}</span>
+        {!narration && (verb !== null ? <span className="work-row-name is-verb">{t(verb)}</span> : <span className="work-row-name">{part.name}</span>)}
+        {/* the spaces are for a screen reader: the row is read as words, not "Ranbun test" */}
+        {!narration && part.error && verb === null && <>{" "}<span className="work-row-failed">{t("failed")}</span></>}
+        {summary.length > 0 && summary !== part.name && <>{" "}<span className="work-row-summary">{summary}</span></>}
+        {/* after a verb, or the agent's own sentence, the word follows it: "Ran pnpm test failed", not "Ran failed pnpm test" */}
+        {part.error && (narration || verb !== null) && <>{" "}<span className="work-row-failed">{t("failed")}</span></>}
+      </button>
+      {!open && <LineImages paneId={paneId} images={images} />}
+    </div>
     {open && <div className="work-row-detail">{verb !== null && <p className="work-row-tool">{part.name}</p>}<ToolInputView part={part} /><ToolImages paneId={paneId} part={part} />{output.length > 0 && <section className="chat-tool-output"><h4>{t(part.error ? "Error" : "Output")}</h4><pre className={`chat-tool-io${whole.text !== null ? " is-whole" : ""}`}>{linkFilePaths(output, openFile)}</pre>
       {part.output_ref !== undefined && whole.text === null && <button type="button" className="btn btn-ghost chat-tool-more" disabled={whole.state === "loading"} onClick={whole.load}>
         {t(whole.state === "loading" ? "Loading the whole output…" : whole.state === "failed" ? "Couldn't load the whole output — retry" : "Show the whole output ({size} characters)", { size: formatTokens(part.output_size ?? 0) })}
@@ -475,6 +499,7 @@ function WorkBlockView({ paneId, parts, duration, live, waiting, defaultOpen, sh
   // reading or working inside the block is a choice to keep it: the fold at the end of the turn
   // must not take the rows from under the reader's focus or close the row they opened
   const keepOpen = () => { if (chosenOpen === null) setOpen(true); };
+  const images = useMemo(() => linePictures(parts), [parts]);
   const visible = visibleWorkParts(parts, showThinking);
   if (visible.length === 0) return live && !waiting && pendingHead ? <PendingWorkHead title={t("Working…")} /> : null;
   const summary = workSummary(parts);
@@ -482,13 +507,16 @@ function WorkBlockView({ paneId, parts, duration, live, waiting, defaultOpen, sh
   // a blocked agent is not working: the open block takes the sidebar's words for it
   const title = waiting ? t("Needs you") : live ? t("Working…") : duration !== null ? t("Worked for {duration}", { duration }) : t("Worked");
   return <section className={`work-block${live ? " is-live" : ""}${waiting ? " is-waiting" : ""}${open ? "" : " is-folded"}`}>
-    <button type="button" className="work-block-head" aria-expanded={open} onClick={() => setOpen(!open)}>
-      <span className="work-row-caret" aria-hidden="true">{open ? <ChevronDown /> : <ChevronRight />}</span>
-      <span className="work-block-title">{title}</span>
-      {summary.length > 0 && <span className="work-block-summary">· {summary}</span>}
-      {/* its own span: the counts before it are cut on a narrow screen, a failure never is */}
-      {failed > 0 && <span className="work-block-failed">· {t("{n} failed", { n: failed })}</span>}
-    </button>
+    <div className="work-line">
+      <button type="button" className="work-block-head" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span className="work-row-caret" aria-hidden="true">{open ? <ChevronDown /> : <ChevronRight />}</span>
+        <span className="work-block-title">{title}</span>
+        {summary.length > 0 && <span className="work-block-summary">· {summary}</span>}
+        {/* its own span: the counts before it are cut on a narrow screen, a failure never is */}
+        {failed > 0 && <span className="work-block-failed">· {t("{n} failed", { n: failed })}</span>}
+      </button>
+      {!open && <LineImages paneId={paneId} images={images} />}
+    </div>
     {/* the rows open and fold at the block's measured height; folded and settled, they are not drawn */}
     <AnimatedHeight open={open} animateContent={false}>
       <div className="work-block-rows" onFocus={keepOpen} onClick={keepOpen}>{visible.map((part, index) =>
