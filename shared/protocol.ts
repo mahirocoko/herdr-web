@@ -1224,12 +1224,17 @@ export type ClientMessage =
    * box still shows that `box` or reads empty (else input_draft again, with the new box). Not with
    * `clear_draft`.
    * `resend_id`: stable held-copy ID for immediate chat resends across connections; the bridge
-   * shares the first outcome for 60 seconds after settlement. `resend_generation` defaults to 0;
+   * requires a matching live pending record or an already cached outcome for that pane/ID/generation.
+   * Unknown/expired IDs fail closed with pending_not_found; withdrawn IDs never dispatch. The bridge
+   * shares the first outcome for 60 seconds after settlement (longer while a successful outcome's
+   * live row remains). `resend_generation` defaults to 0;
    * only a definitive no-input refusal permits the next attempt generation. Not with `send_anyway`:
    * that combination returns invalid_delivery before reserving or replaying an ID. No `clear_draft`.
    * Older peers ignore it. */
   | { type: "submit"; id: number; pane_id: string; text: string; payload: string; typed?: boolean; delivery?: "immediate" | "queue" | "hold"; clear_draft?: string; send_anyway?: true; resend_id?: string; resend_generation?: number }
-  | { type: "pending-action"; id: number; pane_id: string; pending_id: string; action: "steer" | "discard"; resend_generation?: number }
+  /** `withdraw`: Edit's fail-closed action, never input. Only provably unsent queued/held rows
+   * produce `withdrawn`; older servers reject this action rather than silently discarding uncertainty. */
+  | { type: "pending-action"; id: number; pane_id: string; pending_id: string; action: "steer" | "discard" | "withdraw"; resend_generation?: number }
   /** Masked input: revalidate the visible prompt, type literal bytes + Enter immediately.
    * Never queued, retried, sent through agent.prompt, or echoed in a result. */
   | { type: "secret"; id: number; pane_id: string; prompt: string; secret: string }
@@ -1281,7 +1286,7 @@ export type ServerMessage =
   | { type: "submit-result"; id: number; pane_id: string; ok: boolean; pending?: PendingMessage; code?: string; message?: string; draft?: string; box?: string }
   | { type: "pending-result"; id: number; pane_id: string; pending_id: string; ok: boolean; code?: string; message?: string }
   /** Owner-only receipt and state; only an explicit removed outcome permits deleting a retained client message. */
-  | { type: "pending-messages"; pane_id: string; messages: PendingMessage[]; removed?: Array<{ id: string; outcome: "sent" | "discarded" }> }
+  | { type: "pending-messages"; pane_id: string; messages: PendingMessage[]; removed?: Array<{ id: string; outcome: "sent" | "discarded" | "withdrawn" }> }
   | { type: "secret-result"; id: number; pane_id: string; ok: boolean; code?: string }
   /** agent-status push for ANY pane, attached or not (server-side status collector) */
   | { type: "pane-status"; pane_id: string; agent_status: AgentStatus; /** a pane's live background tasks (OmO, Claude, or verified Pi children), when the frame is about them: it changes no native status */ background_tasks?: number; /** every frame says it: absent, the pane does not wait on its turn's background work */ background_wait?: true; /** a pane's plan, when the frame is about it (null: it keeps none now); it changes no status */ plan?: PlanSummary | null }

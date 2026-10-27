@@ -1,5 +1,5 @@
 import { shouldSyncViewportOnResume } from "./viewportResume.ts";
-import { keyboardViewportReference } from "./keyboard.ts";
+import { keyboardViewportOccluded, keyboardViewportReference } from "./keyboard.ts";
 
 /*
  * Sizes the shell to the VISUAL viewport. When the soft keyboard opens, iOS
@@ -68,7 +68,8 @@ const syncKeyboard = (): void => {
   const keyboardActive = focused || root.hasAttribute("data-keyboard");
   const reference = keyboardViewportReference(height, large, window.innerHeight, remembered, keyboardActive);
   const visible = keyboardActive && ((keyboard?.boundingRect.height ?? 0) > 0
-    || !!viewport && viewport.scale === 1 && reference - height > reference * 0.2);
+    // Safari page zoom also changes scale. Width, not scale, distinguishes a pinch.
+    || !!viewport && keyboardViewportOccluded(reference, height, viewport.width, root.clientWidth));
   if (!visible) unobstructedHeights.set(width, { large, height: Math.max(reference, height) });
   root.toggleAttribute("data-keyboard", visible);
   if (visible && viewport) root.style.setProperty("--app-height", `${Math.round(height)}px`);

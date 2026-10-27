@@ -761,6 +761,8 @@ export const TH: Record<string, string> = {
   "Worked for {duration}": "ทำงานให้กับ {duration}",
   "Worked": "ได้ผล",
   "Copy message": "คัดลอกข้อความ",
+  "Copying keeps this message here and does not send it. Check the terminal before manually pasting and sending.": "การคัดลอกจะเก็บข้อความนี้ไว้ที่เดิม โดยยังไม่ส่ง ตรวจสอบเทอร์มินัลก่อนนำข้อความไปวางและกดส่งเอง",
+  "Edit queued message": "แก้ไขข้อความในคิว",
   "Copy as markdown": "คัดลอกเป็นมาร์กดาวน์",
   "Copy as plain text": "คัดลอกเป็นข้อความธรรมดา",
   "Plain text": "ข้อความธรรมดา",

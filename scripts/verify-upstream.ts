@@ -351,7 +351,9 @@ export const PROMOTION_PATCHES = [
   'server/index.ts',
   'server/pending-input.ts',
   'server/pending-input.test.ts',
+  'server/pending-input.contract.test.ts',
   'server/conversation.ts',
+  'server/pi.test.ts',
   'server/conversation-monitor.ts',
   'server/core/terminals.ts',
   'server/pane-routes.ts',
@@ -434,6 +436,16 @@ export const PROMOTION_PATCHES = [
   'src/components/BackgroundTasks.tsx',
   'src/lib/api.ts',
   'src/lib/machineContext.tsx',
+  // #1957 (7031c2e2): Safari page zoom vs pinch geometry, with isolated unit coverage.
+  'src/lib/viewport.ts',
+  'src/lib/keyboard.ts',
+  'src/lib/viewport.test.ts',
+  // #2041 (c60c06a7), Edit only: current-owner, receipt-bound withdrawal; no Pi resume.
+  // Protocol/index/pending-input/PaneTerminal/Thai and row tests already have exact entries above.
+  'src/components/PendingMessages.tsx',
+  'src/lib/pendingMessages.ts',
+  'src/lib/composerDraft.ts',
+  'src/lib/ws.ts',
 ]
 export const PROMOTION_ADDITIONS = [
   'scripts/docs-contracts.test.ts',
@@ -485,6 +497,9 @@ export const PROMOTION_ADDITIONS = [
   'src/components/PiSubagents.tsx',
   'src/components/PiSubagents.css',
   'src/components/PiSubagents.test.tsx',
+  // #2041 conservative Edit adapter and receipt-race fixtures, not the later retry architecture.
+  'src/lib/pendingEdit.ts',
+  'src/lib/pendingEdit.test.ts',
 ]
 const promotedPath = (path: string) =>
   path === 'LICENSE'

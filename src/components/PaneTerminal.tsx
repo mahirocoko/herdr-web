@@ -28,6 +28,7 @@ import { ApiError, AttachmentTooLargeError, assertAttachable, fetchPaneScroll, f
 import { userErrorMessage } from "../lib/userError.ts";
 import { parseOsc52 } from "../lib/osc52.ts";
 import { composerDrafts } from "../lib/composerDraft.ts";
+import { editPendingMessage } from "../lib/pendingEdit.ts";
 import { appendQuote, formatTerminalQuote } from "../lib/terminalQuote.ts";
 import { matchHerdrWidths } from "../lib/terminalWidths.ts";
 import { useMachineApi, useMachineId } from "../lib/machineContext.tsx";
@@ -3071,6 +3072,13 @@ export function PaneTerminal({
         unsaved={pendingMessages.isUnsaved(queueOwner)}
         isBusy={(id) => pendingMessages.isBusy(queueOwner, id)}
         onSendNow={(id) => actOnPending(id, "steer")}
+        onEdit={(id) => {
+          const pane = paneId, owner = queueOwner, socket = socketRef.current;
+          if (!socket || pane === null || owner === null || paneRef.current !== pane) return Promise.resolve(false);
+          return editPendingMessage({ socket, store: pendingMessages, drafts: composerDrafts, owner, pane,
+            scope: pendingScopeRef.current, draftKey: `herdr-web-ui:composer-draft:${owner}`,
+            retain: submitRetention ? () => submitRetention.retain(pane) : undefined }, id);
+        }}
         onDiscard={(id) => actOnPending(id, "discard")}
       />}
       {/* The prompt card's place: under the held messages (which fold to their caption while it is

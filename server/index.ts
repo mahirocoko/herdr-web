@@ -1511,8 +1511,8 @@ export function createServer(
               lettaStops.ownerLeft(client, message.pane_id);
               const result = (reply: SubmitReply) => send(client, { type: "pending-result", id: message.id, pane_id: message.pane_id, pending_id: message.pending_id, ...reply });
               if (!Number.isSafeInteger(message.id) || typeof message.pane_id !== "string" || !message.pane_id
-                || typeof message.pending_id !== "string" || !message.pending_id || !["steer", "discard"].includes(message.action)) {
-                result({ ok: false, code: "invalid_pending_action", message: "Use steer or discard with a pending-message id" }); break;
+                || typeof message.pending_id !== "string" || !message.pending_id || !["steer", "discard", "withdraw"].includes(message.action)) {
+                result({ ok: false, code: "invalid_pending_action", message: "Use steer, discard or withdraw with a pending-message id" }); break;
               }
               if (message.resend_generation !== undefined && (!Number.isSafeInteger(message.resend_generation) || message.resend_generation < 0)) {
                 result({ ok: false, code: "invalid_pending_action", message: "A resend generation must be a nonnegative integer" }); break;
@@ -1527,6 +1527,8 @@ export function createServer(
                   const item = pending.get(client, message.pane_id, message.pending_id);
                   if (!item) return replayPendingOutcome(client, message.pane_id, message.pending_id)
                     ? { ok: true } : { ok: false, code: "pending_not_found", message: "This pending message does not belong to this connection" };
+                  if (message.action === "withdraw") return pending.withdraw(item) ? { ok: true }
+                    : { ok: false, code: "pending_not_withdrawable", message: "This message may already have been sent; copy it or check the terminal before editing" };
                   if (message.action === "discard") return pending.discard(item) ? { ok: true } : { ok: false, code: "pending_busy", message: "This message is already being sent" };
                   if (item.message.state === "uncertain") return { ok: false, code: "pending_uncertain", message: "Check the terminal before sending this message again" };
                   let dispatched = false;

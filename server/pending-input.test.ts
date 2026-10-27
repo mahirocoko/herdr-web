@@ -45,6 +45,95 @@ function fixture() {
   return { queue, receipts, enqueue, advance: (ms: number) => { now += ms; queue.expire(); } };
 }
 
+describe("pending withdrawal for Edit (#2041 scoped port)", () => {
+  it("withdraws the exact queued/held row and publishes only to its owner", () => {
+    for (const held of [false, true]) {
+      const f = fixture();
+      const item = f.queue.enqueue("a", "p1", 1, "edit me", "lease", { agent: "pi", terminalId: "t1", session: null }, held);
+      const other = f.enqueue(2);
+      expect(f.queue.get("b", "p1", item.message.id)).toBeUndefined();
+      expect(f.queue.get("a", "p2", item.message.id)).toBeUndefined();
+      expect(f.queue.withdraw(item)).toBe(true);
+      expect(f.queue.withdraw(item)).toBe(false);
+      expect(f.queue.list("a", "p1").map((row) => row.id)).toEqual([other.message.id]);
+      expect(f.receipts.at(-1)).toMatchObject({ owner: "a", pane: "p1", removed: [{ id: item.message.id, outcome: "withdrawn" }] });
+      expect(f.queue.outcome("a", "p1", item.message.id)).toBe("withdrawn");
+      expect(f.queue.outcome("b", "p1", item.message.id)).toBeUndefined();
+    }
+  });
+
+  it("cannot withdraw sending, uncertain, already sent or ordinarily discarded input", () => {
+    const f = fixture(), item = f.enqueue(1);
+    expect(f.queue.claim(item, false)).toBe(true);
+    expect(f.queue.withdraw(item)).toBe(false);
+    f.queue.settle(item, { code: "submit_changed", message: "maybe typed" }, true);
+    expect(f.queue.withdraw(item)).toBe(false);
+    expect(f.queue.discard(item)).toBe(true);
+    expect(f.queue.outcome("a", "p1", item.message.id)).toBe("discarded");
+    expect(f.queue.withdraw(item)).toBe(false);
+    const sent = f.enqueue(2);
+    f.queue.claim(sent, false); f.queue.settle(sent);
+    expect(f.queue.withdraw(sent)).toBe(false);
+  });
+
+  it("refuses any cross-connection resend attempt, including ambiguous replies after cache expiry", async () => {
+    for (const reply of [{ ok: true }, { ok: false, code: "submit_changed" }, { ok: false, code: "agent_blocked" }]) {
+      const f = fixture(), item = f.enqueue(1);
+      let finish!: (value: typeof reply) => void;
+      const resend = f.queue.resend("p1", item.message.id, "fingerprint", () => new Promise<typeof reply>((resolve) => { finish = resolve; }));
+      expect(f.queue.withdraw(item)).toBe(false);
+      await Promise.resolve(); finish(reply); await resend;
+      expect(f.queue.withdraw(item)).toBe(false);
+      f.advance(60_001);
+      expect(f.queue.withdraw(item)).toBe(false);
+    }
+  });
+
+  it("unknown saved IDs after bridge restart or closed-owner expiry never dispatch", async () => {
+    const f = fixture(), item = f.enqueue(1);
+    f.queue.close("a"); f.advance(60_001);
+    let calls = 0;
+    for (const id of [item.message.id, "id-from-previous-bridge"]) {
+      expect(await f.queue.resend("p1", id, "old text", async () => { calls++; return { ok: true }; }))
+        .toMatchObject({ ok: false, code: "pending_not_found" });
+    }
+    expect(calls).toBe(0);
+  });
+
+  it("withdrawal refuses old stable-ID resends of every generation without dispatch", async () => {
+    const f = fixture(), item = f.enqueue(1);
+    expect(f.queue.withdraw(item)).toBe(true);
+    let calls = 0;
+    for (const generation of [0, 1, 999]) {
+      expect(await f.queue.resend("p1", item.message.id, "fingerprint", async () => { calls++; return { ok: true }; }, generation))
+        .toMatchObject({ ok: false, code: "pending_withdrawn" });
+    }
+    expect(calls).toBe(0);
+  });
+
+  it("reserves bounded receipts under traffic pressure and preserves recent withdrawals after close", async () => {
+    const f = fixture(), item = f.enqueue(1);
+    f.queue.withdraw(item);
+    for (let request = 2; request <= 1024; request++) f.queue.discard(f.enqueue(request));
+    expect(() => f.enqueue(1025)).toThrow("recent pending-message outcomes");
+    // Another connection holding a saved copy cannot erase withdrawal by closing its owner.
+    f.queue.close("a");
+    expect(await f.queue.resend("p1", item.message.id, "fingerprint", async () => { throw new Error("must not dispatch"); }))
+      .toMatchObject({ code: "pending_withdrawn" });
+    f.advance(60_001);
+    // Closing removed ordinary receipts; refill pressure so the aged withdrawal is evicted.
+    for (let request = 1025; request <= 2047; request++) f.queue.discard(f.enqueue(request));
+    expect(() => f.enqueue(2048)).not.toThrow();
+    expect(f.queue.outcome("a", "p1", item.message.id)).toBeUndefined();
+    let calls = 0;
+    for (const generation of [0, 1, 999]) {
+      expect(await f.queue.resend("p1", item.message.id, item.message.text, async () => { calls++; return { ok: true }; }, generation))
+        .toMatchObject({ ok: false, code: "pending_not_found" });
+    }
+    expect(calls).toBe(0);
+  });
+});
+
 describe("bridge pending input", () => {
   it("regression: shares one resend outcome across stale cross-tab reads", async () => {
     const f = fixture();
@@ -52,7 +141,8 @@ describe("bridge pending input", () => {
     const completion = new Promise<{ ok: boolean }>((resolve) => { finish = resolve; });
     const submitted: string[] = [];
     const submit = () => { submitted.push("copy-id"); return completion; };
-    let saved = JSON.stringify({ messages: [{ id: "copy-id", request_id: 1, text: "text", state: "held", created_at: "2026-10-14T00:00:00Z" }] });
+    const live = f.enqueue(1, "a", "p", "text");
+    let saved = JSON.stringify({ messages: [{ ...live.message, state: "held" }] });
     const snapshot = saved;
     const port = { getItem: () => snapshot, setItem: (_key: string, raw: string) => { saved = raw; }, removeItem: () => {} };
     const a = new PendingMessageStore(() => port), b = new PendingMessageStore(() => port);
@@ -70,22 +160,25 @@ describe("bridge pending input", () => {
   });
   it("control: retains refused outcomes and rejects a different message for the same resend id", async () => {
     const f = fixture();
-    expect(await f.queue.resend("p", "id", "one", async () => ({ ok: false, code: "agent_blocked" }))).toEqual({ ok: false, code: "agent_blocked" });
-    expect(await f.queue.resend("p", "id", "one", async () => ({ ok: true }))).toEqual({ ok: false, code: "agent_blocked" });
-    expect(() => f.queue.resend("p", "id", "two", async () => ({ ok: true }))).toThrow("another message");
-    expect(await f.queue.resend("p", "id", "one", async () => ({ ok: true }), 1)).toEqual({ ok: true });
+    f.queue.enqueue("a", "p", 1, "one", "lease", { agent: "pi", terminalId: "t1", session: null });
+    expect(await f.queue.resend("p", "pending-1", "one", async () => ({ ok: false, code: "agent_blocked" }))).toEqual({ ok: false, code: "agent_blocked" });
+    expect(await f.queue.resend("p", "pending-1", "one", async () => ({ ok: true }))).toEqual({ ok: false, code: "agent_blocked" });
+    expect(() => f.queue.resend("p", "pending-1", "two", async () => ({ ok: true }))).toThrow("another message");
+    expect(await f.queue.resend("p", "pending-1", "one", async () => ({ ok: true }), 1)).toEqual({ ok: true });
   });
   it("control: retains an in-flight resend past the lifetime and expires only settled receipts", async () => {
     const f = fixture();
+    f.enqueue(1, "a", "p");
     let finish!: (value: { ok: boolean }) => void;
-    const first = f.queue.resend("p", "id", "text", () => new Promise((resolve) => { finish = resolve; }));
+    const first = f.queue.resend("p", "pending-1", "text", () => new Promise((resolve) => { finish = resolve; }));
     await Promise.resolve();
     f.advance(60_001);
-    expect(f.queue.resend("p", "id", "text", async () => ({ ok: false }))).toBe(first);
+    expect(f.queue.resend("p", "pending-1", "text", async () => ({ ok: false }))).toBe(first);
     finish({ ok: true });
     await first;
+    f.queue.discard(f.queue.get("a", "p", "pending-1")!);
     f.advance(60_001);
-    expect(await f.queue.resend("p", "id", "text", async () => ({ ok: false }))).toEqual({ ok: false });
+    expect(await f.queue.resend("p", "pending-1", "text", async () => { throw new Error("must not dispatch"); })).toMatchObject({ ok: false, code: "pending_not_found" });
   });
   it("control: keeps the resend receipt while its original live pending row still exists", async () => {
     const f = fixture(), item = f.enqueue(1);

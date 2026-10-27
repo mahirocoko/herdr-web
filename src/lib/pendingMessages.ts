@@ -2,7 +2,7 @@ import type { PendingMessage } from "../../shared/protocol.ts";
 
 export interface PendingMessageView extends PendingMessage { serverOwned: boolean; resendInFlight?: true; resendGeneration?: number }
 type StoragePort = Pick<Storage, "getItem" | "setItem" | "removeItem">;
-type Removal = { id: string; outcome: "sent" | "discarded" };
+type Removal = { id: string; outcome: "sent" | "discarded" | "withdrawn" };
 const PREFIX = "herdr-web-ui:pending:";
 
 /** Connection proof stays in memory. A saved copy can never resume automatic delivery. */
@@ -14,6 +14,11 @@ export class PendingMessageStore {
   private saved = new Map<string, string | null>();
   private unsaved = new Set<string>();
   private busy = new Set<string>();
+  /** Connection-bound recovery outlives an action timeout and mounted pane listeners. */
+  private withdrawals = new Map<string, { scope: string; restore: () => void }>();
+  recoverWithdrawal(owner: string, id: string, scope: string, restore: () => void): void {
+    if (this.isOwned(owner, id, scope)) this.withdrawals.set(`${owner}\0${id}`, { scope, restore });
+  }
   /** rows saved as not confirmed while they are shown as they were (unconfirm) */
   private unconfirmed = new Set<string>();
   private listeners = new Set<() => void>();
@@ -111,7 +116,18 @@ export class PendingMessageStore {
   publish(owner: string, messages: PendingMessage[], removed: Removal[], scope: string): void {
     for (const message of messages) this.accept(owner, message, scope);
     const proofs = this.scopes.get(owner);
-    const deleted = new Set(removed.filter((item) => proofs?.get(item.id) === scope).map((item) => item.id));
+    const deleted = new Set<string>();
+    for (const item of removed) {
+      if (proofs?.get(item.id) !== scope) continue;
+      const key = `${owner}\0${item.id}`, recovery = this.withdrawals.get(key);
+      if (item.outcome === "withdrawn") {
+        // Never erase the only retained text without recovery (e.g. after a reload).
+        if (recovery?.scope !== scope) continue;
+        try { recovery.restore(); } catch { continue; }
+      }
+      this.withdrawals.delete(key);
+      deleted.add(item.id);
+    }
     const receipts = this.removed.get(owner) ?? new Map<string, Set<string>>();
     this.removed.set(owner, receipts);
     for (const item of removed) {
@@ -144,6 +160,7 @@ export class PendingMessageStore {
     const next = this.read(owner).map((message) => {
       if (proofs?.get(message.id) !== scope) return message;
       proofs.delete(message.id);
+      this.withdrawals.delete(`${owner}\0${message.id}`);
       changed = true;
       return { ...message, serverOwned: false, state: message.state === "held" && !message.resendInFlight ? "held" as const : "uncertain" as const };
     });

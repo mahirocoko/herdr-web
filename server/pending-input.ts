@@ -29,16 +29,19 @@ export interface PendingRecord<Owner, Lease> {
   identity: PendingIdentity;
   message: PendingMessage;
   inFlight: boolean;
+  /** A cross-connection resend may have typed without updating this row. Never withdraw it for Edit. */
+  resendAttempted?: true;
 }
 type Fault = { code: string; message: string };
 interface HeldCopyReply { ok: boolean; code?: string; message?: string }
-type Removed = { id: string; outcome: "sent" | "discarded" };
+type Removed = { id: string; outcome: "sent" | "discarded" | "withdrawn" };
 /** `by`: the message whose send opened the gate */
 interface TurnGate { by: string; committed: boolean; sawWorking: boolean; completed: boolean; deadline: number | null; restart?: "interruption" | "working" }
 const ready = (status: AgentStatus | undefined) => status === "idle" || status === "done";
 export const PENDING_START_TIMEOUT_MS = 10_000;
 export const MAX_PENDING_PER_OWNER = 32;
 const MAX_PENDING_TOTAL = 256;
+const MAX_PENDING_DISPOSITIONS = 1024;
 const MAX_PENDING_CHARS = 20_000;
 const CLOSED_RETENTION_MS = 60_000;
 
@@ -54,7 +57,7 @@ export class PendingInputs<Owner, Lease> {
   private readonly events = new Map<string, number>();
   private readonly gates = new Map<string, TurnGate>();
   private readonly closed = new Map<Owner, number>();
-  private readonly removed = new Map<string, { owner: Owner; paneId: string; outcome: Removed["outcome"] }>();
+  private readonly removed = new Map<string, { owner: Owner; paneId: string; outcome: Removed["outcome"]; at: number }>();
   private readonly resends = new Map<string, { id: string; fingerprint: string; reply: Promise<HeldCopyReply>; settledAt: number | null; sent: boolean }>();
 
   constructor(
@@ -68,10 +71,22 @@ export class PendingInputs<Owner, Lease> {
   resend(paneId: string, id: string, fingerprint: string, task: () => Promise<HeldCopyReply>, generation = 0): Promise<HeldCopyReply> {
     const key = JSON.stringify([paneId, id, generation]);
     this.expireResends();
+    // This receipt is withdrawal, not delivery. No generation may dispatch the old ID.
+    const outcome = this.removed.get(id);
+    if (outcome?.paneId === paneId && outcome.outcome === "withdrawn") {
+      return Promise.resolve({ ok: false, code: "pending_withdrawn", message: "This pending message was withdrawn for editing" });
+    }
+    const item = this.records.get(id);
+    if (item?.paneId === paneId) item.resendAttempted = true;
     const previous = this.resends.get(key);
     if (previous) {
       if (previous.fingerprint !== fingerprint) throw new PendingInputError("invalid_submit_id", "This resend id already belongs to another message");
       return previous.reply;
+    }
+    // A saved ID is not a capability after its live row expires (or this bridge restarts).
+    // Tombstones are bounded; their absence must never authorize old text to dispatch.
+    if (!item || item.paneId !== paneId) {
+      return Promise.resolve({ ok: false, code: "pending_not_found", message: "This saved message no longer has a live pending record; review it without resending the old ID" });
     }
     if (this.resends.size >= MAX_PENDING_TOTAL) throw new PendingInputError("pending_limit", "Too many held-copy sends are still retained; try again later");
     const entry: { id: string; fingerprint: string; settledAt: number | null; sent: boolean; reply: Promise<HeldCopyReply> } = { id, fingerprint, settledAt: null, sent: false, reply: Promise.resolve().then(task) };
@@ -93,8 +108,7 @@ export class PendingInputs<Owner, Lease> {
   private publish(owner: Owner, paneId: string, removed?: Removed[]): void { this.changed(owner, paneId, this.list(owner, paneId), removed); }
 
   private remember(item: PendingRecord<Owner, Lease>, outcome: Removed["outcome"]): void {
-    this.removed.set(item.message.id, { owner: item.owner, paneId: item.paneId, outcome });
-    if (this.removed.size > 1024) this.removed.delete(this.removed.keys().next().value!);
+    this.removed.set(item.message.id, { owner: item.owner, paneId: item.paneId, outcome, at: this.now() });
   }
 
   outcome(owner: Owner, paneId: string, id: string): Removed["outcome"] | undefined {
@@ -112,6 +126,15 @@ export class PendingInputs<Owner, Lease> {
     if (!text.trim() || text.length > MAX_PENDING_CHARS) throw new PendingInputError("invalid_submit_text", "A pending message must contain text and be at most 20000 characters");
     if (this.records.size >= MAX_PENDING_TOTAL || [...this.records.values()].filter((item) => item.owner === owner).length >= MAX_PENDING_PER_OWNER) {
       throw new PendingInputError("pending_limit", "The pending-message list is full; send or discard a message first");
+    }
+    // Reserve each accepted row's eventual receipt. Do not evict a recent withdrawal under
+    // traffic pressure: a saved copy may still race with Edit from another connection.
+    for (const [id, receipt] of this.removed) {
+      if (this.records.size + this.removed.size < MAX_PENDING_DISPOSITIONS) break;
+      if (this.now() - receipt.at >= CLOSED_RETENTION_MS) this.removed.delete(id);
+    }
+    if (this.records.size + this.removed.size >= MAX_PENDING_DISPOSITIONS) {
+      throw new PendingInputError("pending_limit", "Too many recent pending-message outcomes are retained; try again later");
     }
     if ([...this.records.values()].some((item) => item.paneId === paneId && item.message.state === "uncertain")) throw new PendingInputError("pending_uncertain", "Check the terminal before sending more pending messages");
     const item: PendingRecord<Owner, Lease> = {
@@ -174,6 +197,17 @@ export class PendingInputs<Owner, Lease> {
     if (uncertain || gate?.by === item.message.id || gate?.completed) this.gates.delete(item.paneId);
     if (uncertain) this.holdPane(item.paneId, fault);
     this.publish(item.owner, item.paneId);
+  }
+
+  /** Edit withdraws only provably unsent live input. Unlike Discard, it cannot dismiss uncertainty.
+   * Refuse even settled resends: this pin has no transcript receipt to disprove cross-tab delivery. */
+  withdraw(item: PendingRecord<Owner, Lease>): boolean {
+    if (this.records.get(item.message.id) !== item || item.inFlight || item.resendAttempted
+      || !["queued", "held"].includes(item.message.state)) return false;
+    this.records.delete(item.message.id);
+    this.remember(item, "withdrawn");
+    this.publish(item.owner, item.paneId, [{ id: item.message.id, outcome: "withdrawn" }]);
+    return true;
   }
 
   discard(item: PendingRecord<Owner, Lease>): boolean {
@@ -282,7 +316,8 @@ export class PendingInputs<Owner, Lease> {
       for (const [id, item] of this.records) if (item.owner === owner && !item.inFlight) this.records.delete(id);
       if (![...this.records.values()].some((item) => item.owner === owner)) {
         this.closed.delete(owner);
-        for (const [id, receipt] of this.removed) if (receipt.owner === owner) this.removed.delete(id);
+        // Keep withdrawals for the same bounded retention as resend receipts, even after close.
+        for (const [id, receipt] of this.removed) if (receipt.owner === owner && receipt.outcome !== "withdrawn") this.removed.delete(id);
       }
     }
   }

@@ -254,6 +254,25 @@ describe("a pi tool result's images reach the chat", () => {
     expect(Buffer.from(image!.bytes).equals(PNG)).toBe(true);
   });
 
+  it("fetches images addressed by a provider's pipe-separated call id", () => {
+    const id = "call_fixture|fc_fixture";
+    const path = session("image-pipe-id", [asked, callingRead(id), withImage(id)]);
+    const tool = transcriptPage("pi-transcript", path).turns[1]!.parts[0]!;
+    const ref = `pi:${id}:0`;
+    expect(imageOf(tool)).toEqual([{ media_type: "image/png", ref }]);
+    expect(Buffer.from(piTranscriptImage(path, ref)!.bytes).equals(PNG)).toBe(true);
+    expect(piTranscriptImage(path, "pi:call_fixture:0")).toBeNull();
+    expect(piTranscriptImage(path, `pi:${id}:1`)).toBeNull();
+    // Keep the existing size and path-character restrictions on refs.
+    expect(piTranscriptImage(path, `pi:${"x".repeat(129)}:0`)).toBeNull();
+    expect(piTranscriptImage(path, `pi:../${id}:0`)).toBeNull();
+    appendFileSync(path, JSON.stringify({
+      type: "message", id: "a9", parentId: "u1",
+      message: { role: "assistant", content: [{ type: "text", text: "another branch" }] },
+    }) + "\n");
+    expect(piTranscriptImage(path, ref)).toBeNull();
+  });
+
   it("numbers several images of one result, and skips types a chat cannot show", () => {
     const path = session("image-many", [asked, callingRead("c1"), withImage("c1", [
       { type: "image", mimeType: "image/svg+xml", data: "PHN2Zz4=" },

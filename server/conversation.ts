@@ -1853,7 +1853,8 @@ export function piTranscriptImage(path: string, ref: string): { mediaType: strin
   return null;
 }
 
-const PI_IMAGE_REF = /^pi:([A-Za-z0-9_:.\-]{1,128}):(\d{1,3})$/;
+// Some providers join the call and item ids with a pipe; Pi preserves that exact id.
+const PI_IMAGE_REF = /^pi:([A-Za-z0-9_:.|\-]{1,128}):(\d{1,3})$/;
 
 function outputInText(source: RecognizedConversation["source"], text: string, ref: string): string | null {
   text = activeHistoryText(text, source);

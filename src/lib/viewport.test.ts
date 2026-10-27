@@ -1,5 +1,26 @@
 import { describe, expect, test } from "bun:test";
-import { keyboardHoldsGrid, keyboardViewportReference } from "./keyboard.ts";
+import { keyboardHoldsGrid, keyboardViewportOccluded, keyboardViewportReference } from "./keyboard.ts";
+
+describe("keyboard viewport occlusion (#1957)", () => {
+  test("Safari page zoom below 100% can still show and dismiss a keyboard", () => {
+    // Safari reports scale 0.85, but full layout width; scale is deliberately irrelevant.
+    expect(keyboardViewportOccluded(1374, 800, 1194, 1194)).toBe(true);
+    expect(keyboardViewportOccluded(1374, 1294, 1194, 1194)).toBe(false);
+    expect(keyboardViewportOccluded(852, 472, 393, 393)).toBe(true);
+  });
+
+  test("pinch zoom and ordinary browser insets are not keyboard evidence", () => {
+    expect(keyboardViewportOccluded(852, 472, 262, 393)).toBe(false);
+    expect(keyboardViewportOccluded(852, 800, 393, 393)).toBe(false);
+    expect(keyboardViewportOccluded(1000, 800, 393, 393)).toBe(false);
+  });
+
+  test("allows subpixel width rounding, but not two pixels or invalid measurements", () => {
+    expect(keyboardViewportOccluded(852, 472, 392.1, 393)).toBe(true);
+    expect(keyboardViewportOccluded(852, 472, 391, 393)).toBe(false);
+    expect(keyboardViewportOccluded(852, 472, NaN, 393)).toBe(false);
+  });
+});
 
 describe("keyboard viewport reference", () => {
   test("Android layout and lvh shrink retains the unobstructed grid (regression: fails on main)", () => {

@@ -298,16 +298,24 @@ describe("connection-owned pending input", () => {
     } finally { session.mockRestore(); }
   }, 30_000);
 
-  for (const originalFirst of [false, true]) it(`regression: two connections share refusal then retry a new attempt once (original first=${originalFirst})`, async () => {
+  it("rejects an unknown saved-copy ID without typing or allocating a new pending row", async () => {
+    const f = await setup("unknown-copy-id");
+    await f.state("idle");
+    for (const generation of [0, 1]) {
+      f.socket.send({ type: "submit", id: generation + 1, pane_id: f.pane, text: "expired saved text", payload: paste("expired saved text"), resend_id: "unknown-copy-id", resend_generation: generation });
+      expect(await f.socket.result(generation + 1)).toMatchObject({ ok: false, code: "pending_not_found" });
+    }
+    expect(f.bytes()).toBe("");
+  }, 30_000);
+
+  for (const originalFirst of [false, true]) it(`regression: two connections share a live row's refusal then retry a new attempt once (original first=${originalFirst})`, async () => {
     const rule = "\u2500".repeat(60), footer = "[Haiku 4.5] \u2502 project";
     const f = await setup("copy-retry", "claude", `  \u273b Cooked for 1s\n${rule}\n\u276f occupied draft\n${rule}\n  ${footer}\n`);
-    let resendId = "retry-copy-id";
-    if (originalFirst) {
-      f.socket.send({ type: "submit", id: 0, pane_id: f.pane, text: "retry copy", payload: "unused", delivery: "hold" });
-      const held = await f.socket.result(0);
-      expect(held.pending?.state).toBe("held");
-      resendId = held.pending.id;
-    }
+    // Both orderings need an actual live record; a fabricated saved ID is not send authority.
+    f.socket.send({ type: "submit", id: 0, pane_id: f.pane, text: "retry copy", payload: "unused", delivery: "hold" });
+    const held = await f.socket.result(0);
+    expect(held.pending?.state).toBe("held");
+    const resendId = held.pending.id;
     await f.state("idle");
     const other = await f.another();
     const send = (socket: Socket, id: number, generation: number) => socket.send(originalFirst && socket === f.socket

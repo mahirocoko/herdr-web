@@ -88,6 +88,11 @@ export class ComposerDraftStore {
     } catch { this.unsaved.add(key); }
     this.notify();
   }
+  /** A provably withdrawn row joins the latest draft; never truncate recovered text or mentions. */
+  restorePending(key: string, text: string): void {
+    this.refresh(key);
+    this.set(key, (draft) => draft ? `${draft}\n\n${text}` : text);
+  }
   /** `sent`: the draft text this send carries, settled once it is acknowledged */
   begin(key: string, sent?: string): boolean {
     const draft = this.read(key);

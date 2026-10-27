@@ -13,6 +13,12 @@ export function keyboardUp(): boolean {
   return typeof document !== "undefined" && document.documentElement.hasAttribute("data-keyboard");
 }
 
+/** Pinch zoom narrows the visual viewport; Safari per-site page zoom can change scale without
+ * narrowing it. Only full-width, substantial occlusion supplies keyboard evidence. */
+export function keyboardViewportOccluded(reference: number, height: number, visualWidth: number, layoutWidth: number): boolean {
+  return Math.abs(visualWidth - layoutWidth) < 2 && reference - height > reference * 0.2;
+}
+
 /** Reference height for keyboard occlusion, retaining the unobstructed viewport unless the window resized. */
 export function keyboardViewportReference(
   height: number,

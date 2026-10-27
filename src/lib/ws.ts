@@ -838,8 +838,8 @@ export class HerdrSocket {
     })();
   }
 
-  /** Explicitly steer or discard one server-owned pending item. Never queued or replayed. */
-  pendingAction(paneId: string, pendingId: string, action: "steer" | "discard", generation?: number): Promise<SubmitResult> | null {
+  /** Explicitly steer, discard or withdraw one server-owned pending item. Never queued or replayed. */
+  pendingAction(paneId: string, pendingId: string, action: "steer" | "discard" | "withdraw", generation?: number): Promise<SubmitResult> | null {
     const socket = this.socket;
     if (!this.connected || socket === null || this.mode === "observe") return null;
     return (async (): Promise<SubmitResult> => {

@@ -10759,7 +10759,9 @@
       "server/index.ts",
       "server/pending-input.ts",
       "server/pending-input.test.ts",
+      "server/pending-input.contract.test.ts",
       "server/conversation.ts",
+      "server/pi.test.ts",
       "server/conversation-monitor.ts",
       "server/core/terminals.ts",
       "server/pane-routes.ts",
@@ -10841,7 +10843,14 @@
       "src/components/Composer.tsx",
       "src/components/BackgroundTasks.tsx",
       "src/lib/api.ts",
-      "src/lib/machineContext.tsx"
+      "src/lib/machineContext.tsx",
+      "src/lib/viewport.ts",
+      "src/lib/keyboard.ts",
+      "src/lib/viewport.test.ts",
+      "src/components/PendingMessages.tsx",
+      "src/lib/pendingMessages.ts",
+      "src/lib/composerDraft.ts",
+      "src/lib/ws.ts"
     ],
     "additions": [
       "scripts/docs-contracts.test.ts",
@@ -10892,7 +10901,9 @@
       "scripts/pi-subagents-extension.test.ts",
       "src/components/PiSubagents.tsx",
       "src/components/PiSubagents.css",
-      "src/components/PiSubagents.test.tsx"
+      "src/components/PiSubagents.test.tsx",
+      "src/lib/pendingEdit.ts",
+      "src/lib/pendingEdit.test.ts"
     ],
     "license": "UPSTREAM_LICENSE",
     "readmes": "docs/upstream-reference",
