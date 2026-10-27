@@ -1,4 +1,16 @@
 {
+  "0.14.0": {
+    "en": {
+      "new": ["Answer supported Pi questionnaires from Chat."],
+      "improved": ["Read questionnaire details and edit queued messages more easily."],
+      "fixed": ["Show Pi image references and keep the Safari keyboard viewport stable."]
+    },
+    "th": {
+      "new": ["ตอบแบบสอบถาม Pi ที่รองรับได้จากแชต"],
+      "improved": ["อ่านรายละเอียดแบบสอบถามและแก้ข้อความในคิวได้ง่ายขึ้น"],
+      "fixed": ["แสดงภาพจาก Pi และรักษาพื้นที่หน้าจอเมื่อเปิดคีย์บอร์ดบน Safari"]
+    }
+  },
   "0.13.0": {
     "en": {
       "new": [

@@ -4,11 +4,15 @@ import type { HerdrPane, InteractivePrompt, InteractivePromptAnswer, PromptAnswe
 import { codexTranscriptPath, paneCodexHome, unansweredCodexQuestions, type QueuedQuestion } from "./codex.ts";
 import { HerdrError, paneRead, paneScrollInfo, paneSendKeys, paneSendText, sessionSnapshot } from "./herdr/client.ts";
 import { omoTranscriptForPane } from "./omo.ts";
+import { piTranscriptPath } from "./pi.ts";
+import { pendingPiQuestionnaires } from "./pi-questionnaire.ts";
+import { isPiQuestionnaireScreen, parsePiQuestionnaire, piQuestionnaireInputMatches, piQuestionnaireOf, piQuestionnaireScreen } from "./pi-questionnaire-dialog.ts";
+import { navigatePiAsk } from "./pi-questionnaire-navigate.ts";
 import { OmoAskReader, omoAsksAfter, type OmoAskCall, type OmoAsks } from "./omo-ask.ts";
 import { badRequest, errorResponse, jsonResponse } from "./http.ts";
 import { claudePlanFile } from "./claude-plan.ts";
 
-const ANSI_RE = /\u001b\[[0-?]*[ -/]*[@-~]/g;
+export const ANSI_RE = /\u001b\[[0-?]*[ -/]*[@-~]/g;
 const SELECTED_RE = /^[❯›>]\s*/;
 const OMP_OPTION_MARKER_RE = /^([ \t]*)(?:[❯›>]\s*)?([○●◉◯☐☑☒✓])/;
 const DIVIDER_RE = /^[\s╭╮╰╯├┤┬┴┼─━═╌▔]+$/;
@@ -96,7 +100,7 @@ const OMO_PENDING_HINT_RE = /^enter(?: or \S+)? to answer · \/answer · or just
 /** OmO's apparently empty input box; never sufficient evidence for sending text into it. */
 const OMO_EMPTY_BOX_RE = /^[❯›>]$/;
 
-const KEY = {
+export const KEY = {
   up: "up",
   down: "down",
   enter: "enter",
@@ -137,6 +141,8 @@ type Responder =
   | "pi-question"
   | "pi-confirm"
   | "pi-input"
+  | "pi-questionnaire-question"
+  | "pi-questionnaire-submit"
   | "pi-model"
   | "omo-model"
   | "hermes-question"
@@ -146,8 +152,11 @@ type Responder =
   | "fallback-gjc-menu"
   | "fallback-keys";
 
-type ParsedPrompt = InteractivePrompt & {
+export type ParsedPrompt = InteractivePrompt & {
   responder: Responder;
+  piAskForm?: { identity: string; index: number };
+  piQuestionnaireInput?: string;
+  piQuestionnaireInputRows?: string[];
   /** Stable question identity across the folded widget and the expanded form. */
   omoQuestion?: { call: string; index: number };
   menuLabels: string[];
@@ -425,7 +434,7 @@ function sequentialRows(rows: NumberedRow[]): boolean {
   return rows.length > 0 && rows.every((row, index) => row.number === index + 1);
 }
 
-function finishPrompt(
+export function finishPrompt(
   agent: string,
   input: Omit<InteractivePrompt, "id" | "agent">,
   internal: Omit<ParsedPrompt, keyof InteractivePrompt>,
@@ -441,7 +450,7 @@ function finishPrompt(
   return { id, agent, ...input, body: input.body?.slice(0, 12_000) ?? null, ...internal };
 }
 
-function publicPrompt(parsed: ParsedPrompt): InteractivePrompt {
+export function publicPrompt(parsed: ParsedPrompt): InteractivePrompt {
   const prompt: InteractivePrompt = {
     id: parsed.id,
     agent: parsed.agent,
@@ -454,6 +463,7 @@ function publicPrompt(parsed: ParsedPrompt): InteractivePrompt {
     custom_option_index: parsed.custom_option_index,
     ...(parsed.queued ? { queued: parsed.queued } : {}),
     ...(parsed.steps ? { steps: parsed.steps } : {}),
+    ...(parsed.can_step_back ? { can_step_back: true } : {}),
     ...(parsed.answers ? { answers: parsed.answers } : {}),
     ...(parsed.fallback ? { fallback: true as const } : {}),
   };
@@ -2715,7 +2725,7 @@ export function parseInteractivePrompt(agent: string, screen: string, omoAsk: Om
 
 class InvalidAnswer extends Error {}
 
-function navigationKeys(delta: number): string[] {
+export function navigationKeys(delta: number): string[] {
   return Array.from({ length: Math.abs(delta) }, () => delta > 0 ? KEY.down : KEY.up);
 }
 
@@ -2724,18 +2734,20 @@ function sliderKeys(delta: number): string[] {
   return Array.from({ length: Math.abs(delta) }, () => delta > 0 ? KEY.right : KEY.left);
 }
 
-function keySteps(keys: string[]): AnswerStep[] {
+export function keySteps(keys: string[]): AnswerStep[] {
   return keys.map((key) => ({ keys: [key] }));
 }
 
 export function answerKeys(prompt: InteractivePrompt, answer: Pick<PromptAnswer, "option_index" | "option_indices" | "custom_text">): AnswerStep[] {
   const parsed = parsedByPublicPrompt.get(prompt);
   if (!parsed) throw new InvalidAnswer("The prompt was not produced by parseInteractivePrompt.");
+  if (parsed.piQuestionnaireInput !== undefined) throw new InvalidAnswer("Finish or cancel the terminal-owned questionnaire draft in the terminal.");
   const supplied = [answer.option_index !== undefined, answer.option_indices !== undefined, answer.custom_text !== undefined].filter(Boolean).length;
   if (supplied !== 1) throw new InvalidAnswer("Exactly one answer is required.");
 
   if (answer.custom_text !== undefined) {
     if (typeof answer.custom_text !== "string") throw new InvalidAnswer("Custom text must be a string.");
+    if (parsed.responder === "pi-questionnaire-question" && /[\u0000-\u001f\u007f-\u009f]/.test(answer.custom_text)) throw new InvalidAnswer("Pi custom answers must be one line without control characters.");
     const text = answer.custom_text.trim();
     if (!text || parsed.customMenuIndex === null || (parsed.multi_select && parsed.responder !== "claude-question")) throw new InvalidAnswer("This prompt does not accept a custom answer.");
     if (parsed.customSteps) return parsed.customSteps(text);
@@ -3575,7 +3587,7 @@ async function readPrompt(paneId: string, codexHome?: string): Promise<{ agent: 
   // an omo form just answered has closed, while herdr still reports the wait for a moment: that
   // is no screen to answer, and its fallback card would flash up after the form's last answer
   const settling = Date.now() - (formsAnswered.get(paneId) ?? 0) < FORM_SETTLE_MS;
-  if (known.prompt !== null || status !== "blocked" || !agent || settling) {
+  if (known.prompt !== null || known.suppressFallback || status !== "blocked" || !agent || settling) {
     fallbackLogged.delete(paneId);
     return { agent, status, prompt: asked(paneId, known.prompt, turns), pane, panes };
   }
@@ -3623,9 +3635,38 @@ async function readKnownPrompt(
   agent: string,
   codexHome?: string,
   panes: HerdrPane[] = [],
-): Promise<{ prompt: InteractivePrompt | null; screen?: string }> {
+): Promise<{ prompt: InteractivePrompt | null; screen?: string; suppressFallback?: boolean }> {
   if (!["claude", "omp", "codex", "omo", "pi", "gjc", "hermes", ""].includes(agent)) return { prompt: null };
-  const screen = await liveScreen(paneId);
+  let screen = await liveScreen(paneId);
+  if (agent === "pi") screen = piQuestionnaireScreen(screen);
+  const questionnaire = agent === "pi" && isPiQuestionnaireScreen(screen);
+  if (questionnaire && /[□■]/.test(screen)) {
+    const before = screen;
+    const scrollBefore = await paneScrollInfo(paneId).catch(() => null);
+    const colors = await paneRead({ paneId, source: "visible", format: "ansi", timeoutMs: SUGGESTION_READ_MS }).then(read => piQuestionnaireScreen(read.text), () => null);
+    const scrollAfter = await paneScrollInfo(paneId).catch(() => null);
+    screen = piQuestionnaireScreen(await liveScreen(paneId));
+    const text = (value: string): string => value.replace(ANSI_RE, "").replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, "")
+      .split(/\r?\n/).map(line => line.trimEnd()).join("\n").trimEnd();
+    if (colors === null || !viewportShowsLive(scrollBefore, scrollAfter, colors, before, screen) || text(colors) !== text(screen)) return { prompt: null, screen, suppressFallback: true };
+    screen = colors;
+  }
+  if (agent === "pi") {
+    const transcript = await piTranscriptPath(paneId).catch(() => null);
+    if (transcript && "path" in transcript) {
+      try {
+        const calls = pendingPiQuestionnaires(transcript.path);
+        if (calls === null && questionnaire) return { prompt: null, screen, suppressFallback: true };
+        const matches = (calls ?? []).flatMap(call => {
+          const source = piQuestionnaireOf(`${transcript.path}\0${call.id}`, call.args);
+          const parsed = source && parsePiQuestionnaire(screen, source);
+          return parsed ? [parsed] : [];
+        });
+        if (matches.length === 1) return { prompt: publicPrompt(matches[0]!), screen };
+        if (calls?.length || questionnaire) return { prompt: null, screen, suppressFallback: true };
+      } catch { if (questionnaire) return { prompt: null, screen, suppressFallback: true }; }
+    } else if (questionnaire) return { prompt: null, screen, suppressFallback: true };
+  }
   // omo's form reads its text from the session's call, the screen showing where the form stands
   const omoAsks = ["omo", "pi", "claude", ""].includes(agent) && pane.cwd && OMO_FORM_RE.test(screen)
     ? await omoAsksFor(paneId, pane.cwd, panes) : [];
@@ -3833,6 +3874,37 @@ export async function handlePromptRequest(request: Request, url: URL, options: P
       // a plan card's id carries its plan file's revision: the file as it is now must match too
       if (!prompt || (await withPlanFile(prompt, options.claudeTranscript?.(body.pane_id)))!.id !== body.prompt_id) return promptChanged();
       log.matched = true;
+      if (body.step_back === true || body.step_index !== undefined) {
+        const parsed = parsedByPublicPrompt.get(prompt);
+        const native = parsed?.piAskForm;
+        if (!parsed || !native || body.step_back === true && body.step_index !== undefined
+          || body.option_index !== undefined || body.option_indices !== undefined || body.custom_text !== undefined || body.draft !== undefined) {
+          return badRequest("invalid_answer", "Exactly one supported navigation action is required; clear edits first.");
+        }
+        const target = body.step_index ?? native.index - 1;
+        if (!Number.isInteger(target) || target < 0 || target === native.index || !parsed.steps?.[target]?.can_navigate) {
+          return badRequest("invalid_answer", "Invalid question to navigate to.");
+        }
+        const asking = askings.get(body.pane_id);
+        const deadline = Date.now() + SETTLE_MS;
+        const active = (): boolean => !request.signal.aborted && asking !== undefined && askings.get(body.pane_id) === asking && asking.content !== null;
+        answersUnderWay.add(body.pane_id);
+        answerTurns.set(body.pane_id, (answerTurns.get(body.pane_id) ?? 0) + 1);
+        try {
+          const moved = await navigatePiAsk(parsed, target, {
+            deadline, active,
+            send: key => paneSendKeys(body.pane_id, [key]),
+            read: async () => {
+              if (!active()) return null;
+              const live = await readKnownPrompt(body.pane_id, pane, agent, options.codexHome, panes);
+              return live.prompt ? parsedByPublicPrompt.get(live.prompt) ?? null : null;
+            },
+          });
+          if (!moved) return promptChanged();
+          askingEnded(body.pane_id);
+          return jsonResponse({ ok: true });
+        } finally { answersUnderWay.delete(body.pane_id); }
+      }
       // checked against the card before anything is sent: an invalid answer never opens the queue
       let steps: AnswerStep[];
       try {
@@ -3903,7 +3975,7 @@ export async function handlePromptRequest(request: Request, url: URL, options: P
         // Claude's unnumbered rows and pi's models are read with no number to aim at: looked at
         // again before the Enter even when it needs no move. So is Claude's model list, picked
         // with a letter: typed after the list has gone, it would stand in the agent's own prompt
-        let moved = responder === "claude-confirm" || responder === "pi-model" || responder === "omo-model" || responder === "omo-question" || responder === "claude-model" || responder === "claude-effort" || responder === "codex-model" || responder === "fallback-gjc-menu";
+        let moved = responder === "pi-questionnaire-question" || responder === "pi-questionnaire-submit" || responder === "claude-confirm" || responder === "pi-model" || responder === "omo-model" || responder === "omo-question" || responder === "claude-model" || responder === "claude-effort" || responder === "codex-model" || responder === "fallback-gjc-menu";
         // Claude's and Codex's model lists: a window on a list, picked with a letter; Claude's effort
         // slider the same way, its levels side by side
         const list = responder === "claude-model" || responder === "claude-effort" || responder === "codex-model";
@@ -3930,7 +4002,8 @@ export async function handlePromptRequest(request: Request, url: URL, options: P
             const dialog = parsePiDialog(screen, true);
             return dialog?.id === parsed.id && dialog.selectedIndex === cursor && promptTailIsActive(dialog, screen);
           }
-          return shown?.id === parsed.id && shown.selectedIndex === cursor;
+          return shown?.id === parsed.id && shown.selectedIndex === cursor
+            && (responder !== "pi-questionnaire-question" || shown.piQuestionnaireInput === undefined);
         };
         /**
          * Waits for the screen to show the card's own menu with the cursor where the moves sent
@@ -3956,16 +4029,24 @@ export async function handlePromptRequest(request: Request, url: URL, options: P
         };
         // whether a move of this answer has gone out
         let walked = false;
+        let customTyped = false;
         for (let index = 0; index < steps.length; index += 1) {
           const step = steps[index]!;
           const move = step.keys?.every((key) => key === KEY.up || key === KEY.down || (sideways && (key === KEY.left || key === KEY.right))) ?? false;
           // the asking ended under the answer: no further key, whatever the screen shows
-          if (!asks()) return promptChanged();
+          if (!asks() || request.signal.aborted) return promptChanged();
+          if (responder === "pi-questionnaire-question" && body.custom_text !== undefined && committed) {
+            const read = await readKnownPrompt(body.pane_id, pane, agent, options.codexHome, panes);
+            const shown = read.prompt ? parsedByPublicPrompt.get(read.prompt) : null;
+            if (!asks() || request.signal.aborted || shown?.id !== parsed.id || shown.selectedIndex !== parsed.customMenuIndex
+              || !piQuestionnaireInputMatches(shown, customTyped ? body.custom_text.trim() : "")) return promptChanged();
+            if (step.text !== undefined) customTyped = true;
+          }
           // A model list can be nine rows from the cursor, and an Esc in the terminal hands its
           // keys to the agent's own prompt, where an arrow walks the prompt's history: each move
           // after the first goes only once the list shows the one before it
           // GJC's selector the same: dismissed under the answer, its composer would take the moves
-          if (move && walked && (list || responder === "fallback-gjc-menu") && !(await onRow())) return promptChanged();
+          if (move && walked && (list || responder === "fallback-gjc-menu" || responder === "pi-questionnaire-question") && !(await onRow())) return promptChanged();
           if (!move && !committed) {
             // An answer is only as good as the menu and the cursor it moves from, and both are
             // as old as the read above by the time its moves are done: the menu answered in the
@@ -4024,7 +4105,7 @@ export async function handlePromptRequest(request: Request, url: URL, options: P
         await closeQueue(body.pane_id, contentId(target)!);
       }
       const responder = parsedByPublicPrompt.get(target)?.responder;
-      if (responder === "omo-question" || responder === "omo-review" || responder === "omo-typing" || responder === "omo-pending") {
+      if (responder === "omo-question" || responder === "omo-review" || responder === "omo-typing" || responder === "omo-pending" || responder === "pi-questionnaire-question" || responder === "pi-questionnaire-submit") {
         formsAnswered.set(body.pane_id, Date.now());
         if (formsAnswered.size > 64) formsAnswered.delete(formsAnswered.keys().next().value!);
       }

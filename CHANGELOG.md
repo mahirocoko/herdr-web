@@ -8,6 +8,33 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-27
+
+### Added
+
+- Present supported Pi example questionnaires as Chat prompt cards, using the
+  recorded call and terminal drawing to navigate and answer the native widget.
+
+### Changed
+
+- Make questionnaire tool-call details readable and keep titleless prompt cards
+  legible when collapsed, with spacing above the composer controls.
+- Allow queued messages to be withdrawn and edited without replaying uncertain
+  or already withdrawn input.
+
+### Fixed
+
+- Display Pi image references containing `|` and avoid misclassifying the Safari
+  viewport when the keyboard opens.
+
+### Boundaries
+
+- Questionnaire matching follows the upstream terminal-screen approach; it is
+  not an atomic proof of the live Pi branch or widget identity. Check Terminal
+  when an answer's outcome is uncertain and do not automatically retry it.
+- This source-only release does not enable upstream managed updates, installers,
+  remote-PC provisioning or receipt replay.
+
 ## [0.13.0] - 2026-10-26
 
 ### Added
@@ -5142,7 +5169,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/mahirocoko/herdr-web/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/mahirocoko/herdr-web/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/mahirocoko/herdr-web/compare/v0.11.2...v0.12.0
 [0.11.2]: https://github.com/mahirocoko/herdr-web/compare/v0.11.1...v0.11.2

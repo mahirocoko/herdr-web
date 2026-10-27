@@ -60,7 +60,16 @@
   color: var(--status-blocked);
   font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
+  min-width: 0;
   overflow-wrap: anywhere;
+}
+
+/* A titleless question is itself the heading, including when the card is folded. */
+.prompt-card.is-question-header .prompt-card-header h2 {
+  color: var(--text-strong);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-base);
 }
 
 /* "View plan" sits at the header's end, beside the title */
@@ -144,6 +153,24 @@
     color var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out),
     background-color var(--dur-fast) var(--ease-out);
+}
+
+.prompt-card-step-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.prompt-card-step-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .prompt-card-step-mark {
@@ -308,6 +335,10 @@
   transition:
     background-color var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out);
+}
+
+.prompt-card.is-question-header .prompt-card-option {
+  padding-inline: var(--space-1);
 }
 
 .prompt-card-option:hover,

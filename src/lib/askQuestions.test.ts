@@ -31,6 +31,19 @@ describe("a past question tool call", () => {
     }
   });
 
+  test("renders Pi questionnaire call arguments as a read-only question record", () => {
+    expect(askedQuestions("questionnaire", { questions: [{ id: "drink", prompt: "Which do you prefer?", options: [
+      { value: "tea", label: "Tea" }, { value: "coffee", label: "Coffee", description: "Hot" },
+    ] }] })).toEqual([{ header: null, question: "Which do you prefer?", multi: false, recommended: null, options: [
+      { label: "Tea", description: null, preview: null }, { label: "Coffee", description: "Hot", preview: null },
+      { label: "Type something.", description: null, preview: null },
+    ] }]);
+    const noOther = askedQuestions("questionnaire", { questions: [{ label: "Scope", prompt: "Choose", options: [], allowOther: false }] });
+    expect(noOther?.[0]?.header).toBe("Scope");
+    expect(noOther?.[0]?.options).toEqual([]);
+    expect(askedQuestions("questionnaire", { questions: [{ question: "Wrong shape" }] })).toBeNull();
+  });
+
   test("ignores a recommendation that names no option", () => {
     for (const recommended of [2, -1, 0.5, "0"]) {
       expect(askedQuestions("ask", { questions: [{ question: "Q?", recommended, options: [{ label: "A" }, { label: "B" }] }] })?.[0]?.recommended).toBeNull();

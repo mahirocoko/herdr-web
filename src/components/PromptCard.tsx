@@ -122,9 +122,11 @@ export function PromptCard({ paneId, prompt, onPromptChanged, onAnswered, typedA
   const hasChoices = prompt.options.some((_, index) => index !== prompt.custom_option_index);
   const openFile = useContext(OpenFileContext);
   const planFile = prompt.plan_file;
+  const questionHeading = !prompt.title.trim() && !!prompt.question.trim();
+  const heading = questionHeading ? prompt.question : prompt.title;
 
   return (
-    <section className={`prompt-card${folded ? " is-folded" : ""}`} ref={cardRef} role="region" aria-label={t("Agent is asking")}
+    <section className={`prompt-card${folded ? " is-folded" : ""}${questionHeading ? " is-question-header" : ""}`} ref={cardRef} role="region" aria-label={t("Agent is asking")}
       onKeyDown={(event) => { down.current = null; keyed.current = event.key === "Enter" || event.key === " " ? event.target : null; }}
       onPointerDown={(event) => {
         keyed.current = null;
@@ -134,7 +136,7 @@ export function PromptCard({ paneId, prompt, onPromptChanged, onAnswered, typedA
       <header className="prompt-card-header">
         {/* read, not drawn: the title is the card's one red */}
         <span className="visually-hidden">{t("input needed")}</span>
-        <h2>{prompt.title}</h2>
+        <h2>{heading}</h2>
         {/* the card shows a plan in its short box; the file viewer draws the whole of it as Markdown */}
         {planFile && openFile && (
           <button type="button" className="btn btn-ghost prompt-card-plan-file" onClick={() => openFile(planFile)}>
@@ -151,15 +153,24 @@ export function PromptCard({ paneId, prompt, onPromptChanged, onAnswered, typedA
         <ol className="prompt-card-steps" aria-label={t("Questions")}>
           {prompt.steps.map((step, index) => (
             <li key={index} className={`prompt-card-step${step.answered ? " is-answered" : ""}${step.current ? " is-current" : ""}`} aria-current={step.current ? "step" : undefined}>
-              <span className="prompt-card-step-mark" aria-hidden="true">{step.answered ? <Check /> : index + 1}</span>
-              <span className="prompt-card-step-label">{step.label}</span>
-              {step.answered && <span className="visually-hidden">{t("(answered)")}</span>}
+              {step.can_navigate && !step.current ? (
+                <button type="button" className="prompt-card-step-button" disabled={pending || selected.size > 0 || custom.trim().length > 0}
+                  onClick={(event) => void answer({ step_index: index }, event)}>
+                  <span className="prompt-card-step-mark" aria-hidden="true">{step.answered ? <Check /> : index + 1}</span>
+                  <span className="prompt-card-step-label">{step.label}</span>
+                  {step.answered && <span className="visually-hidden">{t("(answered)")}</span>}
+                </button>
+              ) : <>
+                <span className="prompt-card-step-mark" aria-hidden="true">{step.answered ? <Check /> : index + 1}</span>
+                <span className="prompt-card-step-label">{step.label}</span>
+                {step.answered && <span className="visually-hidden">{t("(answered)")}</span>}
+              </>}
             </li>
           ))}
         </ol>
       )}
       {/* a Claude approval's heading is its question too: said once */}
-      {prompt.question !== prompt.title && <p className="prompt-card-question">{prompt.question}</p>}
+      {prompt.question !== heading && <p className="prompt-card-question">{prompt.question}</p>}
       {prompt.queued && (
         <p className="prompt-card-hint">
           {prompt.queued === "open"

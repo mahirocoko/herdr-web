@@ -1094,6 +1094,8 @@ export interface InteractivePrompt {
   /** the questions of a form that asks several at once (omo), in order: which are answered and
    * which one the card asks now (none while the answers are reviewed). Absent for one question */
   steps?: InteractivePromptStep[];
+  /** Whether a questionnaire can navigate back to an earlier question. */
+  can_step_back?: boolean;
   /** the answers a review asks to submit (Claude, omp), each question with what was picked for it,
    * read whole where the terminal wrapped them. A question cut off above the pane's top is null */
   answers?: InteractivePromptAnswer[];
@@ -1108,6 +1110,7 @@ export interface InteractivePromptStep {
   label: string;
   answered: boolean;
   current: boolean;
+  can_navigate?: boolean;
 }
 
 export interface InteractivePromptAnswer {
@@ -1129,6 +1132,9 @@ export interface PromptAnswer {
   option_index?: number;
   option_indices?: number[];
   custom_text?: string;
+  step_back?: boolean;
+  step_index?: number;
+  draft?: { option_indices: number[]; custom_text: string };
 }
 
 /**

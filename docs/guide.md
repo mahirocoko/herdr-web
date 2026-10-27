@@ -18,6 +18,22 @@ Reader availability varies by provider and platform. Source contains Claude, Cod
 
 Letta supports bounded newest/older history pages. Image entries currently show an unavailable-preview notice, and full-output fetching is not implemented. Native records with distinct identities may display repeated text; the reader does not delete them by guessing that matching text is a duplicate.
 
+### Pi questionnaire extension
+
+The `questionnaire` tool is an optional Pi extension, not a built-in Herdr Web feature. A Pi session without that extension cannot call it; ordinary Pi chat does not require it. Herdr Web does not install or enable Pi extensions.
+
+To try Pi's example questionnaire without changing global settings, locate `examples/extensions/questionnaire.ts` in your installed Pi package and start a **new** Pi session with its absolute path:
+
+```sh
+pi --extension /absolute/path/to/questionnaire.ts
+```
+
+The example's location and availability depend on your Pi distribution; consult its documentation if it is not included. This loads the extension for that launch only. It does not enable the tool in an existing Pi session or establish support for other questionnaire implementations.
+
+For all new Pi sessions, Pi also discovers extensions in `~/.pi/agent/extensions/`. You can place a trusted questionnaire extension there instead; remove that specific file or symlink to stop loading it in future sessions. A symlink to Pi's packaged example depends on that installation path and may change or break when Pi is updated. Existing sessions need their own reload or restart to pick up resource changes; do not reload a session with work in progress without checking first.
+
+Herdr Web reads the active example questionnaire using Pi’s recorded tool call and terminal drawing, then presents the existing prompt card in Chat when both can be matched. It does not require an additional Herdr-specific Pi extension. Unsupported, clipped, ambiguous or changed widgets remain terminal-only; finish or cancel an existing terminal-owned draft in Terminal. If an answer’s outcome is uncertain, check Terminal before taking further action—Herdr does not automatically retry it.
+
 ### Pi subagents
 
 Pi's `subagent` calls appear as inline task cards at the position where Main dispatched them, outside folded work blocks. Adjacent calls form a group. Each card keeps its own title and current running, queued, completed or unknown state; completed cards stay at the same position. There is no trailing Chat history button. The activity chip beside the composer also lists children. Select a card to read its Markdown messages, code blocks, expandable tool arguments/results and errors in a separate read-only dialog; Main's Chat stays mounted. Use earlier/latest activity controls for bounded history pages. This view has no Send, Stop, steer or resume controls, and does not expose the child's native session identity as a browser control.
