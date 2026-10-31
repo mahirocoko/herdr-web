@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, Monitor, Plus, Settings, SlidersHorizontal, X } from "lucide-react";
+import { Battery, ChevronDown, ChevronRight, Monitor, Plus, Settings, SlidersHorizontal, X } from "lucide-react";
 import type { Machine, MachineState, MachineUpdate } from "../../shared/machines.ts";
 import { MachineContext } from "../lib/machineContext.tsx";
 import { answerMachineSetup, machineRequest } from "../lib/api.ts";
@@ -42,10 +42,37 @@ export function MachineSidebar(props: Props) {
     <footer className="sidebar-footer">
       <div className="sidebar-footer-row">
         <button className="btn btn-ghost sidebar-footer-action sidebar-footer-settings" aria-label={t("Settings")} title={t("Settings (⌘⇧,)")} onClick={props.actions.openSettings}><Settings aria-hidden="true" /></button>
+        <HostBatteryButton />
         <UsageMeters />
       </div>
     </footer>
   </div></SidebarActivityProvider>;
+}
+
+function HostBatteryButton() {
+  const t = useT();
+  const [message, setMessage] = useState<string | null>(null);
+  const pending = useRef(false);
+  const check = async () => {
+    if (pending.current) return;
+    pending.current = true;
+    setMessage(t("Checking host battery…"));
+    try {
+      const response = await fetch("/api/host-battery", { cache: "no-store" });
+      if (!response.ok) throw new Error("unavailable");
+      const value = await response.json() as { status?: string; percent?: unknown; power?: unknown };
+      if (value.status !== "available" || typeof value.percent !== "number" || !Number.isInteger(value.percent) || value.percent < 0 || value.percent > 100) throw new Error("unavailable");
+      if (!["charging", "charged", "not-charging", "discharging"].includes(String(value.power))) throw new Error("unavailable");
+      const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const params = { time, percent: value.percent };
+      setMessage(value.power === "charging" ? t("Host battery at {time}: {percent}% · charging", params)
+        : value.power === "charged" ? t("Host battery at {time}: {percent}% · charged", params)
+        : value.power === "not-charging" ? t("Host battery at {time}: {percent}% · plugged in, not charging", params)
+        : t("Host battery at {time}: {percent}% · on battery", params));
+    } catch { setMessage(t("Host battery unavailable")); }
+    finally { pending.current = false; }
+  };
+  return <div className="host-battery"><button type="button" className="btn btn-ghost sidebar-footer-action" aria-label={t("Check host battery")} title={t("Check host battery")} onClick={() => void check()}><Battery aria-hidden="true" /></button><span role="status">{message}</span></div>;
 }
 
 function MachineGroup({ machine, ...props }: Props & { machine: Machine }) {

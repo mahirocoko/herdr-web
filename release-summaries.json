@@ -1,4 +1,12 @@
 {
+  "0.15.0": {
+    "en": {
+      "new": ["Check the host Mac's battery on demand from the sidebar."]
+    },
+    "th": {
+      "new": ["กดดูแบตของ Mac ที่รัน Herdr Web ได้จากแถบด้านข้าง"]
+    }
+  },
   "0.14.0": {
     "en": {
       "new": ["Answer supported Pi questionnaires from Chat."],

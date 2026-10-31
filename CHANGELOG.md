@@ -8,6 +8,20 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-31
+
+### Added
+
+- Check the Mac hosting Herdr Web's battery on demand from the sidebar, with
+  the reading time and charging state. No background battery polling is used.
+
+### Boundaries
+
+- Battery readings are supported on macOS hosts only; unsupported or unreadable
+  batteries show an unavailable state. Physical phone rendering remains unverified.
+- This source-only release does not enable upstream managed updates, installers
+  or remote-PC provisioning.
+
 ## [0.14.0] - 2026-10-27
 
 ### Added
@@ -5169,7 +5183,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/mahirocoko/herdr-web/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/mahirocoko/herdr-web/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/mahirocoko/herdr-web/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/mahirocoko/herdr-web/compare/v0.11.2...v0.12.0

@@ -5,6 +5,13 @@
  */
 export const TH: Record<string, string> = {
   "Input": "อินพุต",
+  "Check host battery": "ดูแบตเครื่องเซิร์ฟเวอร์",
+  "Checking host battery…": "กำลังตรวจสอบแบตเครื่องเซิร์ฟเวอร์…",
+  "Host battery at {time}: {percent}% · charging": "แบตเครื่องเซิร์ฟเวอร์เวลา {time}: {percent}% · กำลังชาร์จ",
+  "Host battery at {time}: {percent}% · charged": "แบตเครื่องเซิร์ฟเวอร์เวลา {time}: {percent}% · ชาร์จเต็มแล้ว",
+  "Host battery at {time}: {percent}% · plugged in, not charging": "แบตเครื่องเซิร์ฟเวอร์เวลา {time}: {percent}% · เสียบไฟ แต่ไม่ได้ชาร์จ",
+  "Host battery at {time}: {percent}% · on battery": "แบตเครื่องเซิร์ฟเวอร์เวลา {time}: {percent}% · ใช้แบตเตอรี่",
+  "Host battery unavailable": "ไม่สามารถดูแบตเครื่องเซิร์ฟเวอร์ได้",
   "Pi subagents": "ซับเอเจนต์ Pi",
   "Back to subagents": "กลับสู่ซับเอเจนต์",
   "Read-only · updates from recorded activity": "อ่านอย่างเดียว · อัปเดตตามกิจกรรมที่บันทึกไว้",

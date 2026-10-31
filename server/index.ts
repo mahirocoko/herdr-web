@@ -18,6 +18,7 @@ import { DEVICE_COOKIE, authClient, bearerMatches, handleAuthRequest, isAuthenti
 import { cameThroughProxy, decideAccess, isLoopbackAddress, isLoopbackBind, isServeOwnerRequest, lanExposed } from "./access.ts";
 import { DeviceStore, handleDeviceRequest, type DeviceMatch } from "./devices.ts";
 import { handlePreferencesRequest, PreferenceStore } from "./preferences.ts";
+import { readHostBattery } from "./host-battery.ts";
 import { remoteAccess, TailnetIdentitySource } from "./tailscale.ts";
 import { badRequest, errorResponse, jsonResponse, readJsonObject } from "./http.ts";
 import { requestOrigin, serveStatic } from "./static.ts";
@@ -766,6 +767,10 @@ export function createServer(
       if (pathname === "/api/telemetry") return handleTelemetryRequest(request, options.telemetry);
       // what every browser of this server shares; a watching device reads it and cannot change it (above)
       if (pathname === "/api/preferences") return handlePreferencesRequest(request, preferences);
+      if (pathname === "/api/host-battery") {
+        if (request.method !== "GET") return new Response(null, { status: 405, headers: { Allow: "GET", "Cache-Control": "no-store" } });
+        return jsonResponse(await readHostBattery(), 200, { "Cache-Control": "no-store" });
+      }
 
       if (pathname === "/api/usage") return handleUsageRequest(request, url, usage);
       if (pathname === "/api/usage/login") { bunServer.timeout(request, 30); return usageLogin.handle(request, collector.trackPane); }

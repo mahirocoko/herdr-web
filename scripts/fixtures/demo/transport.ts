@@ -515,6 +515,7 @@ async function route(url: URL, method: string, init: RequestInit | undefined, in
   const query = url.searchParams;
   const paneId = query.get("pane_id") ?? "";
 
+  if (path === "/api/host-battery") return json({ status: "unavailable" });
   if (path === "/api/health") {
     const auth = { required: false, authenticated: true };
     if (query.get("scope") === "bridge") return json({ ok: true, auth, bridge_protocol: 1 });

@@ -3229,6 +3229,17 @@ describe("token auth", () => {
     expect(body.error.code).toBe("unauthorized");
   });
 
+  it("gates host battery and does not cache its on-demand result", async () => {
+    expect((await fetch(`${securedBase()}/api/host-battery`)).status).toBe(401);
+    const headers = { authorization: `Bearer ${TOKEN}` };
+    const result = await fetch(`${securedBase()}/api/host-battery`, { headers });
+    expect(result.status).toBe(200);
+    expect(result.headers.get("cache-control")).toBe("no-store");
+    expect(["available", "unavailable"]).toContain((await result.json() as { status: string }).status);
+    const post = await fetch(`${securedBase()}/api/host-battery`, { method: "POST", headers: { ...headers, origin: securedBase() } });
+    expect(post.status).toBe(405);
+  });
+
   it("keeps /api/health public and advertises the gate state", async () => {
     const res = await fetch(`${securedBase()}/api/health`);
     expect(res.status).toBe(200);

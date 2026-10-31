@@ -20,7 +20,7 @@ Subscription usage is hidden at rendering boundaries, not deleted from backend d
 
 Normal startup is `bun start` through `scripts/bun-project.mjs` and `scripts/run-local.ts` into `createServer`. `server` and `dev` are the same foreground build-and-serve path. It rejects an occupied loopback port before rebuilding. Do not invoke upstream direct-main, managed supervisor, installers or plugin registration. Exact Bun 1.4.2 must already exist; never install or upgrade it globally. Real Node, never Bun, owns `@lydell/node-pty`.
 
-Use verified named visible project Herdr terminals for app/reference servers, without changing focus. Revalidate PID, argv, cwd and pane before signaling. Do not create hidden detached product servers or rebuild a live instance's `dist/` for QA. Reuse the instance or use isolated build output.
+After finishing Herdr Web changes that affect the running app, restart the existing Web service so the changes are available. Use its verified named visible project Herdr terminal without changing focus; revalidate PID, argv, cwd, port and pane before signaling, then check readiness. Preserve unrelated services and sessions; if ownership or a safe restart cannot be verified, report the blocker. Do not create hidden detached product servers or rebuild a live instance's `dist/` for QA. Reuse the instance or use isolated build output.
 
 Runtime state lives under ignored `.agent-state/runtime/upstream-v10700`, with private POSIX permissions or native ACL validation. All `.agent-state` content is local-only, including retrospectives, pulse and QA evidence: never force-add any of it. Preserve HOME, user profiles, credentials, private uploads, drafts, native panes and unknown work. Never reset/clean them as cleanup.
 

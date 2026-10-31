@@ -374,6 +374,7 @@ export const PROMOTION_PATCHES = [
   'src/components/AgentMark.test.tsx',
   'src/components/PaneTerminal.tsx',
   'src/components/MachineSidebar.tsx',
+  'src/components/Sidebar.css',
   'src/components/SettingsDialog.tsx',
   'src/lib/paletteSettings.ts',
   'src/lib/paletteSettings.test.ts',
@@ -457,6 +458,8 @@ export const PROMOTION_PATCHES = [
   'server/prompt.test.ts',
 ]
 export const PROMOTION_ADDITIONS = [
+  'server/host-battery.ts',
+  'server/host-battery.test.ts',
   'scripts/docs-contracts.test.ts',
   'server/letta-stop.ts',
   'server/letta-stop.test.ts',

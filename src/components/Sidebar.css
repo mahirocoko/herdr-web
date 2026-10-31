@@ -650,6 +650,21 @@ button.sidebar-section-label:focus-visible { outline-offset: calc(var(--ring-off
 
 .sidebar-footer-settings svg { margin-inline: auto; }
 
+.host-battery { position: relative; flex: 0 0 auto; }
+.host-battery .sidebar-footer-action { width: var(--side-box); padding: 0; }
+.host-battery [role="status"]:not(:empty) {
+  position: absolute;
+  bottom: 100%;
+  inset-inline-start: 0;
+  width: max-content;
+  max-width: 220px;
+  padding: var(--space-2);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: var(--fs-xs);
+  border-radius: var(--radius-md);
+}
+
 .sidebar-install-help {
   margin: 0;
   padding: 0 var(--space-2) var(--space-1) var(--side-box);
