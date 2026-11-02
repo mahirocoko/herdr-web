@@ -1,4 +1,12 @@
 {
+  "0.16.2": {
+    "en": {
+      "fixed": ["Recognize Antigravity status in Herdr App; keep long mobile drafts compact."]
+    },
+    "th": {
+      "fixed": ["รู้จักสถานะ Antigravity ใน Herdr App และย่อช่องพิมพ์ข้อความยาวบนมือถือ"]
+    }
+  },
   "0.16.1": {
     "en": {
       "fixed": ["Release stale Chat reads when returning to a conversation."]

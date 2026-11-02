@@ -421,14 +421,16 @@ describe.skipIf(process.platform === "win32")("herdr-core adapter", () => {
     const core = cores[0]!;
     core.notify(channel, "event", { seq: 2, type: "status", terminal: "t2", data: { status: { app: "codex", state: "working" } } });
     core.notify(channel, "event", { seq: 3, type: "status", terminal: "t1", data: { status: { app: "claude-code", state: "working" } } });
-    core.notify(channel, "event", { seq: 4, type: "status", terminal: "t1", data: { status: { app: "omp", state: "error" } } });
-    core.notify(channel, "event", { seq: 5, type: "title", terminal: "t1", data: { title: "spinner" } });
-    core.notify(channel, "event", { seq: 6, type: "finished", terminal: "t1", data: { reason: "exited", exit_code: 0 } });
-    core.notify(channel, "missed", { seq: 9, terminals: [] });
+    core.notify(channel, "event", { seq: 4, type: "status", terminal: "t1", data: { status: { app: "antigravity", state: "working" } } });
+    core.notify(channel, "event", { seq: 5, type: "status", terminal: "t1", data: { status: { app: "omp", state: "error" } } });
+    core.notify(channel, "event", { seq: 6, type: "title", terminal: "t1", data: { title: "spinner" } });
+    core.notify(channel, "event", { seq: 7, type: "finished", terminal: "t1", data: { reason: "exited", exit_code: 0 } });
+    core.notify(channel, "missed", { seq: 10, terminals: [] });
     await ended.promise;
     expect(frames).toEqual([
       // herdr-core's `claude-code` reaches the browser as herdr's `claude`, as in the snapshot
       { event: "pane.agent_status_changed", data: { pane_id: "t1", agent_status: "working", agent: "claude" } },
+      { event: "pane.agent_status_changed", data: { pane_id: "t1", agent_status: "working", agent: "agy" } },
       { event: "pane.agent_status_changed", data: { pane_id: "t1", agent_status: "unknown", agent: "omp" } },
       { event: "pane.exited", data: { type: "pane_exited", pane_id: "t1" } },
       { event: "pane.closed", data: { type: "pane_closed", pane_id: "t1" } },

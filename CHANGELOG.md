@@ -8,6 +8,23 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.16.2] - 2026-11-02
+
+### Fixed
+
+- Normalize herdr-core's Antigravity status to Agy while preserving the
+  foreground-process and history identity guards. Adapted from Ovis
+  [#2613](https://github.com/devswha/ovis/pull/2613).
+- Constrain the mobile composer text area to the visible viewport so a long
+  draft has more room for its controls. Adapted from Ovis
+  [#2597](https://github.com/devswha/ovis/pull/2597); Enter behavior is unchanged.
+
+### Boundaries
+
+- Actual Agy history depends on the existing exact foreground process and
+  presence-lock identity checks; this change does not relax them. Real Agy/core
+  and physical keyboard viewport behavior were not tested in this release.
+
 ## [0.16.1] - 2026-11-02
 
 ### Fixed
@@ -5209,7 +5226,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.1...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.2...HEAD
+[0.16.2]: https://github.com/mahirocoko/herdr-web/compare/v0.16.1...v0.16.2
 [0.16.1]: https://github.com/mahirocoko/herdr-web/compare/v0.16.0...v0.16.1
 [0.15.0]: https://github.com/mahirocoko/herdr-web/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/mahirocoko/herdr-web/compare/v0.13.0...v0.14.0

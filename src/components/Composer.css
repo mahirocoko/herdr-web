@@ -1033,6 +1033,11 @@
   .composer-note-action {
     min-height: var(--touch-target);
   }
+
+  /* Keep the controls reachable above a tall keyboard (Ovis #2597). */
+  .composer-text {
+    max-height: min(10lh, max(2lh, calc(var(--app-height, 100dvh) * 0.3)));
+  }
 }
 
 @media (max-width: 480px) {

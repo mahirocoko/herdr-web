@@ -1,7 +1,7 @@
 // Adapted from devswha/herdr-web-ui a4ff0c942716602c43362f05c8511984e2bcae44.
 // MIT; see UPSTREAM_LICENSE. Fork opt-in compatibility, not a source repin.
 import { describe, expect, it } from "bun:test";
-import { buildSnapshot, type HcTerminal, keyBytes, OTHER_WORKSPACE_ID } from "./snapshot.ts";
+import { buildSnapshot, type HcTerminal, keyBytes, OTHER_WORKSPACE_ID, processInfoOf } from "./snapshot.ts";
 
 function terminal(address: string, extra: Partial<HcTerminal> = {}): HcTerminal {
   return { address, cols: 120, rows: 40, cwd: "/home/u", state: "live", ...extra };
@@ -77,6 +77,16 @@ describe("buildSnapshot", () => {
     expect(snapshot.tabs[0]!.agent_status).toBe("blocked");
     expect(snapshot.workspaces[0]!.agent_status).toBe("blocked");
     expect(snapshot.agents.map((a) => [a.pane_id, a.agent])).toEqual([["t1", "claude"], ["t2", "codex"], ["t3", "omp"], ["t5", "claude"]]);
+  });
+
+  it("normalizes Antigravity status without changing the actual foreground process", () => {
+    const layout = { spaces: [{ id: "s1", name: "a", tabs: [{ id: "s1t1", name: "", root: block("t1") }] }] };
+    const source = terminal("t1", { status: { app: "antigravity", state: "working" }, foreground: { name: "sh", pid: 123, argv: ["sh"] } });
+    const snapshot = buildSnapshot([source], layout, "0.1.16");
+    expect(processInfoOf(source).foreground_processes?.[0]?.name).toBe("sh");
+    expect(snapshot.panes[0]!.agent).toBe("agy");
+    expect(snapshot.agents[0]!.agent).toBe("agy");
+    expect(snapshot.panes[0]!.agent_status).toBe("working");
   });
 
   it("gives each pane its terminal's own grid at its place in the tab's splits, so no two panes overlap", () => {
