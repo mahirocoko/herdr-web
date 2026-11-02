@@ -1,4 +1,12 @@
 {
+  "0.16.1": {
+    "en": {
+      "fixed": ["Release stale Chat reads when returning to a conversation."]
+    },
+    "th": {
+      "fixed": ["ยกเลิกการอ่านแชตที่ค้างไว้เมื่อกลับมาดูบทสนทนา"]
+    }
+  },
   "0.16.0": {
     "en": {
       "new": ["Connect to Herdr App terminals with opt-in core mode."],

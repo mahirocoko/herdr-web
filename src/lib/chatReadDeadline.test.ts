@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { chatReadDeadlineMs, withChatReadDeadline } from "./chatReadDeadline.ts";
+import { ConversationRefresh } from "./conversationRefresh.ts";
 
 test("a stalled header aborts and releases the serialized reader", async () => {
   let signal: AbortSignal | undefined;
@@ -27,4 +28,41 @@ test("success and HTTP failures preserve the original result or error", async ()
 test("a remote PC's read, which crosses the machine proxy, waits twice as long as a local one", () => {
   expect(chatReadDeadlineMs("local")).toBe(15_000);
   expect(chatReadDeadlineMs("studio-mac")).toBe(30_000);
+});
+
+test("a replaced screen releases an uncooperative read and aborts its transport", async () => {
+  const screen = new AbortController();
+  let transport: AbortSignal | undefined;
+  const late = Promise.withResolvers<string>();
+  const pending = withChatReadDeadline((signal) => { transport = signal; return late.promise; }, 30_000, screen.signal);
+  screen.abort();
+  await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+  expect(transport?.aborted).toBe(true);
+  late.resolve("obsolete");
+  let started = false;
+  await expect(withChatReadDeadline(async () => { started = true; }, 10, screen.signal)).rejects.toMatchObject({ name: "AbortError" });
+  expect(started).toBe(false);
+});
+
+test("screen replacement cancels a stalled read and starts a fresh one", async () => {
+  const previous = globalThis.window;
+  Object.assign(globalThis, { window: globalThis });
+  const refresh = new ConversationRefresh();
+  const began = Promise.withResolvers<void>();
+  const next = Promise.withResolvers<void>();
+  try {
+    refresh.setRead(async (signal) => {
+      try { await withChatReadDeadline(() => { began.resolve(); return new Promise(() => {}); }, 30_000, signal); }
+      catch (error) { if (!(error instanceof DOMException && error.name === "AbortError")) throw error; }
+    });
+    refresh.refresh();
+    await began.promise;
+    refresh.stop();
+    refresh.setRead(async () => { next.resolve(); });
+    refresh.refresh();
+    await withChatReadDeadline(() => next.promise, 500);
+  } finally {
+    refresh.stop();
+    Object.assign(globalThis, { window: previous });
+  }
 });

@@ -230,10 +230,10 @@ const wrappedOnly = new Set<string>();
  * rejoins the rows the terminal soft-wrapped, so a line reflows to the chat's
  * width instead of breaking where the pty's columns ended.
  */
-export async function fetchPaneTranscript(paneId: string, lines: number, machineId = "local"): Promise<PaneReadResult> {
+export async function fetchPaneTranscript(paneId: string, lines: number, machineId = "local", signal?: AbortSignal): Promise<PaneReadResult> {
   const read = async (source: "recent" | "recent_unwrapped"): Promise<PaneReadResult> => {
     const query = new URLSearchParams({ pane_id: paneId, source, format: "text", lines: String(lines) });
-    return (await withChatReadDeadline((signal) => getJson<{ read: PaneReadResult }>(machinePath(machineId, `pane/read?${query.toString()}`), { signal }), chatReadDeadlineMs(machineId))).read;
+    return (await withChatReadDeadline((bounded) => getJson<{ read: PaneReadResult }>(machinePath(machineId, `pane/read?${query.toString()}`), { signal: bounded }), chatReadDeadlineMs(machineId), signal)).read;
   };
   if (wrappedOnly.has(machineId)) return read("recent");
   try {
@@ -246,7 +246,7 @@ export async function fetchPaneTranscript(paneId: string, lines: number, machine
 }
 
 /** Which turns (ConversationResponse.cursor): the page `before` a cursor, not past `since`; the newest ones `from` a held start. */
-export type ConversationPageQuery = { before?: string; since?: string; from?: string };
+export type ConversationPageQuery = { before?: string; since?: string; from?: string; signal?: AbortSignal };
 
 /**
  * The last answer per newest-page conversation URL and its ETag. The chat reads it again on
@@ -321,7 +321,8 @@ export async function fetchPaneConversation(paneId: string, machineId = "local",
     if (response.status === 304 && known) return { response, body: known.body };
     if (!response.ok) throw await errorFrom(url, response);
     return { response, body: (await response.json()) as ConversationResponse };
-  }, chatReadDeadlineMs(machineId));
+  }, chatReadDeadlineMs(machineId), page.signal);
+  if (page.signal?.aborted) throw page.signal.reason ?? new DOMException("The read was cancelled.", "AbortError");
   // Cache changes occur after the bounded read: a late, aborted answer cannot replace it.
   if (response.status === 304 && known) {
     conversationAnswers.delete(url);

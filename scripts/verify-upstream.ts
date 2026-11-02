@@ -443,6 +443,10 @@ export const PROMOTION_PATCHES = [
   'src/components/BackgroundTasks.tsx',
   'src/lib/api.ts',
   'src/lib/machineContext.tsx',
+  // #2584 (4560571c): cancel abandoned Chat reads on screen replacement.
+  'src/lib/chatReadDeadline.ts',
+  'src/lib/chatReadDeadline.test.ts',
+  'src/lib/conversationRefresh.ts',
   // #1957 (7031c2e2): Safari page zoom vs pinch geometry, with isolated unit coverage.
   'src/lib/viewport.ts',
   'src/lib/keyboard.ts',

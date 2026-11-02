@@ -1018,13 +1018,13 @@ export const ChatView = memo(function ChatView({ paneId, active = true, visible:
     if (!visible) return;
     let cancelled = false;
     /** The turns between the held start and where the newest page now starts, a page at a time; null when they cannot be joined. */
-    const turnsBetween = async (held: string | null, start: string): Promise<ConversationTurn[] | null> => {
+    const turnsBetween = async (held: string | null, start: string, signal: AbortSignal): Promise<ConversationTurn[] | null> => {
       const pages: ConversationTurn[][] = [];
       let before = start;
       try {
         for (let step = 0; step < 32 && before !== held; step++) {
           if (cancelled) return null;
-          const page = await fetchPaneConversation(paneId, { before, ...(held === null ? {} : { since: held }) });
+          const page = await fetchPaneConversation(paneId, { before, ...(held === null ? {} : { since: held }), signal });
           if (page.cursor === held) {
             pages.unshift(page.turns);
             return pages.flat();
@@ -1038,19 +1038,19 @@ export const ChatView = memo(function ChatView({ paneId, active = true, visible:
       }
       return before === held ? pages.flat() : null;
     };
-    const read = async (): Promise<void> => {
+    const read = async (signal: AbortSignal): Promise<void> => {
       let generation = olderGeneration.current;
       try {
         let conversation;
         try {
-          conversation = await fetchPaneConversation(paneId, heldFrom.current === null ? undefined : { from: heldFrom.current });
+          conversation = await fetchPaneConversation(paneId, { ...(heldFrom.current === null ? {} : { from: heldFrom.current }), signal });
         } catch (cause) {
           // a new session or a Codex backtrack replaced the transcript the older pages came from
           if (heldFrom.current === null || !(cause instanceof ApiError) || cause.status !== 409) throw cause;
           if (cancelled || generation !== olderGeneration.current) return;
           dropOlder(); setState(EMPTY_STATE); setLoaded(false); signature.current = ""; lastAnswer.current = null;
           generation = olderGeneration.current;
-          conversation = await fetchPaneConversation(paneId);
+          conversation = await fetchPaneConversation(paneId, { signal });
         }
         if (cancelled || generation !== olderGeneration.current) return;
         // the timeline's chunk is in hand before any turn is: the list mounts once, with the refs bound
@@ -1071,7 +1071,7 @@ export const ChatView = memo(function ChatView({ paneId, active = true, visible:
         const held = heldFrom.current ?? (previous?.source !== "scrollback" && previous?.history_id === conversation.history_id ? previous?.cursor : undefined);
         let moved: ConversationTurn[] = [];
         if (held !== undefined && conversation.source !== "scrollback" && typeof conversation.cursor === "string" && conversation.cursor !== held) {
-          const between = await turnsBetween(held, conversation.cursor);
+          const between = await turnsBetween(held, conversation.cursor, signal);
           if (cancelled || generation !== olderGeneration.current) return;
           if (between === null) {
             dropOlder(); setState(EMPTY_STATE); setLoaded(false); signature.current = ""; lastAnswer.current = null;
@@ -1095,7 +1095,7 @@ export const ChatView = memo(function ChatView({ paneId, active = true, visible:
               ? { source: "scrollback", turns: [], messages: [], truncated: false } : previous);
             signature.current = ""; lastAnswer.current = null;
           }
-          const result = await fetchPaneTranscript(paneId, TRANSCRIPT_LINES);
+          const result = await fetchPaneTranscript(paneId, TRANSCRIPT_LINES, signal);
           if (cancelled || generation !== olderGeneration.current) return;
           next = { source: "scrollback", turns: [], messages: toTranscriptMessages(result.text).filter((message) => message.role !== "status"), truncated: result.truncated === true };
         }
@@ -1163,10 +1163,10 @@ export const ChatView = memo(function ChatView({ paneId, active = true, visible:
     const generation = olderGeneration.current;
     loadingOlder.current = true;
     setOlderState("loading");
-    await conversationRefresh.page(async () => {
+    await conversationRefresh.page(async (signal) => {
       try {
         if (shownPane.current !== paneId || olderGeneration.current !== generation) return;
-        const page = await fetchPaneConversation(paneId, { before });
+        const page = await fetchPaneConversation(paneId, { before, signal });
         if (shownPane.current !== paneId || olderGeneration.current !== generation) return;
         if (page.history_id !== history.current) {
           dropOlder(); setState(EMPTY_STATE); setLoaded(false); signature.current = ""; lastAnswer.current = null;
@@ -1198,6 +1198,9 @@ export const ChatView = memo(function ChatView({ paneId, active = true, visible:
       } finally {
         if (olderGeneration.current === generation) loadingOlder.current = false;
       }
+    }).catch((cause: unknown) => {
+      if (!(cause instanceof DOMException && cause.name === "AbortError")) throw cause;
+      if (olderGeneration.current === generation) { loadingOlder.current = false; setOlderState("idle"); }
     });
   }, [fetchPaneConversation, olderCursor, paneId, conversationRefresh]);
 

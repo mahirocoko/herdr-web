@@ -8,6 +8,14 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-11-02
+
+### Fixed
+
+- Cancel abandoned Chat reads when a view is hidden or replaced so a stale
+  request does not hold the next read until its timeout. Adapted from Ovis
+  [#2584](https://github.com/devswha/ovis/pull/2584).
+
 ## [0.16.0] - 2026-11-02
 
 ### Added
@@ -5201,7 +5209,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.1...HEAD
+[0.16.1]: https://github.com/mahirocoko/herdr-web/compare/v0.16.0...v0.16.1
 [0.15.0]: https://github.com/mahirocoko/herdr-web/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/mahirocoko/herdr-web/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/mahirocoko/herdr-web/compare/v0.12.0...v0.13.0
