@@ -100,6 +100,7 @@ export const TH: Record<string, string> = {
   "Antigravity chat is unavailable. Open Terminal to see activity and tool calls.": "การแชต Antigravity ไม่พร้อมใช้งาน เปิด Terminal เพื่อดูกิจกรรมและการเรียกใช้เครื่องมือ",
   "Chat read timed out.": "หมดเวลาการอ่านแชต",
   "Thinking…": "กำลังคิด…",
+  "Pi history is unavailable because this session could not be verified. Open Terminal to view it; sending a message will not connect its history.": "ยังอ่านประวัติ Pi ไม่ได้ เพราะยืนยันเซสชันนี้ไม่ได้ เปิด Terminal เพื่อดูประวัติ การส่งข้อความจะไม่ทำให้เชื่อมต่อประวัติได้",
   "Grok chat is unavailable. Open Terminal to see activity and tool calls.": "การแชต Grok ไม่พร้อมใช้งาน เปิด Terminal เพื่อดูกิจกรรมและการเรียกใช้เครื่องมือ",
   "Scroll pane up": "เลื่อนช่องขึ้น",
   "Scroll pane down": "เลื่อนช่องลง",

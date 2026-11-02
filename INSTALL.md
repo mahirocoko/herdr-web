@@ -51,6 +51,42 @@ PORT=8788 bun start
 
 In PowerShell, set `$env:PORT = "8788"` before `bun start`. This changes the local listener, not Tailscale configuration. Do not run a separate build over a live instance's `dist/`; development validation needs isolated output or a stopped owned instance.
 
+## Herdr App / herdr-core (opt-in, Linux/macOS)
+
+The newer desktop **Herdr App** uses `hc` (herdr-core), not the protocol-22 `herdr` host above. With an already installed, running core, select it for this Web process only:
+
+```sh
+hc --version
+hc server status
+OVIS_RUNTIME=herdr-core bun start
+```
+
+This does not install/start a core server, change global settings, reload Pi, or modify the desktop layout. `OVIS_HC_BIN` can select an existing `hc` executable; `hc connect` retains its normal endpoint selection (`HC_SOCKET` / `HC_SESSION` when explicitly provided). Keep the Web terminal visible. Switching an existing Web instance requires its owner to stop and restart it with this selection; an occupied port is still refused before building. Omitting the variable on a later launch selects the original runtime again. Do not run two instances over the same `dist/` output.
+
+Core mode provides the existing Web shell, native screen/terminal streaming and guarded manual Send/Stop. Desktop create/close/split/focus/reorder, worktree, plugin and agent-start operations are not translated and remain unavailable. Windows core mode is refused. This is a compatibility lane, not full desktop parity; see the [integration contract](docs/development.md#opt-in-herdr-core-compatibility).
+
+### Pi history in core mode
+
+A terminal's Pi status, title and cwd do **not** identify its active SessionManager. Without a compatible private observer, the terminal remains usable, but core Pi transcript/questionnaire and child-conversation reads are unavailable. Web never guesses the newest transcript or derives identity from a label.
+
+### One-time Pi setup (both runtimes)
+
+Use a compatible [mahiro-pi worker-activity resource](https://github.com/mahirocoko/mahiro-pi/blob/main/docs/integrations.md). Its source revision must support `herdr-web.json`; older session-command-only versions are not sufficient. With separate profile-configuration approval:
+
+1. Register the canonical `mahiro-pi/extensions/mahiro-worker-activity.ts` once in the intended Pi profile's public `settings.json` extension list, preserving other entries. It remains separate from the default 13-entry Mahiro manifest.
+2. Create an owner-private (0600), regular, non-linked `herdr-web.json` in that profile's agent directory (`~/.pi/agent`, or its explicit `PI_CODING_AGENT_DIR`):
+
+   ```json
+   { "version": 1, "root": "/absolute/canonical/path/to/herdr-web" }
+   ```
+
+3. Keep the Web runtime directories owner-private. Do not repair unknown permissions automatically. Pi and Web must use the same checkout/runtime root and compatible session store.
+4. Activate the resource only through an authorized fresh launch or reload. Thereafter **every TUI session using that profile**, regardless of cwd or old Herdr versus Herdr App/core, publishes automatically. New/resume/fork/reload follow Pi lifecycle events; **no per-session start command** is needed. Separate profiles require their own explicit setup.
+
+`/mh-herdr-web-observer status` reports local publication, not Web acceptance. `stop` suspends only that session; the next session/reload returns to profile configuration. Normal shutdown/reload revokes only its own generation's receipt; crashes expire within 8 seconds. RPC/print/SDK children never acquire the TUI producer. The original Herdr runtime retains its existing native `herdr:pi` identity/lifecycle integration; this resource is the sole private Web receipt producer for both runtimes. Core requires no old socket or Herdr CLI inside Pi.
+
+The old `scripts/pi-subagents-extension.ts` entrypoint is now a non-writing migration notice. Remove it from launch arguments/configuration when adopting the unified resource; do not combine old installed producer copies with the new producer. Web does not install resources, edit profiles, activate observers or reload existing sessions. An already running Pi without the configured source needs separately authorized activation; restarting Web alone cannot add Pi identity.
+
 ## Platform and private-state limits
 
 Runtime data stays inside the checkout under ignored `.agent-state/runtime/upstream-v10700`. Private directories use POSIX mode 0700 or native Windows ACL protection. The helper rejects unsafe ownership, ancestors, reparse points and unsupported filesystems; it does not repair permissions.

@@ -214,7 +214,13 @@ describe("herdr socket", () => {
 
   it("subscribes to status only in server/collector.ts", () => {
     const subscribers = matches(serverCode(), /\bsubscribeEvents\b/).filter((match) => match.file !== "server/herdr/client.ts" && match.file !== "server/collector.ts");
-    const raw = matches(files("{server,src,shared,scripts}/**/*.{ts,tsx,mjs,js}").filter((file) => !file.endsWith(".test.ts")), /["']events\.subscribe["']/).filter((match) => match.file !== "server/herdr/client.ts");
+    // The opt-in core adapter is the transport backend answering the existing client/collector,
+    // not another application status collector. Allow exactly its request dispatch and hc bridge.
+    const coreBridge = "server/herdr-core/adapter.ts";
+    const raw = matches(files("{server,src,shared,scripts}/**/*.{ts,tsx,mjs,js}").filter((file) => !file.endsWith(".test.ts")), /["']events\.subscribe["']/).filter((match) => match.file !== "server/herdr/client.ts" && match.file !== coreBridge);
+    expect(matches([coreBridge], /["']events\.subscribe["']/)).toHaveLength(2);
+    expect(read(coreBridge)).toContain('request.method === "events.subscribe"');
+    expect(read(coreBridge)).toContain('hc.open("events.subscribe",');
     fail([...subscribers, ...raw].map((match) => match.at),
       "server/collector.ts is the only status subscription (startStatusCollector), and `events.subscribe` is sent only by subscribeEvents in server/herdr/client.ts: take pane status from the collector's callbacks (onStatus, onPaneEnded, onBaseline) in server/index.ts instead of subscribing again.");
   });

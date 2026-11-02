@@ -8,6 +8,24 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-02
+
+### Added
+
+- Opt in to Herdr App terminals through herdr-core while retaining the original
+  Herdr runtime as the default.
+- Configure the compatible Mahiro Pi observer once per profile for automatic
+  session-scoped Chat and subagent activity across both runtimes.
+
+### Boundaries
+
+- Core support is macOS/Linux only. Existing Pi processes need the compatible
+  observer loaded; Web cannot infer their session identities. Desktop layout
+  controls and read-only terminal watch are unavailable in core mode.
+- Real core and Pi worker checks used a local synthetic provider; physical
+  device and independent acceptance remain separate. This source release does
+  not enable managed updates, public exposure or remote-PC provisioning.
+
 ## [0.15.0] - 2026-10-31
 
 ### Added

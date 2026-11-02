@@ -1,12 +1,15 @@
-import { expect, it } from "bun:test";
+import { expect, it, spyOn } from "bun:test";
+import * as coreRuntime from "../herdr-core/runtime.ts";
+import type { HcConnection } from "../herdr-core/connection.ts";
 import { OUTPUT_STALLED_CLOSE_CODE } from "../../shared/terminal-flow.ts";
 import type { DeviceStore } from "../devices.ts";
 import type { MachineRelay } from "../machine-relay.ts";
 import type { PendingInputs } from "../pending-input.ts";
-import { type Client, connectionData, connectionOf, createConnections, send } from "./connections.ts";
+import { type Client, connectionData, connectionOf, createConnections, paneWatchSupported, send } from "./connections.ts";
 
 function harness({ deviceId, readOnly = false, relay, revokedAlready = false }: { deviceId?: string; readOnly?: boolean; relay?: MachineRelay; revokedAlready?: boolean } = {}) {
   const log: string[] = [];
+  const messages: unknown[] = [];
   const revocations: (() => void)[] = [];
   const devices = {
     onRevoke: (_id: string, close: () => void) => {
@@ -19,7 +22,7 @@ function harness({ deviceId, readOnly = false, relay, revokedAlready = false }: 
     data: connectionData({ deviceId, readOnly, ...(relay ? { relay } : {}) }),
     close: (code: number, reason: string) => log.push(`closed ${code} ${reason}`),
     getBufferedAmount: () => 0,
-    send: () => 1,
+    send: (text: string) => { messages.push(JSON.parse(text)); return 1; },
   } as unknown as Client;
   const clients = new Set<Client>([client]);
   const present = new Set<Client>([client]);
@@ -28,8 +31,51 @@ function harness({ deviceId, readOnly = false, relay, revokedAlready = false }: 
     detachClaimed: () => log.push("detach claimed"),
     dropClaims: () => log.push("drop claims"),
   });
-  return { client, clients, present, log, revoke: () => revocations.forEach((close) => close()), ...connections };
+  return { client, clients, present, log, messages, revoke: () => revocations.forEach((close) => close()), ...connections };
 }
+
+it("refuses core watches before any CLI or attach is spawned, even for a stale client request", () => {
+  const previous = process.env["HERDR_SOCKET"];
+  const socket = `/private/${"long-checkout/".repeat(12)}herdr-core.sock`;
+  const lookup = spyOn(coreRuntime, "coreConnectionForSocket").mockImplementation((path) => path === socket ? {} as HcConnection : null);
+  const spawn = spyOn(Bun, "spawn").mockImplementation(() => { throw new Error("must not spawn"); });
+  try {
+    process.env["HERDR_SOCKET"] = socket;
+    expect(paneWatchSupported()).toBe(false);
+    expect(paneWatchSupported("/old-herdr.sock")).toBe(true);
+    const h = harness({ readOnly: true });
+    h.watchPane(h.client, "t1", { cols: 10, rows: 5 });
+    h.watchPane(h.client, "t1", { cols: 20, rows: 8 });
+    expect(h.messages).toEqual([{ type: "watch-end", pane_id: "t1" }, { type: "watch-end", pane_id: "t1" }]);
+    expect(spawn).not.toHaveBeenCalled();
+    expect(h.client.data.attached.size).toBe(0);
+    expect(h.mayType(h.client)).toBe(false);
+  } finally {
+    spawn.mockRestore(); lookup.mockRestore();
+    if (previous === undefined) delete process.env["HERDR_SOCKET"]; else process.env["HERDR_SOCKET"] = previous;
+  }
+});
+
+it("retains the old runtime's read-only observe command and exact socket", () => {
+  const previous = process.env["HERDR_SOCKET"];
+  const lookup = spyOn(coreRuntime, "coreConnectionForSocket").mockReturnValue(null);
+  // Refuse the fake launch synchronously: never invoke the installed CLI in a unit check.
+  const spawn = spyOn(Bun, "spawn").mockImplementation(() => { throw new Error("fixture launch stopped"); });
+  const warning = spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    process.env["HERDR_SOCKET"] = "/private/old-herdr.sock";
+    expect(paneWatchSupported()).toBe(true);
+    const h = harness();
+    h.watchPane(h.client, "t2", { cols: 80, rows: 24 });
+    expect(spawn).toHaveBeenCalledTimes(1);
+    expect(spawn.mock.calls[0]?.[0]).toEqual([process.env["HERDR_WEB_HERDR_BIN"] || "herdr", "terminal", "session", "observe", "t2", "--cols", "80", "--rows", "24"]);
+    expect(spawn.mock.calls[0]?.[1]).toMatchObject({ stdin: "ignore", env: { HERDR_SOCKET_PATH: "/private/old-herdr.sock" } });
+    expect(h.messages).toEqual([{ type: "watch-end", pane_id: "t2" }]);
+  } finally {
+    warning.mockRestore(); spawn.mockRestore(); lookup.mockRestore();
+    if (previous === undefined) delete process.env["HERDR_SOCKET"]; else process.env["HERDR_SOCKET"] = previous;
+  }
+});
 
 it("a stall ends the connection once and leaves its presence to the socket's close", () => {
   const { client, clients, present, log, end } = harness();

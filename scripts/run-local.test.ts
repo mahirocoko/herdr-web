@@ -20,6 +20,26 @@ import {
   requiresNodePty,
 } from "./run-local.ts";
 
+test("launcher help distinguishes per-process core selection and Pi identity limits without starting a runtime", () => {
+  const result = Bun.spawnSync(
+    [process.execPath, join(import.meta.dir, "run-local.ts"), "--help"],
+    {
+      env: { ...process.env, OVIS_RUNTIME: "invalid-help-must-not-start" },
+      timeout: 15_000,
+    },
+  );
+  expect(result.exitCode).toBe(0);
+  const text = result.stdout.toString();
+  expect(text).toContain("OVIS_RUNTIME=herdr-core bun start");
+  expect(text).toContain(
+    "Default runtime: running Herdr host with native protocol 22",
+  );
+  expect(text).toContain("no Node PTY, core installation or global settings change");
+  expect(text).toContain(
+    "existing\nPi sessions are never reloaded or bound by guessing",
+  );
+});
+
 test("PTY requirement retains Unix smoke and follows Windows native attach capability", () => {
   expect(requiresNodePty(false, "darwin")).toBe(true);
   expect(requiresNodePty(false, "linux")).toBe(true);

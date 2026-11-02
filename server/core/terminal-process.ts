@@ -9,6 +9,8 @@ import { HerdrError, herdrSocketPath, paneRead, paneSendText, sessionSnapshot } 
 import { MirrorSession } from "../mirror.ts";
 import { ReplayBuffer } from "../output-window.ts";
 import { PtySession } from "../pty/session.ts";
+import { CoreAttachSession } from "../herdr-core/attach-session.ts";
+import { coreConnectionForSocket } from "../herdr-core/runtime.ts";
 import { type Client, connectionOf } from "./connections.ts";
 
 const MAX_REPLAY_BYTES = 128 * 1024;
@@ -101,7 +103,7 @@ interface AttachmentState {
 export interface PtyAttachment extends AttachmentState {
   readonly kind: "pty";
   /** the attach the latest start made: each retry, take-over or handoff's new terminal replaces it */
-  process: PtySession;
+  process: PtySession | CoreAttachSession;
   /** a held terminal's next try takes the slot from the other bridge for this client (`take-over`) */
   takeOver?: (client: Client) => void;
 }
@@ -202,6 +204,37 @@ export function createSpawnAttachment({ attachments, retiringAttachments, termin
         },
       });
       attachment.process = mirror;
+      return attachment;
+    }
+
+    const core = coreConnectionForSocket(herdrSocketPath());
+    if (core) {
+      // Core shares viewers, so no legacy exclusive-slot/takeover machinery applies. A lost stream
+      // holds pending input and ends this attachment; it never retries or replays native input.
+      const attachment: PtyAttachment = { kind: "pty", ready: false, process: undefined as unknown as CoreAttachSession, ...state };
+      attachments.set(paneId, attachment);
+      attachment.process = new CoreAttachSession({
+        hc: core, terminal: terminalId, cols: spawnCols, rows: spawnRows,
+        onReady: () => {
+          if (attachments.get(paneId) !== attachment) return;
+          attachment.ready = true;
+          broadcast(paneId, { type: "input-ready", pane_id: paneId });
+        },
+        onData: (data) => {
+          if (attachments.get(paneId) !== attachment) return;
+          attachment.replay.append(data);
+          for (const client of attachment.clients) sendOutput(client, paneId, data);
+          reconcileOutput(paneId);
+        },
+        onExit: (code) => {
+          if (attachments.get(paneId) !== attachment) return;
+          attachment.ready = false;
+          broadcast(paneId, { type: "input-ready", pane_id: paneId, ready: false });
+          holdPendingPane(paneId, { code: "input_not_ready", message: "The core terminal stream ended; review pending messages before sending them" });
+          broadcast(paneId, { type: "pty-exit", pane_id: paneId, code });
+          closeAttachment(paneId);
+        },
+      });
       return attachment;
     }
 

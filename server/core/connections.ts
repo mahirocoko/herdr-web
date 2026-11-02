@@ -13,6 +13,12 @@ import type { MachineRelay } from "../machine-relay.ts";
 import { OUTPUT_HARD_BYTES, type OutputWindow } from "../output-window.ts";
 import type { PendingInputs } from "../pending-input.ts";
 import { PaneWatch } from "../watch.ts";
+import { coreConnectionForSocket } from "../herdr-core/runtime.ts";
+
+/** Core has no read-only viewport stream. Never substitute an attach (which can own geometry). */
+export function paneWatchSupported(socketPath = herdrSocketPath()): boolean {
+  return coreConnectionForSocket(socketPath) === null;
+}
 
 export interface SocketData {
   deviceId?: string;
@@ -134,11 +140,16 @@ export function createConnections<Lease>({ clients, present, pending, devices, d
     const { watches } = stateOf(client);
     watches.get(paneId)?.kill();
     watches.delete(paneId);
+    const socketPath = herdrSocketPath();
+    if (!paneWatchSupported(socketPath)) {
+      send(client, { type: "watch-end", pane_id: paneId });
+      return;
+    }
     try {
       const watch = new PaneWatch({
         paneId,
         ...geometry,
-        socketPath: herdrSocketPath(),
+        socketPath,
         onFrame: (data) => send(client, { type: "watch-data", pane_id: paneId, data }),
         onEnd: () => {
           if (watches.get(paneId) !== watch) return;

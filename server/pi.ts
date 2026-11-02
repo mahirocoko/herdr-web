@@ -122,7 +122,9 @@ function piSessionDirForProcess(
 
 /**
  * pi's transcript for a pane, or the session it has not written yet. The agent report names
- * the active session; Linux process metadata ties a custom store to the Pi process in this pane.
+ * the active session; the core-only observer source is issued only after private receipt/PID/header
+ * validation in herdr-core/pi-binding.ts, never from core labels. Linux process metadata ties
+ * a custom store to the Pi process in this pane.
  * Where the OS cannot expose that process environment, only the bridge's default store is used.
  */
 export async function piTranscriptPath(
@@ -132,7 +134,7 @@ export async function piTranscriptPath(
 ): Promise<{ path: string } | { unwritten: { id: string; path: string } } | null> {
   const agent = options.agent === undefined ? await agentGet(paneId).catch(() => null) : options.agent;
   const session = agent?.agent_session;
-  if (agent?.agent !== "pi" || session?.agent !== "pi" || session.source !== "herdr:pi" || session.kind !== "path" || typeof session.value !== "string") return null;
+  if (agent?.agent !== "pi" || session?.agent !== "pi" || !["herdr:pi", "herdr-core:pi-observer"].includes(session.source) || session.kind !== "path" || typeof session.value !== "string") return null;
 
   const info = options.processes === undefined
     ? await paneProcessInfo(paneId).catch(() => undefined)

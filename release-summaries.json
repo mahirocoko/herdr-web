@@ -1,4 +1,14 @@
 {
+  "0.16.0": {
+    "en": {
+      "new": ["Connect to Herdr App terminals with opt-in core mode."],
+      "improved": ["Set up Pi activity once for supported sessions across both runtimes."]
+    },
+    "th": {
+      "new": ["เชื่อมต่อเทอร์มินัลของ Herdr App ด้วย core mode ที่เลือกเปิดได้"],
+      "improved": ["ตั้งค่ากิจกรรม Pi ครั้งเดียวสำหรับเซสชันที่รองรับทั้งสอง runtime"]
+    }
+  },
   "0.15.0": {
     "en": {
       "new": ["Check the host Mac's battery on demand from the sidebar."]

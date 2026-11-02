@@ -1,7 +1,7 @@
 import { handleWorkspaceRequest } from "./workspace-routes.ts";
 import { closeMention, createSubmitText, freeClaudeBox, freeHermesInput, InputDraftError, pendingFault, pendingIdentity, pendingText } from "./core/composer.ts";
 import { createInputLane } from "./core/input.ts";
-import { type Client, connectionData, connectionOf, createConnections, presenceOf, send, type SocketData } from "./core/connections.ts";
+import { type Client, connectionData, connectionOf, createConnections, paneWatchSupported, presenceOf, send, type SocketData } from "./core/connections.ts";
 import { createStatusHub } from "./core/status.ts";
 import { ATTACH_HELD_MESSAGE, ATTACH_HELD_RETRY_MS, ATTACH_HOLD_MS, ATTACH_RELOOKUP_FOR_MS, ATTACH_RETRY_FOR_MS } from "./core/terminal-process.ts";
 import { createTerminalRegistry, type TerminalSighting, validGeometry } from "./core/terminals.ts";
@@ -1045,7 +1045,7 @@ export function createServer(
         const snapshot = clientSnapshot();
         countVisit(snapshot);
         try {
-          send(client, { type: "snapshot", snapshot: await snapshot, features: SERVER_FEATURES });
+          send(client, { type: "snapshot", snapshot: await snapshot, features: paneWatchSupported() ? SERVER_FEATURES : SERVER_FEATURES.filter((feature) => feature !== "watch") });
         } catch (error) {
           const code = error instanceof HerdrError ? error.code : "snapshot_failed";
           send(client, { type: "error", code, message: error instanceof Error ? error.message : String(error) });

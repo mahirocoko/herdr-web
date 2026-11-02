@@ -21,6 +21,8 @@ export interface PiActivitySnapshot {
   pid: number;
   updatedAt: number;
   records: PiRunRecord[];
+  /** Parent identity only: the exact-owner child service was unavailable. Never live child authority. */
+  activity?: "unavailable";
 }
 
 export function piRunRecord(value: unknown): PiRunRecord | null {

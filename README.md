@@ -16,6 +16,8 @@ Open **http://127.0.0.1:8787**. Startup builds the client and serves it in the f
 
 If an instance already owns the port, open that instance instead. Startup refuses an occupied port before rebuilding and never stops its owner. `bun run server` and `bun run dev` use this same safe launcher, not a second development server or hot-reload proxy. Port selection and troubleshooting belong in the installation guide.
 
+Using the newer **Herdr App / herdr-core** instead of the original Herdr host? On Linux/macOS, `OVIS_RUNTIME=herdr-core bun start` selects the already-running `hc` runtime for this process only, without global settings or a Pi reload. Read the [core setup and Pi identity limits](INSTALL.md#herdr-app--herdr-core-opt-in-linuxmacos) before switching an existing Web service.
+
 ## What to expect
 
 Native Herdr owns processes and sessions. The private Letta reader uses source Chat; reading history does not authorize terminal input.
@@ -28,7 +30,7 @@ Windows bootstrap and NTFS privacy fixtures have passed native CI, but actual Wi
 
 This fork supports **Pi subagents in Chat** with compatible `@gotgenes/pi-subagents` sessions: inline task cards at the original dispatch position, running/queued/completed/unknown states, and clickable read-only child conversations. Details render Markdown, highlighted code and expandable tool arguments, results and errors. Main's Send/Stop authority stays separate from child activity.
 
-For live status, use a compatible [mahiro-pi](https://github.com/mahirocoko/mahiro-pi) revision with the optional worker-activity observer command. In an already configured session, explicitly run `/mh-herdr-web-observer start`; `status` reports observation health and `stop` disables it. Reloading Pi requires another explicit start. Herdr Web does not install or enable the resource, and older Pi integrations may not provide this command. The producer and Web must share the checkout/runtime root and pass its privacy checks.
+For automatic observation on **both the original Herdr runtime and Herdr App/core**, use the compatible [mahiro-pi](https://github.com/mahirocoko/mahiro-pi) worker-activity resource with the [one-time profile target setup](INSTALL.md#one-time-pi-setup-both-runtimes). All TUI sessions using that profile follow their own lifecycle automatically, including reload; there is no per-session observer start. `/mh-herdr-web-observer status` reports local health. Web does not edit profiles or activate/reload Pi, and older session-command-only producers must be retired. Producer and Web share the explicit checkout/runtime root, independent of the Pi session's cwd.
 
 Without a fresh verified observer receipt, recorded history can still be read, but an unfinished child is **Status unknown**, not assumed running or completed. Updates follow Pi's recorded activity, not guaranteed token streaming. The live observer is POSIX-only; Windows live activity is not supported. See the [Pi user guide](docs/guide.md#pi-subagents) and [integration contract](docs/development.md#pi-subagent-observer) for compatibility, setup and limits.
 

@@ -25,6 +25,16 @@ const NAMED_COLORS = "aliceblue antiquewhite aqua aquamarine azure beige bisque 
 /** Color literals in a declaration value: hex, color functions and named colors, in any case. `color-mix()` of tokens is fine. */
 const COLOR_LITERAL = new RegExp(String.raw`#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(|(?<![\w-])(?:${NAMED_COLORS.join("|")})(?![\w-])`, "i");
 
+describe("unavailable Pi history", () => {
+  it("does not invite a new message when a recognized Pi has no readable transcript", () => {
+    const chat = read("src/components/ChatView.tsx");
+    expect(chat).toContain('const piHistoryUnavailable = loaded && error === null && agent === "pi" && state.source !== "conversation";');
+    expect(chat).toContain('{piHistoryUnavailable && <p className="chat-inline-state" role="status">');
+    expect(chat).toContain('sending a message will not connect its history.');
+    expect(chat).toContain('loaded && empty && error === null && !piHistoryUnavailable && prompt === null');
+  });
+});
+
 describe("component CSS", () => {
   // The light theme and the opt-in palettes are only token overrides in src/styles.css: a literal
   // in a component stylesheet stays the same in every theme, and `!important` beats the order the

@@ -32,7 +32,8 @@ export function piSessionHeader(path: string): Record<string, unknown> | null {
   finally { if (fd !== undefined) closeSync(fd); }
 }
 
-/** Used only after the exact herdr:pi parent binding is validated. Some native hosts
+/** Used only after an exact parent binding is validated (native herdr:pi or a core
+ * observer receipt, whose binding already requires full Pi argv). Some native hosts
  * report the foreground executable as argv0 without argv. Never trust `name: node`
  * alone, or let argv0 override contradictory full argv. */
 export function piForegroundPids(processes: readonly { pid?: number; argv?: readonly string[] | null; argv0?: string | null }[]): number[] {
@@ -69,7 +70,7 @@ export function piChildPath(parent: PiParent, outputFile: string | undefined): s
 function liveRecords(parent: PiParent, stateDir: string, now: number): PiRunRecord[] | null {
   try {
     const value = readPrivateConfiguration(join(stateDir, "pi-subagents", piActivityName(parent.path)));
-    if (!value || value.version !== PI_ACTIVITY_VERSION || value.parentFile !== parent.path || value.parentSessionId !== parent.id
+    if (!value || value.version !== PI_ACTIVITY_VERSION || value.activity !== undefined || value.parentFile !== parent.path || value.parentSessionId !== parent.id
       || typeof value.pid !== "number" || !parent.pids.includes(value.pid)
       || typeof value.updatedAt !== "number" || now - value.updatedAt < -1000 || now - value.updatedAt > PI_ACTIVITY_TTL_MS
       || !Array.isArray(value.records) || value.records.length > 24) return null;
