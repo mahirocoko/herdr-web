@@ -8,6 +8,18 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.16.3] - 2026-11-02
+
+### Fixed
+
+- Match equivalent Thai SARA AM representations in supported Pi questionnaire
+  screens, so the prompt can appear in Chat without weakening input guards.
+
+### Boundaries
+
+- Core multi-question widgets still require terminal color and viewport evidence
+  unavailable from the current core adapter; they may not appear in Chat.
+
 ## [0.16.2] - 2026-11-02
 
 ### Fixed
@@ -5226,7 +5238,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.2...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.3...HEAD
+[0.16.3]: https://github.com/mahirocoko/herdr-web/compare/v0.16.2...v0.16.3
 [0.16.2]: https://github.com/mahirocoko/herdr-web/compare/v0.16.1...v0.16.2
 [0.16.1]: https://github.com/mahirocoko/herdr-web/compare/v0.16.0...v0.16.1
 [0.15.0]: https://github.com/mahirocoko/herdr-web/compare/v0.14.0...v0.15.0

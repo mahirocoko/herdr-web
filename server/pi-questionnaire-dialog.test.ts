@@ -29,6 +29,21 @@ test("installed questionnaire reads exact renderer fixtures, hard wraps and desc
   expect(read("other").selectedIndex).toBe(2);
 });
 
+test("accepts equivalent Thai SARA AM screen rendering without accepting different text", () => {
+  const original = fixture.single.questions[0]!;
+  const question = { ...original, prompt: "คำถาม", options: original.options.map((option, index) => index === 0
+    ? { ...option, label: "ทำ", description: "กำหนด" } : option) };
+  const source = piQuestionnaireOf("thai", { questions: [question] })!;
+  const screen = fixture.screens.single
+    .replace(original.prompt, "คําถาม")
+    .replace(original.options[0]!.label, "ทํา")
+    .replace(original.options[0]!.description, "กําหนด");
+  expect(parsePiQuestionnaire(screen, source)?.selectedIndex).toBe(0);
+  expect(parsePiQuestionnaire(screen.replace("ทํา", "ทาน"), source)).toBeNull();
+  const ambiguous = { ...question, options: [{ value: "a", label: "ทำ" }, { value: "b", label: "ทํา" }] };
+  expect(piQuestionnaireOf("ambiguous", { questions: [ambiguous] })).toBeNull();
+});
+
 test("allowOther false and custom-only questions preserve native cursor indices", () => {
   const noOther = piQuestionnaireOf("no-other", { questions: [{ ...fixture.single.questions[0], allowOther: false }] })!;
   const parsed = read("no-other", noOther);

@@ -12,7 +12,9 @@ export interface PiQuestionnaire { id: string; questions: Question[] }
 const SINGLE = "↑↓ navigate • Enter select • Esc cancel";
 const MULTI = "Tab/←→ navigate • ↑↓ select • Enter confirm • Esc cancel";
 const INPUT = "Enter to submit • Esc to cancel";
-const compact = (text: string): string => text.replace(/\s/g, "");
+// hc may render Thai SARA AM as NIKHAHIT + SARA AA; compare only that equivalent form.
+const thaiSaraAm = (text: string): string => text.replace(/\u0e4d\u0e32/g, "\u0e33");
+const compact = (text: string): string => thaiSaraAm(text.replace(/\s/g, ""));
 const same = (a: string, b: string): boolean => compact(a) === compact(b);
 const rule = (line: string): boolean => /^─{8,}$/.test(line);
 
@@ -72,6 +74,8 @@ export function piQuestionnaireOf(id: string, args: unknown): PiQuestionnaire | 
     if (q.options.some((o: Question["options"][number]) => !o || !text(o.value, true) || !text(o.label)
       || o.description !== undefined && !text(o.description, true))) return null;
     if (!q.options.length && q.allowOther === false) return null;
+    // Equivalent rendered labels cannot prove which source option a row represents.
+    if (new Set(q.options.map((option: Question["options"][number]) => thaiSaraAm(option.label))).size !== q.options.length) return null;
     questions.push({ ...q, label, allowOther: q.allowOther !== false });
   }
   if (new Set(questions.map(q => compact(q.label))).size !== questions.length) return null;
