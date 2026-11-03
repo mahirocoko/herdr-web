@@ -10761,6 +10761,7 @@
       "server/pending-input.test.ts",
       "server/pending-input.contract.test.ts",
       "server/conversation.ts",
+      "server/herdr/client.ts",
       "server/conversation.test.ts",
       "server/agy.ts",
       "server/agy.test.ts",
@@ -10871,6 +10872,7 @@
       "server/prompt.test.ts"
     ],
     "additions": [
+      "server/rpc-write.test.ts",
       "server/herdr-core/attach-session.ts",
       "server/herdr-core/attach-session.test.ts",
       "server/herdr-core/pi-binding.ts",

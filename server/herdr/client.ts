@@ -78,9 +78,9 @@ function makeLineReader(onLine: (line: string) => void): (chunk: Uint8Array) => 
  * The herdr server closes the connection after a single response, so a pooled
  * or reused socket would never see a second reply.
  *
- * `guard`, when given, is asked once more right before the request is written: the
- * connect is awaited, and a caller's right to send can lapse meanwhile. A guard that
- * answers false sends nothing and rejects with `cancelled`.
+ * `guard` is checked before each write. Before any byte, refusal is `cancelled`;
+ * after a partial frame it closes the connection and reports an uncertain `socket_error`.
+ * A request is never reconnected or replayed.
  */
 export function herdrRpc<M extends HerdrMethod>(
   method: SingleHerdrMethod<M>,
@@ -115,8 +115,10 @@ export async function herdrRpc(
   const id = nextId();
   return await new Promise<unknown>((resolve, reject) => {
     let settled = false;
-    let socket: { end: () => void } | null = null;
+    let socket: { end: () => void; write: (data: Uint8Array) => number } | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let request: Buffer | null = null;
+    let written = 0;
 
     const finish = (fn: () => void) => {
       if (settled) return;
@@ -152,12 +154,35 @@ export async function herdrRpc(
     };
 
     const onData = makeLineReader(handleLine);
+    const writeRequest = () => {
+      if (settled || socket === null || (request !== null && written === request.length)) return;
+      try {
+        if (guard && !guard()) {
+          finish(() => reject(written === 0
+            ? new HerdrError("cancelled", `herdr ${method} was not sent: the sender may no longer send`)
+            : new HerdrError("socket_error", `herdr ${method} was cut short: the sender lost the right to send mid-request`)));
+          return;
+        }
+        request ??= Buffer.from(`${JSON.stringify({ id, method, params })}\n`);
+        const accepted = socket.write(request.subarray(written));
+        if (accepted < 0) {
+          finish(() => reject(new HerdrError("closed", `herdr closed the connection before answering ${method}`)));
+          return;
+        }
+        written += accepted;
+      } catch (error) {
+        finish(() => reject(new HerdrError("socket_error", error instanceof Error ? error.message : "herdr socket error")));
+      }
+    };
 
     Bun.connect({
       unix: socketAddress(socketPath),
       socket: {
         data(_sock, chunk) {
           onData(chunk);
+        },
+        drain() {
+          writeRequest();
         },
         error(_sock, err) {
           finish(() => reject(new HerdrError("socket_error", err?.message ?? "herdr socket error")));
@@ -177,13 +202,8 @@ export async function herdrRpc(
           }
           return;
         }
-        if (guard && !guard()) {
-          finish(() => reject(new HerdrError("cancelled", `herdr ${method} was not sent: the sender may no longer send`)));
-          return;
-        }
-        sock.write(`${JSON.stringify({ id, method, params })}\n`);
-      })
-      .catch((err: Error) => {
+        writeRequest();
+      }, (err: Error) => {
         finish(() =>
           reject(new HerdrError("connect_failed", `cannot reach herdr at ${socketPath}: ${err.message}`)),
         );

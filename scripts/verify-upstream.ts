@@ -353,6 +353,7 @@ export const PROMOTION_PATCHES = [
   'server/pending-input.test.ts',
   'server/pending-input.contract.test.ts',
   'server/conversation.ts',
+  'server/herdr/client.ts',
   'server/conversation.test.ts',
   'server/agy.ts',
   'server/agy.test.ts',
@@ -468,6 +469,7 @@ export const PROMOTION_PATCHES = [
   'server/prompt.test.ts',
 ]
 export const PROMOTION_ADDITIONS = [
+  'server/rpc-write.test.ts',
   // Focused opt-in core adapter from a4ff0c94; no pin or broad exception changes.
   'server/herdr-core/attach-session.ts',
   'server/herdr-core/attach-session.test.ts',

@@ -1,4 +1,12 @@
 {
+  "0.16.6": {
+    "en": {
+      "fixed": ["Complete large Herdr requests without replaying partially sent input."]
+    },
+    "th": {
+      "fixed": ["ส่งคำขอขนาดใหญ่ไปยัง Herdr ได้ครบ โดยไม่ส่งข้อมูลที่ส่งไปบางส่วนซ้ำ"]
+    }
+  },
   "0.16.5": {
     "en": {
       "fixed": ["Open longer Antigravity chat histories more reliably on the first read."]

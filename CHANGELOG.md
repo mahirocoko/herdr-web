@@ -8,6 +8,18 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.16.6] - 2026-11-03
+
+### Fixed
+
+- Complete partial Herdr RPC socket writes without reconnecting or replaying the
+  request, and distinguish connected failures from a failure to connect. Adapted
+  from upstream [#2625](https://github.com/devswha/ovis/pull/2625).
+
+### Boundaries
+
+- Chat follow adaptation and herdr-core terminal scrolling remain unaddressed.
+
 ## [0.16.5] - 2026-11-03
 
 ### Fixed
@@ -5257,7 +5269,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.5...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.6...HEAD
+[0.16.6]: https://github.com/mahirocoko/herdr-web/compare/v0.16.5...v0.16.6
 [0.16.5]: https://github.com/mahirocoko/herdr-web/compare/v0.16.4...v0.16.5
 [0.16.4]: https://github.com/mahirocoko/herdr-web/compare/v0.16.3...v0.16.4
 [0.16.3]: https://github.com/mahirocoko/herdr-web/compare/v0.16.2...v0.16.3
