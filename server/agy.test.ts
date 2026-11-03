@@ -3,7 +3,7 @@ import { Database } from "bun:sqlite";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { agyDatabasePath, forgetAgyState, parseAgyTranscript, withAgyHistory } from "./agy.ts";
+import { agyCatalog, agyDatabasePath, forgetAgyState, parseAgyTranscript, withAgyHistory } from "./agy.ts";
 
 it("keeps the recorded skill invocation without its expanded metadata", () => {
   const fixture = readFileSync(new URL("./fixtures/skill-invocations/agy.jsonl", import.meta.url), "utf8");
@@ -26,6 +26,24 @@ it("opens a ledger larger than 32 MiB on the first read", () => {
     finally { db.close(); }
     expect(withAgyHistory(path, (projection) => projection.indices)).toEqual([0, 1, 2]);
   } finally { forgetAgyState(path); rmSync(root, { recursive: true, force: true }); }
+});
+
+it("reads a checkpointed WAL-mode catalog after its sidecars close", () => {
+  const root = mkdtempSync(join(tmpdir(), "agy-idle-catalog-"));
+  const path = join(root, "brain", "session", ".system_generated", "logs", "transcript_full.jsonl");
+  try {
+    mkdirSync(join(root, "conversations"), { recursive: true });
+    const db = new Database(agyDatabasePath(path));
+    db.exec("PRAGMA journal_mode=WAL; CREATE TABLE steps(idx INTEGER PRIMARY KEY); INSERT INTO steps VALUES (0), (1)");
+    db.close();
+    expect([...agyCatalog(path)]).toEqual([0, 1]);
+    const live = new Database(agyDatabasePath(path));
+    try {
+      live.exec("INSERT INTO steps VALUES (2)");
+      expect([...agyCatalog(path)]).toEqual([0, 1, 2]);
+    } finally { live.close(); }
+    expect([...agyCatalog(path)]).toEqual([0, 1, 2]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 it("keeps raw input when it is not a complete recognized envelope", () => {

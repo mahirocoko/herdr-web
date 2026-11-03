@@ -1,4 +1,12 @@
 {
+  "0.16.7": {
+    "en": {
+      "fixed": ["Keep Antigravity chat available when its idle database closes the WAL files."]
+    },
+    "th": {
+      "fixed": ["แก้แชต Antigravity หายเมื่อฐานข้อมูลปิดไฟล์ WAL หลังตอบเสร็จ"]
+    }
+  },
   "0.16.6": {
     "en": {
       "fixed": ["Complete large Herdr requests without replaying partially sent input."]

@@ -8,6 +8,19 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.16.7] - 2026-11-03
+
+### Fixed
+
+- Read a checkpointed Antigravity catalog when SQLite's idle WAL sidecars are
+  absent, with filesystem checks around the read. This avoids an observed cause
+  of Chat falling back after an answer completes.
+
+### Boundaries
+
+- Long histories may require multiple bounded scans. A live rendered completion
+  transition and device acceptance have not been verified.
+
 ## [0.16.6] - 2026-11-03
 
 ### Fixed
@@ -5269,7 +5282,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.6...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.7...HEAD
+[0.16.7]: https://github.com/mahirocoko/herdr-web/compare/v0.16.6...v0.16.7
 [0.16.6]: https://github.com/mahirocoko/herdr-web/compare/v0.16.5...v0.16.6
 [0.16.5]: https://github.com/mahirocoko/herdr-web/compare/v0.16.4...v0.16.5
 [0.16.4]: https://github.com/mahirocoko/herdr-web/compare/v0.16.3...v0.16.4

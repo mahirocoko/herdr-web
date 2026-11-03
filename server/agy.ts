@@ -3,6 +3,7 @@ import { Database } from "bun:sqlite";
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, fstatSync, openSync, readSync, realpathSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { ConversationPart, ConversationTurn } from "../shared/protocol.ts";
 import { trimOutput } from "./tool-output.ts";
 import { toolSummary } from "./transcript-records.ts";
@@ -29,16 +30,34 @@ export function agyDatabasePath(path: string): string {
 /** The database supplies only the active indices, never payloads or guessed numeric statuses. */
 export function agyCatalog(path: string): Set<number> {
   const dbPath = agyDatabasePath(path);
-  let db: Database | undefined;
+  const query = (name: string) => {
+    const db = new Database(name, { readonly: true });
+    try {
+      db.exec("PRAGMA busy_timeout = 100");
+      return db.query<{ idx: number }, []>(`SELECT idx FROM steps ORDER BY idx LIMIT ${MAX_ENTRIES + 1}`).all();
+    } finally { db.close(); }
+  };
   try {
     if (realpathSync(dbPath) !== dbPath) throw new AgyUnavailable();
-    db = new Database(dbPath, { readonly: true });
-    db.exec("PRAGMA busy_timeout = 100");
-    const rows = db.query<{ idx: number }, []>(`SELECT idx FROM steps ORDER BY idx LIMIT ${MAX_ENTRIES + 1}`).all();
+    let rows: { idx: number }[];
+    try { rows = query(dbPath); }
+    catch (error) {
+      // Agy can close its WAL at idle while leaving the database in WAL mode.
+      // SQLite may then refuse a read-only open because no shared-memory file exists.
+      // Only read the checkpointed database when no WAL/journal exists on either side
+      // and the database identity and timestamps remain unchanged throughout the read.
+      if (!(error instanceof Error) || !('code' in error) || error.code !== "SQLITE_CANTOPEN") throw error;
+      const noSidecars = () => ["-wal", "-shm", "-journal"].every((suffix) => statSync(dbPath + suffix, { throwIfNoEntry: false }) === undefined);
+      const before = statSync(dbPath, { bigint: true });
+      if (!noSidecars()) throw new AgyUnavailable();
+      rows = query(`${pathToFileURL(dbPath).href}?mode=ro&immutable=1`);
+      const after = statSync(dbPath, { bigint: true });
+      if (!noSidecars() || realpathSync(dbPath) !== dbPath || before.dev !== after.dev || before.ino !== after.ino
+        || before.size !== after.size || before.mtimeNs !== after.mtimeNs || before.ctimeNs !== after.ctimeNs) throw new AgyUnavailable();
+    }
     if (rows.length > MAX_ENTRIES || rows.some((row) => !Number.isSafeInteger(row.idx) || row.idx < 0)) throw new AgyUnavailable();
     return new Set(rows.map((row) => row.idx));
   } catch { throw new AgyUnavailable(); }
-  finally { db?.close(); }
 }
 
 function entry(line: string): Record<string, unknown> {
