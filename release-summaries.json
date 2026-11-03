@@ -1,4 +1,12 @@
 {
+  "0.16.4": {
+    "en": {
+      "improved": ["Document safe checks for an occupied Herdr core adapter socket."]
+    },
+    "th": {
+      "improved": ["เพิ่มวิธีตรวจเมื่อ socket ของ Herdr core adapter ถูกใช้งาน"]
+    }
+  },
   "0.16.3": {
     "en": {
       "fixed": ["Show supported Thai Pi questions in Chat when terminal text uses an equivalent spelling."]

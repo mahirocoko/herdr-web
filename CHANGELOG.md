@@ -8,6 +8,13 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.16.4] - 2026-11-03
+
+### Documentation
+
+- Explain how to investigate an occupied Herdr core adapter socket without
+  automatically deleting unknown runtime state.
+
 ## [0.16.3] - 2026-11-02
 
 ### Fixed
@@ -5238,7 +5245,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.3...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.4...HEAD
+[0.16.4]: https://github.com/mahirocoko/herdr-web/compare/v0.16.3...v0.16.4
 [0.16.3]: https://github.com/mahirocoko/herdr-web/compare/v0.16.2...v0.16.3
 [0.16.2]: https://github.com/mahirocoko/herdr-web/compare/v0.16.1...v0.16.2
 [0.16.1]: https://github.com/mahirocoko/herdr-web/compare/v0.16.0...v0.16.1

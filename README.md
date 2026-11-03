@@ -16,7 +16,7 @@ Open **http://127.0.0.1:8787**. Startup builds the client and serves it in the f
 
 If an instance already owns the port, open that instance instead. Startup refuses an occupied port before rebuilding and never stops its owner. `bun run server` and `bun run dev` use this same safe launcher, not a second development server or hot-reload proxy. Port selection and troubleshooting belong in the installation guide.
 
-Using the newer **Herdr App / herdr-core** instead of the original Herdr host? On Linux/macOS, `OVIS_RUNTIME=herdr-core bun start` selects the already-running `hc` runtime for this process only, without global settings or a Pi reload. Read the [core setup and Pi identity limits](INSTALL.md#herdr-app--herdr-core-opt-in-linuxmacos) before switching an existing Web service.
+Using the newer **Herdr App / herdr-core** instead of the original Herdr host? On Linux/macOS, `OVIS_RUNTIME=herdr-core bun start` selects the already-running `hc` runtime for this process only, without global settings or a Pi reload. Read the [core setup and Pi identity limits](INSTALL.md#herdr-app--herdr-core-opt-in-linuxmacos) before switching an existing Web service; see [socket troubleshooting](INSTALL.md#core-adapter-socket-is-occupied) if startup reports an occupied adapter socket.
 
 ## What to expect
 

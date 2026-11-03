@@ -65,6 +65,32 @@ This does not install/start a core server, change global settings, reload Pi, or
 
 Core mode provides the existing Web shell, native screen/terminal streaming and guarded manual Send/Stop. Desktop create/close/split/focus/reorder, worktree, plugin and agent-start operations are not translated and remain unavailable. Windows core mode is refused. This is a compatibility lane, not full desktop parity; see the [integration contract](docs/development.md#opt-in-herdr-core-compatibility).
 
+### Core adapter socket is occupied
+
+If startup reports `herdr-core socket path is occupied`, it has stopped rather
+than deleting or reusing the existing path. This is Web's private adapter
+socket at `.agent-state/runtime/upstream-v10700/herdr-core.sock` in the checkout,
+not the `hc` core socket. Starting another Web instance on a different port does
+not give it a separate adapter socket or build output.
+
+First check the Web terminal and the configured port for an existing instance.
+For example, on macOS or Linux with `lsof` (substitute the configured port):
+
+```sh
+hc server status
+lsof -nP -iTCP:8787 -sTCP:LISTEN
+lsof -nP -U
+```
+
+Inspect the exact socket path in the Unix-socket listing and identify any owner
+before taking action. A missing listing alone does not prove a socket is safe to
+remove: permissions, races or an incomplete listing can hide ownership. Reuse
+an existing Web instance, or deliberately stop only its verified owner. If an
+old path remains, have the owner inspect its type, ownership and identity and
+decide how to recover it; do not automatically unlink, repair permissions or
+remove unknown runtime state. If ownership is uncertain, leave it intact. The
+launcher does not clean up an occupied path or fall back to another runtime.
+
 ### Pi history in core mode
 
 A terminal's Pi status, title and cwd do **not** identify its active SessionManager. Without a compatible private observer, the terminal remains usable, but core Pi transcript/questionnaire and child-conversation reads are unavailable. Web never guesses the newest transcript or derives identity from a label.
