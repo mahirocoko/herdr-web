@@ -8,6 +8,18 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.16.5] - 2026-11-03
+
+### Fixed
+
+- Increase the bounded first-read scan for Antigravity history from 32 MiB to
+  128 MiB, reducing initial unavailable responses for longer conversations.
+
+### Boundaries
+
+- Larger histories may still require multiple reads. Herdr core terminal history
+  scrolling and the reported drifting terminal paint remain unresolved.
+
 ## [0.16.4] - 2026-11-03
 
 ### Documentation
@@ -5245,7 +5257,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.4...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.5...HEAD
+[0.16.5]: https://github.com/mahirocoko/herdr-web/compare/v0.16.4...v0.16.5
 [0.16.4]: https://github.com/mahirocoko/herdr-web/compare/v0.16.3...v0.16.4
 [0.16.3]: https://github.com/mahirocoko/herdr-web/compare/v0.16.2...v0.16.3
 [0.16.2]: https://github.com/mahirocoko/herdr-web/compare/v0.16.1...v0.16.2

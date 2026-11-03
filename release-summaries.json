@@ -1,4 +1,12 @@
 {
+  "0.16.5": {
+    "en": {
+      "fixed": ["Open longer Antigravity chat histories more reliably on the first read."]
+    },
+    "th": {
+      "fixed": ["เปิดประวัติแชต Antigravity ที่ยาวได้ดีขึ้นตั้งแต่การอ่านครั้งแรก"]
+    }
+  },
   "0.16.4": {
     "en": {
       "improved": ["Document safe checks for an occupied Herdr core adapter socket."]

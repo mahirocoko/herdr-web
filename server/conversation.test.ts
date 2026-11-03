@@ -1838,8 +1838,8 @@ describe("Agy native ledger through shared paging", () => {
   });
   it("continues a bounded cold scan on the next poll", () => {
     add(0, "USER_INPUT", "start");
-    for (let i=1; i<=34; i++) add(i, "EPHEMERAL_MESSAGE", "x".repeat(1024 * 1024));
-    add(35, "USER_INPUT", "end");
+    for (let i=1; i<=130; i++) add(i, "EPHEMERAL_MESSAGE", "x".repeat(1024 * 1024));
+    add(131, "USER_INPUT", "end");
     expect(page).toThrow(ConversationUnavailable);
     expect(page().turns.at(-1)!.parts[0]).toEqual({ kind: "text", text: "end" });
   });

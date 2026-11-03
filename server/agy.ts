@@ -9,7 +9,9 @@ import { toolSummary } from "./transcript-records.ts";
 
 const MAX_ENTRIES = 100_000;
 const MAX_LINE = 16 * 1024 * 1024;
-const SCAN_BYTES = 32 * 1024 * 1024;
+// Agy exports can grow well beyond 32 MiB in ordinary long sessions. Keep a
+// bounded synchronous scan, but let a typical long ledger open on its first read.
+const SCAN_BYTES = 128 * 1024 * 1024;
 const hash = (value: string): string => createHash("sha256").update(value).digest("base64url");
 const record = (value: unknown): Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 export class AgyUnavailable extends Error { constructor() { super("Agy history is unavailable"); } }
