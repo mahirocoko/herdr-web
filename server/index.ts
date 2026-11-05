@@ -1033,7 +1033,8 @@ export function createServer(
 
     websocket: {
       // This transport cap also covers clients that predate application ACKs.
-      backpressureLimit: OUTPUT_HARD_BYTES,
+      // One large snapshot may drain alongside the normal bounded output backlog.
+      backpressureLimit: OUTPUT_HARD_BYTES + 64 * 1024 * 1024,
       closeOnBackpressureLimit: true,
       drain(client) {
         drainOutput(client);

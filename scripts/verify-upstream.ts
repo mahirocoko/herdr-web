@@ -297,6 +297,11 @@ export const PROMOTION_REFERENCES = [
   '.github/workflows/omp-question-compat.yml',
 ]
 export const PROMOTION_PATCHES = [
+  // Narrow terminal privacy and large-snapshot adaptations.
+  'server/output-window.ts',
+  'shared/secret-prompt.ts',
+  'src/lib/terminalDraft.ts',
+  'src/lib/terminalDraft.test.ts',
   'INSTALL.md',
   'CONTRIBUTING.md',
   'SECURITY.md',

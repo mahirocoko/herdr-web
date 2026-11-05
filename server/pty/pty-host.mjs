@@ -49,13 +49,45 @@ let stdoutBlocked = false;
 function updateReading() {
   if (parentPaused || stdoutBlocked) term.pause();
   else term.resume();
+  settleFinalRead();
 }
 term.onData((chunk) => {
   if (!process.stdout.write(chunk)) {
     stdoutBlocked = true;
     updateReading();
-  }
+  } else settleFinalRead();
 });
+
+// node-pty's exit timer otherwise destroys the paused socket with unread output.
+const EXIT_QUIET_MS = 200;
+const EXIT_DRAIN_LIMIT_MS = 2000;
+const EXIT_HELD_LIMIT_MS = 15_000;
+let finalRead = null;
+const socket = process.platform === "win32" ? undefined : term._socket;
+if (socket) {
+  const destroy = socket.destroy.bind(socket);
+  socket.destroy = (...args) => {
+    if (finalRead || args[0]) return destroy(...args);
+    finalRead = { destroy: () => destroy(...args), heldUntil: Date.now() + EXIT_HELD_LIMIT_MS, since: null, timer: undefined };
+    socket.once("close", () => clearTimeout(finalRead.timer));
+    settleFinalRead();
+    return socket;
+  };
+}
+function settleFinalRead() {
+  if (!finalRead) return;
+  clearTimeout(finalRead.timer);
+  const now = Date.now();
+  let wait;
+  if (parentPaused || stdoutBlocked) {
+    finalRead.since = null;
+    wait = finalRead.heldUntil - now;
+  } else {
+    finalRead.since ??= now;
+    wait = Math.min(EXIT_QUIET_MS, finalRead.since + EXIT_DRAIN_LIMIT_MS - now);
+  }
+  finalRead.timer = setTimeout(finalRead.destroy, Math.max(0, wait));
+}
 process.stdout.on("drain", () => {
   stdoutBlocked = false;
   updateReading();

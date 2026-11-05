@@ -57,6 +57,8 @@ Owners here are relative to `server/` except shared contracts.
 
 ### Focused upstream hardening backports
 
+Three further adaptations retain this fork's snapshot and owners: [#2532](https://github.com/devswha/ovis/pull/2532) keeps key-shaped terminal input-line drafts in memory rather than persisting them, without scanning or deleting previously stored drafts; key detection is heuristic and cannot guarantee that secrets are never stored. [#2461](https://github.com/devswha/ovis/pull/2461) holds POSIX Node PTY exit destruction while paused output drains, with bounded waits. [#2570](https://github.com/devswha/ovis/pull/2570) accounts for one large WebSocket frame separately from subsequent output backlog. The PTY regression uses a disposable local fixture; no physical-device or rendered large-snapshot proof is claimed.
+
 The snapshot pin remains `d918448647e41079c52047ffc96cdaac50ccba32`. Three
 bounded fixes are backported from candidate
 `818c461710e3765f5ef2c4dd4dbc119deab0b015`; this is not a full snapshot upgrade:

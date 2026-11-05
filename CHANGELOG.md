@@ -8,6 +8,24 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.16.8] - 2026-11-05
+
+### Fixed
+
+- Keep key-shaped terminal input-line drafts in page memory instead of writing
+  them to browser storage, adapted from upstream [#2532](https://github.com/devswha/ovis/pull/2532).
+- Preserve the final output of a POSIX Node PTY when its reader is paused as the
+  command exits, adapted from [#2461](https://github.com/devswha/ovis/pull/2461).
+- Allow a large session snapshot to drain without treating that frame alone as a
+  stalled transport, adapted from [#2570](https://github.com/devswha/ovis/pull/2570).
+
+### Boundaries
+
+- Key detection is heuristic and does not identify every secret; existing stored
+  drafts are not scanned or removed. Avoid entering secrets in the input line.
+- The PTY check used a disposable local fixture; the large-snapshot change has
+  bounded unit evidence, not a physical-device or live-browser test.
+
 ## [0.16.7] - 2026-11-03
 
 ### Fixed
@@ -5282,7 +5300,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.7...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.8...HEAD
+[0.16.8]: https://github.com/mahirocoko/herdr-web/compare/v0.16.7...v0.16.8
 [0.16.7]: https://github.com/mahirocoko/herdr-web/compare/v0.16.6...v0.16.7
 [0.16.6]: https://github.com/mahirocoko/herdr-web/compare/v0.16.5...v0.16.6
 [0.16.5]: https://github.com/mahirocoko/herdr-web/compare/v0.16.4...v0.16.5

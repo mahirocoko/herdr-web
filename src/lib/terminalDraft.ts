@@ -1,3 +1,5 @@
+import { looksLikeKey } from "../../shared/secret-prompt.ts";
+
 /** Unsent terminal lines belong to a PC/pane, never to the currently mounted view. */
 const listeners = new Set<() => void>();
 const pending = new Map<string, { written: string; canClear: boolean }>();
@@ -22,7 +24,8 @@ export function writeTerminalDraft(owner: string, text: string): void {
   if (sent && !value.startsWith(sent.written)) sent.canClear = false;
   memory.set(owner, value);
   try {
-    if (value) localStorage.setItem(PREFIX + owner, value);
+    // Key-shaped lines remain in this page's memory; detection is necessarily incomplete.
+    if (value && !looksLikeKey(value)) localStorage.setItem(PREFIX + owner, value);
     else localStorage.removeItem(PREFIX + owner);
   } catch { /* private mode: preserve across view changes in memory */ }
   notify();

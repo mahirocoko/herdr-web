@@ -5,7 +5,8 @@ import { OUTPUT_STALLED_CLOSE_CODE } from "../../shared/terminal-flow.ts";
 import type { DeviceStore } from "../devices.ts";
 import type { MachineRelay } from "../machine-relay.ts";
 import type { PendingInputs } from "../pending-input.ts";
-import { type Client, connectionData, connectionOf, createConnections, paneWatchSupported, send } from "./connections.ts";
+import { backlog, type Client, connectionData, connectionOf, createConnections, paneWatchSupported, send } from "./connections.ts";
+import { OUTPUT_HARD_BYTES } from "../output-window.ts";
 
 function harness({ deviceId, readOnly = false, relay, revokedAlready = false }: { deviceId?: string; readOnly?: boolean; relay?: MachineRelay; revokedAlready?: boolean } = {}) {
   const log: string[] = [];
@@ -33,6 +34,27 @@ function harness({ deviceId, readOnly = false, relay, revokedAlready = false }: 
   });
   return { client, clients, present, log, messages, revoke: () => revocations.forEach((close) => close()), ...connections };
 }
+
+it("admits one oversized frame while counting subsequent backlog", () => {
+  let buffered = 0;
+  const closed: number[] = [];
+  const client = {
+    data: connectionData({ deviceId: undefined, readOnly: false }),
+    getBufferedAmount: () => buffered,
+    send: (text: string) => { buffered += Buffer.byteLength(text); return -1; },
+    close: (code: number) => closed.push(code),
+  } as unknown as Client;
+  expect(send(client, { type: "error", message: "x".repeat(OUTPUT_HARD_BYTES + 1) } as never)).toBe(-1);
+  const first = buffered;
+  expect(backlog(client)).toBe(0);
+  expect(send(client, { type: "session-changed" })).toBe(-1);
+  const after = buffered - first;
+  expect(backlog(client)).toBe(after);
+  buffered -= 100;
+  expect(backlog(client)).toBe(after);
+  expect(send(client, { type: "error", message: "y".repeat(OUTPUT_HARD_BYTES + 1) } as never)).toBe(0);
+  expect(closed).toEqual([OUTPUT_STALLED_CLOSE_CODE]);
+});
 
 it("refuses core watches before any CLI or attach is spawned, even for a stale client request", () => {
   const previous = process.env["HERDR_SOCKET"];

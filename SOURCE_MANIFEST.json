@@ -10705,6 +10705,10 @@
   ],
   "promotion": {
     "patches": [
+      "server/output-window.ts",
+      "shared/secret-prompt.ts",
+      "src/lib/terminalDraft.ts",
+      "src/lib/terminalDraft.test.ts",
       "INSTALL.md",
       "CONTRIBUTING.md",
       "SECURITY.md",

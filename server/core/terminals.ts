@@ -7,7 +7,7 @@ import type { ClientMessage, ServerMessage } from "../../shared/protocol.ts";
 import { ConversationMonitor } from "../conversation-monitor.ts";
 import { type SightingFacts, sightingFacts } from "../input-guard.ts";
 import { OUTPUT_HARD_BYTES, OUTPUT_HIGH_BYTES, OUTPUT_STALL_MS, OutputWindow, wireBytes } from "../output-window.ts";
-import { type Client, connectionOf, send } from "./connections.ts";
+import { backlog, type Client, connectionOf, send } from "./connections.ts";
 import { ATTACH_HELD_MESSAGE, createSpawnAttachment, type PaneAttachment } from "./terminal-process.ts";
 
 /** joins this close together share one repaint: a reconnect brings every tab back at once */
@@ -96,7 +96,7 @@ export function createTerminalRegistry({ options, clients, stopped, terminalAtta
     let paused = false;
     for (const client of attachment.clients) {
       const window = client.data.output.get(paneId);
-      const buffered = client.getBufferedAmount();
+      const buffered = backlog(client);
       if (window) {
         // an ACK client: measured by its ACK progress, and a joiner draining its replay never pauses the pty
         const verdict = window.check(buffered);
@@ -127,7 +127,7 @@ export function createTerminalRegistry({ options, clients, stopped, terminalAtta
     onOutput?.(paneId);
     const window = client.data.output.get(paneId);
     const bytes = Buffer.byteLength(data);
-    if ((window && window.pending + bytes > OUTPUT_HARD_BYTES) || client.getBufferedAmount() >= OUTPUT_HARD_BYTES) {
+    if ((window && window.pending + bytes > OUTPUT_HARD_BYTES) || backlog(client) >= OUTPUT_HARD_BYTES) {
       end(client, "stalled");
       return;
     }
@@ -344,7 +344,8 @@ export function createTerminalRegistry({ options, clients, stopped, terminalAtta
       // (a mirror keeps its latest screen whole; a pty keeps a bounded tail of its stream)
       const replay = attachment.kind === "mirror" ? attachment.process.current ?? "" : attachment.replay.text();
       if (!alreadyAttached && replay) {
-        client.data.output.get(message.pane_id)?.join(replay, client.getBufferedAmount());
+        const ahead = backlog(client);
+        client.data.output.get(message.pane_id)?.join(replay, ahead, Date.now(), client.getBufferedAmount() - ahead);
         sendOutput(client, message.pane_id, replay);
         // a tail that lost the stream's start may miss what was drawn once: herdr draws it again
         if (attachment.kind !== "mirror" && attachment.ready && !attachment.held && attachment.replay.truncated) requestRepaint(message.pane_id);

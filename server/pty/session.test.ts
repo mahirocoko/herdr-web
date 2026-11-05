@@ -193,6 +193,31 @@ describe("PtySession", () => {
     } finally { session.kill(); }
   }, 15000);
 
+  it("delivers final output when the child exits while reads are paused", async () => {
+    if (process.platform === "win32") return;
+    let output = "";
+    let paused = false;
+    let session!: PtySession;
+    const done = new Promise<number | null>((resolve) => {
+      session = new PtySession({
+        command: "node", args: ["-e", `process.stdout.write("READY\\n", () => setTimeout(() => process.stdout.write("FINAL", () => process.exit(0)), 100));`],
+        cols: 80, rows: 24,
+        onData: (data) => { output += data; if (!paused && output.includes("READY")) { paused = true; session.pause(); } },
+        onExit: resolve,
+      });
+    });
+    try {
+      const deadline = Date.now() + 5000;
+      while (!paused && Date.now() < deadline) await Bun.sleep(10);
+      expect(paused).toBe(true);
+      // fixed wait: leave reads paused beyond node-pty's 200 ms exit-time destroy.
+      await Bun.sleep(500);
+      session.resume();
+      expect(await done).toBe(0);
+      expect(output).toContain("FINAL");
+    } finally { session.kill(); }
+  }, 15000);
+
   it("reaps both processes when the last client leaves with output paused", async () => {
     const tag = `herdr-pty-kill-${crypto.randomUUID()}`;
     let painted = false;

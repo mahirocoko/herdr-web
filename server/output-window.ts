@@ -63,8 +63,8 @@ export class OutputWindow {
    * clients share. `ahead` is what the socket already has queued in front of the frame (on a
    * reconnect every attached pane's replay goes out back to back): it crosses the link first.
    */
-  join(replay: string, ahead = 0, now = Date.now()): void {
-    this.joinUntil = now + Math.min(OUTPUT_JOIN_MAX_MS, OUTPUT_STALL_MS + crossingMs(ahead + wireBytes(replay)));
+  join(replay: string, ahead = 0, now = Date.now(), large = 0): void {
+    this.joinUntil = now + Math.min(OUTPUT_JOIN_MAX_MS, OUTPUT_STALL_MS + crossingMs(ahead + wireBytes(replay))) + crossingMs(large);
   }
 
   acknowledge(id: string, offset: number): boolean {

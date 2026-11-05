@@ -15,6 +15,22 @@ export function secretPrompt(screen: string, columns = Infinity): string | null 
   }
 }
 
+// A heuristic for terminal drafts, not a guarantee that every credential is recognized.
+const KEY_SHAPES = [
+  /(?:^|[^A-Za-z0-9])(?:sk|rk)[-_][A-Za-z0-9_-]{4,}/,
+  /(?:^|[^A-Za-z0-9])(?:gh[pousr]_|github_pat_|glpat-|xox[abposr]-|hf_|gsk_|r8_|xai-|npm_|pypi-)[A-Za-z0-9_-]{4,}/,
+  /(?:^|[^A-Za-z0-9])AIza[A-Za-z0-9_-]{4,}/,
+  /(?:^|[^A-Za-z0-9])(?:AKIA|ASIA)[A-Z0-9]{4,}/,
+  /(?:^|[^A-Za-z0-9])eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/,
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
+];
+
+export function looksLikeKey(text: string): boolean {
+  if (KEY_SHAPES.some((shape) => shape.test(text))) return true;
+  return (text.match(/[A-Za-z0-9/+_]{24,}/g) ?? []).some((run) => /[a-z]/.test(run) && /[A-Z]/.test(run) && !/[a-z]{8}/.test(run)
+    && (!run.includes("/") || run.length === 40) && (/\d/.test(run) || run.length >= 40));
+}
+
 /** A secret is one line of literal keystrokes; never allow terminal controls. */
 export function validSecret(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= 4096 && !/[\x00-\x1f\x7f-\x9f]/.test(value);

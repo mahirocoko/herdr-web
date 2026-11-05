@@ -1,4 +1,12 @@
 {
+  "0.16.8": {
+    "en": {
+      "fixed": ["Reduce browser storage of key-shaped terminal drafts.", "Preserve paused PTY output and support larger session snapshots."]
+    },
+    "th": {
+      "fixed": ["ลดการเก็บร่างเทอร์มินัลที่มีข้อความคล้ายคีย์ในเบราว์เซอร์", "รักษา output ขณะหยุดอ่าน และรองรับ session snapshot ที่ใหญ่ขึ้น"]
+    }
+  },
   "0.16.7": {
     "en": {
       "fixed": ["Keep Antigravity chat available when its idle database closes the WAL files."]
