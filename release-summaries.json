@@ -1,4 +1,12 @@
 {
+  "0.16.9": {
+    "en": {
+      "fixed": ["Recheck the target process and masked prompt before pending input is typed.", "Recognize wrapped password prompts with wide characters and spaces."]
+    },
+    "th": {
+      "fixed": ["ตรวจ process และหน้าจอรับรหัสผ่านอีกครั้งก่อนส่งข้อความที่รออยู่", "ตรวจช่องรับรหัสผ่านที่ตัดบรรทัด มีอักษรกว้างหรือช่องว่างได้แม่นขึ้น"]
+    }
+  },
   "0.16.8": {
     "en": {
       "fixed": ["Reduce browser storage of key-shaped terminal drafts.", "Preserve paused PTY output and support larger session snapshots."]

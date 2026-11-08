@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { MAX_PENDING_PER_OWNER, PendingInputs, samePendingIdentity, type PendingIdentity } from "./pending-input.ts";
+import { MAX_PENDING_PER_OWNER, PendingInputs, guardPendingWrite, samePendingIdentity, type PendingIdentity } from "./pending-input.ts";
 import { PendingMessageStore } from "../src/lib/pendingMessages.ts";
 
 describe("pending target identity", () => {
@@ -8,6 +8,7 @@ describe("pending target identity", () => {
   it("refuses known process, birth, native session and OmO session replacements (regression #540)", () => {
     expect(samePendingIdentity(identity, { ...identity, processPid: 13 })).toBe(false);
     expect(samePendingIdentity(identity, { ...identity, processBirth: 110_000 })).toBe(false);
+    expect(samePendingIdentity(identity, { ...identity, processBirth: null })).toBe(false);
     expect(samePendingIdentity({ ...identity, session: "old" }, { ...identity, session: "new" })).toBe(false);
     expect(samePendingIdentity({ ...identity, omoSession: "old" }, { ...identity, omoSession: "new" })).toBe(false);
   });
@@ -23,7 +24,8 @@ describe("pending target identity", () => {
     const unknown: PendingIdentity = { agent: "claude", terminalId: "t1", session: null };
     const known = { ...identity, session: "native", omoSession: "omo" };
     expect(samePendingIdentity(unknown, known)).toBe(true);
-    expect(samePendingIdentity(known, unknown)).toBe(true);
+    expect(samePendingIdentity(known, unknown)).toBe(true); // a missing PID is not a known same-PID replacement
+    expect(samePendingIdentity(known, { ...known, processBirth: null })).toBe(false);
     expect(samePendingIdentity(identity, { ...identity })).toBe(true);
     expect(samePendingIdentity(identity, { ...identity, terminalId: "t2" })).toBe(false);
     expect(samePendingIdentity(identity, { ...identity, agent: null })).toBe(false);
@@ -33,6 +35,29 @@ describe("pending target identity", () => {
     expect(samePendingIdentity(identity, { ...identity, processBirth: 101_000 }, "darwin")).toBe(true);
     expect(samePendingIdentity(identity, { ...identity, processBirth: 101_001 }, "darwin")).toBe(false);
     expect(samePendingIdentity(identity, { ...identity, processBirth: 101_000 }, "linux")).toBe(false);
+  });
+});
+
+describe("last pending write guard", () => {
+  const identity: PendingIdentity = { agent: "pi", terminalId: "t1", session: null, processPid: 12, processBirth: 100_000 };
+  const checks = (screen = "ready", birth: number | null = 100_000, pid: number | null = 12) => ({
+    foregroundPid: async () => pid, screen: async () => screen, birth: () => birth,
+  });
+
+  it("refuses a replaced or unreadable foreground process before reading the screen", async () => {
+    expect(await guardPendingWrite(identity, 80, checks("ready", 100_000, 13))).toBe("target_changed");
+    expect(await guardPendingWrite(identity, 80, checks("ready", null))).toBe("target_changed");
+    expect(await guardPendingWrite(identity, 80, checks("ready", 110_000))).toBe("target_changed");
+  });
+
+  it("checks a late masked prompt then checks process birth after that read", async () => {
+    let birth = 100_000;
+    expect(await guardPendingWrite(identity, 80, {
+      foregroundPid: async () => 12,
+      screen: async () => { birth = 110_000; return "ready"; }, birth: () => birth,
+    })).toBe("target_changed");
+    expect(await guardPendingWrite(identity, 80, checks("Password:"))).toBe("agent_blocked");
+    expect(await guardPendingWrite(identity, 80, checks())).toBeNull();
   });
 });
 

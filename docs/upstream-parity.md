@@ -80,7 +80,7 @@ independent verifier. These changes do not alter native input authority, private
 state identity, Pi subagent support, branding or the source-only launcher. Unit
 fixtures do not establish physical-device or real-host acceptance.
 
-Three later changes are also adapted narrowly without repinning the snapshot:
+Five later changes are also adapted narrowly without repinning the snapshot:
 
 - [#1568](https://github.com/devswha/herdr-web-ui/pull/1568), commit
   `ee2daec00af8579c3a6c4d0de4fc1b51a317a47e`: durable same-directory private-state
@@ -95,6 +95,17 @@ Three later changes are also adapted narrowly without repinning the snapshot:
   UX ideas applied to the existing Pi owner, not a Claude detail architecture.
   The Pi route reports page/freshness evidence, revalidates parent and child after
   reads, and remains GET-only with opaque parent-scoped IDs.
+- [#3172](https://github.com/devswha/ovis/pull/3172), commit
+  `27e5003f357a0ec8629328a409bdf73b35fd0836`: a final bound-process and live
+  masked-prompt check before each fork pending paste, Enter and steering Escape.
+  A known process birth becoming unreadable at the same PID now fails the identity
+  match. The fork retains its own pending lease, Letta Stop witness and uncertain
+  write handling; the host cannot compare and write atomically.
+- [#3177](https://github.com/devswha/ovis/pull/3177), commit
+  `cdf01a42879c360ce47e3260ca1932e5f9aeacce`: detect wrapped masked prompts
+  by terminal display columns, preserving leading spaces on continuation rows.
+  The width heuristic is bounded by the existing prompt patterns, not a guarantee
+  that every secret request can be recognized.
 
 These adaptations do not adopt Ovis branding, Rust PTY/native applications,
 installers, managed updates, public Push relay or release/provisioning tooling.

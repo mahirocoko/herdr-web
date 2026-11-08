@@ -8,6 +8,18 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.16.9] - 2026-11-08
+
+### Fixed
+
+- Recheck the bound process and live masked-prompt screen before a pending message's paste, Enter, and steering Escape. Adapted narrowly from upstream [#3172](https://github.com/devswha/ovis/pull/3172); the fork retains its lease, Letta Stop, and uncertain-write guards.
+- Recognize wrapped password and passphrase prompts by terminal display columns, preserving continuation spaces and wide characters. Adapted from upstream [#3177](https://github.com/devswha/ovis/pull/3177).
+
+### Boundaries
+
+- Herdr cannot compare the process/screen and write atomically; changes during the final reads or write remain possible. Prompt recognition remains heuristic. Unit tests and HTTP readiness do not establish live native Send, device, or human acceptance.
+- The Web service continuity rule now requires a runtime-prerequisite preflight and prompt restart in its existing visible tab; it does not authorize an automatic runtime switch. The upstream snapshot pin is unchanged.
+
 ## [0.16.8] - 2026-11-05
 
 ### Fixed
@@ -5300,7 +5312,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.8...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.9...HEAD
+[0.16.9]: https://github.com/mahirocoko/herdr-web/compare/v0.16.8...v0.16.9
 [0.16.8]: https://github.com/mahirocoko/herdr-web/compare/v0.16.7...v0.16.8
 [0.16.7]: https://github.com/mahirocoko/herdr-web/compare/v0.16.6...v0.16.7
 [0.16.6]: https://github.com/mahirocoko/herdr-web/compare/v0.16.5...v0.16.6

@@ -1,4 +1,5 @@
 import type { AgentStatus, PendingMessage } from "../shared/protocol.ts";
+import { secretPrompt } from "../shared/secret-prompt.ts";
 
 export interface PendingIdentity {
   agent: string | null;
@@ -19,8 +20,26 @@ export function samePendingIdentity(before: PendingIdentity, after: PendingIdent
     && !changed(before.claudeSession, after.claudeSession)
     && !changed(before.processPid, after.processPid)
     // macOS derives birth from whole elapsed seconds; reads of one PID drift by up to a second.
-    && (before.processBirth == null || after.processBirth == null
-      || (platform === "darwin" ? Math.abs(before.processBirth - after.processBirth) <= 1000 : before.processBirth === after.processBirth));
+    && (before.processBirth == null || (after.processBirth == null
+      ? before.processPid == null || before.processPid !== after.processPid
+      : (platform === "darwin" ? Math.abs(before.processBirth - after.processBirth) <= 1000 : before.processBirth === after.processBirth)));
+}
+
+/** Recheck the bound process and live screen after other awaited checks, immediately before a write. */
+export async function guardPendingWrite(identity: PendingIdentity, columns: number | undefined, reads: {
+  foregroundPid: () => Promise<number | null>;
+  screen: () => Promise<string>;
+  birth: (pid: number) => number | null;
+}): Promise<"target_changed" | "agent_blocked" | null> {
+  const pid = identity.processPid;
+  if (pid != null) {
+    if (await reads.foregroundPid() !== pid) return "target_changed";
+    if (identity.processBirth != null && !samePendingIdentity(identity, { ...identity, processBirth: reads.birth(pid) })) return "target_changed";
+  }
+  if (secretPrompt(await reads.screen(), columns) !== null) return "agent_blocked";
+  if (pid != null && identity.processBirth != null
+    && !samePendingIdentity(identity, { ...identity, processBirth: reads.birth(pid) })) return "target_changed";
+  return null;
 }
 export interface PendingRecord<Owner, Lease> {
   owner: Owner;

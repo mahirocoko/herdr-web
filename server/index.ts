@@ -57,7 +57,7 @@ import { claudeHeldIsGrey, shownInputBox, codexQuestionsCollapsed, handlePromptR
 import { secretPrompt, validSecret } from "../shared/secret-prompt.ts";
 import { attachableIdentity, sidecarAvailable } from "./pty/sidecar.ts";
 import { mirrorInput } from "./mirror-input.ts";
-import { PendingInputs, samePendingIdentity, type PendingIdentity, type PendingRecord } from "./pending-input.ts";
+import { PendingInputs, guardPendingWrite, samePendingIdentity, type PendingIdentity, type PendingRecord } from "./pending-input.ts";
 import { processStartedAt } from "./process-start.ts";
 import { PendingRequestBook } from "./pending-requests.ts";
 import { LettaStops, type LettaStopTicket } from "./letta-stop.ts";
@@ -387,6 +387,16 @@ export function createServer(
    * needs no colors.
    */
 
+  async function checkPendingWrite(paneId: string, lease: PendingLease, identity: PendingIdentity): Promise<void> {
+    const fault = await guardPendingWrite(identity, lease.sighting.facts().cols, {
+      foregroundPid: async () => (await paneProcessInfo(paneId))?.foreground_processes?.[0]?.pid ?? null,
+      screen: async () => (await paneRead({ paneId, source: "detection", format: "text" })).text,
+      birth: processStartedAt,
+    });
+    if (fault === "target_changed") throw new HerdrError("pending_target_changed", "The pane's process changed before input; review the message before sending again");
+    if (fault === "agent_blocked") throw new HerdrError("agent_blocked", "The terminal is waiting for masked input; answer it with the secret-input form first");
+  }
+
   async function dispatchPendingText(owner: Client, paneId: string, text: string, lease: PendingLease, identity: PendingIdentity,
     automatic: boolean, arrivedAt: number, committing: (working: boolean, restarting?: boolean) => void = () => {}, interruptWorkingCodex = false,
     recovery?: LettaStopTicket<Client, PendingLease>): Promise<SubmitReply> {
@@ -433,6 +443,7 @@ export function createServer(
       // read comes after the colors, so text typed between the two is in the box and holds the message.
       if (context.identity.agent === "claude") await freeClaudeBox(paneId, context.working, () => authorizePending(owner, paneId, lease), arrivedAt + (options.submitDeadlineMs ?? SUBMIT_DEADLINE_MS));
       else if (context.identity.agent === "hermes") await freeHermesInput(paneId, context.identity);
+      await checkPendingWrite(paneId, lease, identity);
       if (Date.now() - arrivedAt > (options.submitDeadlineMs ?? SUBMIT_DEADLINE_MS)) throw new HerdrError("submit_timeout", "The pending message waited too long; nothing was typed");
       authorizePending(owner, paneId, lease);
       // asked again right before herdr is written to: its connect is awaited (#666)
@@ -461,6 +472,7 @@ export function createServer(
       const beforeEnter = await pendingContext(owner, paneId, lease, identity, true);
       recoveryReady(beforeEnter, closeMention(text).trimEnd());
       if (automatic && beforeEnter.working) throw new HerdrError("pending_wait", "The agent started another turn before this queued message could be committed");
+      await checkPendingWrite(paneId, lease, identity);
       authorizePending(owner, paneId, lease);
       const steering = !automatic && beforeEnter.working && !recovery;
       committing(steering);
@@ -478,7 +490,10 @@ export function createServer(
         restarting: () => committing(true, true),
         // herdr has no compare-and-send: the screen can change between this read and the write, so the
         // write is refused when the lease, the deadline or the pane's status moved meanwhile
-        escape: (fresh) => paneSendKeys(paneId, ["Escape"], undefined, () => allowed() && fresh() && pending.current(paneId) === statusAtRead),
+        escape: async (fresh) => {
+          await checkPendingWrite(paneId, lease, identity);
+          return paneSendKeys(paneId, ["Escape"], undefined, () => allowed() && fresh() && pending.current(paneId) === statusAtRead);
+        },
       });
       noteSubmitted(paneId, text);
       return { ok: true };

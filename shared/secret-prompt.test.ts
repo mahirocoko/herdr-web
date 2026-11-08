@@ -19,6 +19,11 @@ it("joins only right-edge continuations of a narrow prompt", () => {
   expect(secretPrompt("Enter passphrase for key '/tmp/my private key for testing\n':\n", 57)).toBe("Enter passphrase for key '/tmp/my private key for testing':");
   expect(secretPrompt("Enter passphrase for key\n'/tmp/key':", "Enter passphrase for key ".length)).toBe("Enter passphrase for key '/tmp/key':");
   expect(secretPrompt("Enter passphrase for key\n '/tmp/key':", "Enter passphrase for key".length)).toBe("Enter passphrase for key '/tmp/key':");
+  expect(secretPrompt("Enter passph\nrase for key\n '/tmp/a-ver\ny-long-priva\nte-key':", 12)).toBe("Enter passphrase for key '/tmp/a-very-long-private-key':");
+  expect(secretPrompt("$ ssh-add\nEnter pass\nphrase for\n key '/tmp\n/key':", 10)).toBe("Enter passphrase for key '/tmp/key':");
+  expect(secretPrompt("$ ssh-add\nEnter passphrase for\n key '密钥密钥密钥密\n钥':", 20)).toBe("Enter passphrase for key '密钥密钥密钥密钥':");
+  expect(secretPrompt("Enter passphrase for key '/tmp/\n키':", 32)).toBe("Enter passphrase for key '/tmp/ 키':");
+  expect(secretPrompt("Enter passphrase for key '👨‍👩‍👧x\nfoo':", 29)).toBe("Enter passphrase for key '👨‍👩‍👧xfoo':");
   expect(secretPrompt("Enter passphrase for key\n'/tmp/key':", 80)).toBeNull();
   expect(secretPrompt("This is prose that ends\nPassword?", 24)).toBeNull();
 });
