@@ -8,15 +8,23 @@ This fork adopts the coherent frontend and backend from `devswha/herdr-web-ui`, 
 
 Follow [Installation](INSTALL.md) once to prepare the exact Bun runtime, frozen dependencies, Node and your existing Herdr host. From a configured checkout:
 
-```sh
-bun start
-```
+Choose the command for your running host:
+
+| Host | Command |
+| --- | --- |
+| Herdr App / herdr-core (Linux/macOS) | `bun run start:core` |
+| Original Herdr | `bun run start:herdr` |
+
+Both commands use the same foreground launcher and explicitly select the runtime
+for this process, overriding `OVIS_RUNTIME`. There is no auto-detection or fallback.
+`bun start` remains compatible: it uses `OVIS_RUNTIME` when set, otherwise the
+original Herdr host.
 
 Open **http://127.0.0.1:8787**. Startup builds the client and serves it in the foreground; Ctrl-C stops this web instance, not Herdr. There is no separate test or build prerequisite for everyday use. Keep the server in a visible project terminal.
 
 If an instance already owns the port, open that instance instead. Startup refuses an occupied port before rebuilding and never stops its owner. `bun run server` and `bun run dev` use this same safe launcher, not a second development server or hot-reload proxy. Port selection and troubleshooting belong in the installation guide.
 
-Using the newer **Herdr App / herdr-core** instead of the original Herdr host? On Linux/macOS, `OVIS_RUNTIME=herdr-core bun start` selects the already-running `hc` runtime for this process only, without global settings or a Pi reload. Read the [core setup and Pi identity limits](INSTALL.md#herdr-app--herdr-core-opt-in-linuxmacos) before switching an existing Web service; see [socket troubleshooting](INSTALL.md#core-adapter-socket-is-occupied) if startup reports an occupied adapter socket.
+Using the newer **Herdr App / herdr-core** instead of the original Herdr host? On Linux/macOS, `bun run start:core` selects the already-running `hc` runtime for this process only, without global settings or a Pi reload. The existing `OVIS_RUNTIME=herdr-core bun start` form is still supported. Read the [core setup and Pi identity limits](INSTALL.md#herdr-app--herdr-core-opt-in-linuxmacos) before switching an existing Web service; see [socket troubleshooting](INSTALL.md#core-adapter-socket-is-occupied) if startup reports an occupied adapter socket.
 
 ## What to expect
 

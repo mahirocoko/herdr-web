@@ -1,4 +1,12 @@
 {
+  "0.16.10": {
+    "en": {
+      "improved": ["Choose Herdr App/core or original Herdr with explicit startup commands."]
+    },
+    "th": {
+      "improved": ["เลือกเริ่ม Web ด้วย Herdr App/core หรือ Herdr รุ่นเดิมได้ผ่านคำสั่งแยก"]
+    }
+  },
   "0.16.9": {
     "en": {
       "fixed": ["Recheck the target process and masked prompt before pending input is typed.", "Recognize wrapped password prompts with wide characters and spaces."]

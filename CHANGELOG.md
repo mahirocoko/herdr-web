@@ -8,6 +8,24 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.16.10] - 2026-11-10
+
+### Improved
+
+- Choose the running host explicitly with `bun run start:core` for Herdr App/core
+  or `bun run start:herdr` for original Herdr, without shell-specific environment
+  assignment. Each alias overrides inherited `OVIS_RUNTIME` for this process only.
+- Show both runtime choices in startup help and setup guides. Help works with
+  either alias without building or starting a server.
+
+### Boundaries
+
+- Bare `bun start`, `server` and `dev` retain their existing runtime selection.
+  There is no auto-detection, fallback, host startup or global configuration change.
+- Occupied-port and adapter-socket guards remain unchanged; these commands do not
+  recover or delete an existing socket. Core remains Linux/macOS-only.
+- This is a source-only release, not an installer, managed update or deployment.
+
 ## [0.16.9] - 2026-11-08
 
 ### Fixed
@@ -5312,7 +5330,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.9...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.10...HEAD
+[0.16.10]: https://github.com/mahirocoko/herdr-web/compare/v0.16.9...v0.16.10
 [0.16.9]: https://github.com/mahirocoko/herdr-web/compare/v0.16.8...v0.16.9
 [0.16.8]: https://github.com/mahirocoko/herdr-web/compare/v0.16.7...v0.16.8
 [0.16.7]: https://github.com/mahirocoko/herdr-web/compare/v0.16.6...v0.16.7

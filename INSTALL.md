@@ -41,6 +41,21 @@ bun start --help
 
 ## Running again and choosing a port
 
+Choose the runtime explicitly for everyday use:
+
+| Running host | Command |
+| --- | --- |
+| Herdr App / herdr-core (Linux/macOS) | `bun run start:core` |
+| Original Herdr | `bun run start:herdr` |
+
+The aliases set runtime selection inside the launcher, without shell-specific
+environment assignment. They override inherited `OVIS_RUNTIME` for this process
+only; there is no auto-detection, fallback, host startup or global configuration
+change. `bun start` still follows `OVIS_RUNTIME`, defaulting to original Herdr when
+unset or empty. Use `bun run start:core --help` or `bun run start:herdr --help` for
+non-starting help. If Bun cannot run the bootstrap, use
+`node scripts/bun-project.mjs run start:core` (or `start:herdr`).
+
 Every normal start rebuilds, including after a source update. Reuse an existing instance rather than starting a duplicate. The launcher rejects an occupied port before touching its assets. `start`, `server` and `dev` all take the same safe path; none enables Vite HMR or a managed updater.
 
 For a different local port on Unix:
@@ -58,10 +73,10 @@ The newer desktop **Herdr App** uses `hc` (herdr-core), not the protocol-22 `her
 ```sh
 hc --version
 hc server status
-OVIS_RUNTIME=herdr-core bun start
+bun run start:core
 ```
 
-This does not install/start a core server, change global settings, reload Pi, or modify the desktop layout. `OVIS_HC_BIN` can select an existing `hc` executable; `hc connect` retains its normal endpoint selection (`HC_SOCKET` / `HC_SESSION` when explicitly provided). Keep the Web terminal visible. Switching an existing Web instance requires its owner to stop and restart it with this selection; an occupied port is still refused before building. Omitting the variable on a later launch selects the original runtime again. Do not run two instances over the same `dist/` output.
+This does not install/start a core server, change global settings, reload Pi, or modify the desktop layout. `OVIS_HC_BIN` can select an existing `hc` executable; `hc connect` retains its normal endpoint selection (`HC_SOCKET` / `HC_SESSION` when explicitly provided). Keep the Web terminal visible. Switching an existing Web instance requires its owner to stop and restart it with this selection; an occupied port is still refused before building. The existing `OVIS_RUNTIME=herdr-core bun start` form remains supported. Use `start:core` again on later launches to select core explicitly; bare `bun start` without `OVIS_RUNTIME` still selects original Herdr. Do not run two instances over the same `dist/` output.
 
 Core mode provides the existing Web shell, native screen/terminal streaming and guarded manual Send/Stop. Desktop create/close/split/focus/reorder, worktree, plugin and agent-start operations are not translated and remain unavailable. Windows core mode is refused. This is a compatibility lane, not full desktop parity; see the [integration contract](docs/development.md#opt-in-herdr-core-compatibility).
 

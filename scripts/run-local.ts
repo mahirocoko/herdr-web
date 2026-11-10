@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { createServer } from "../server/index.ts";
 import { herdrSocketPath, ping } from "../server/herdr/client.ts";
 import { isRealNode } from "../server/pty/sidecar.ts";
-import { runtime, startRuntime } from "../server/herdr-core/runtime.ts";
+import { runtime, startRuntime, type Runtime } from "../server/herdr-core/runtime.ts";
 import type { ForkPolicy } from "../server/fork-policy.ts";
 
 import {
@@ -248,14 +248,38 @@ export async function startLocal() {
   }
 }
 
+/** Explicit aliases override inherited runtime selection, never auto-detect or fall back. */
+export function parseLauncherArgs(args: string[]): { help: boolean; runtime?: Runtime } {
+  let help = false;
+  let selectedRuntime: Runtime | undefined;
+  for (const arg of args) {
+    if (arg === "--help" || arg === "-h") {
+      help = true;
+    } else if (arg === "--runtime=herdr" || arg === "--runtime=herdr-core") {
+      if (selectedRuntime !== undefined)
+        throw new Error("Choose only one runtime; use bun start --help");
+      selectedRuntime = arg === "--runtime=herdr-core" ? "herdr-core" : "herdr";
+    } else {
+      throw new Error("Unknown launcher argument; use bun start --help");
+    }
+  }
+  return { help, runtime: selectedRuntime };
+}
+
 if (import.meta.main) {
-  const args = process.argv.slice(2);
-  if (args.length === 1 && (args[0] === "--help" || args[0] === "-h")) {
+  const options = parseLauncherArgs(process.argv.slice(2));
+  if (options.help) {
     console.log(`Herdr Web — local source-native launcher
 
-Usage: bun start
-       PORT=8788 bun start
-       OVIS_RUNTIME=herdr-core bun start  (opt-in Linux/macOS, already-running hc)
+Usage: bun start            (OVIS_RUNTIME, otherwise original Herdr)
+       bun run start:core   (Herdr App/core; Linux/macOS, already-running hc)
+       bun run start:herdr  (original Herdr host)
+       PORT=8788 bun run start:core
+
+Aliases explicitly select the runtime for this process, overriding OVIS_RUNTIME.
+No auto-detection or fallback. Direct selection: --runtime=herdr or --runtime=herdr-core.
+OVIS_RUNTIME=herdr-core bun start remains supported.
+Use --help or -h with any start command; help never builds or starts a runtime.
 
 Builds the web client, then serves http://127.0.0.1:8787 in the foreground.
 Requires Bun 1.4.2 (project-local or PATH) and installed dependencies.
@@ -267,9 +291,8 @@ Pi sessions are never reloaded or bound by guessing. See INSTALL.md for setup/li
 Windows private state requires native NTFS ACL checks; host execution remains
 unverified. No Bash/WSL.
 Ctrl-C stops this process. No global install, managed updater or public bind.`);
-  } else if (args.length) {
-    throw new Error("Unknown launcher argument; use bun start --help");
   } else {
+    if (options.runtime !== undefined) process.env["OVIS_RUNTIME"] = options.runtime;
     await startLocal();
   }
 }

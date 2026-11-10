@@ -16,6 +16,7 @@ import { join } from "node:path";
 import {
   assertLocalPortAvailable,
   buildClient,
+  parseLauncherArgs,
   preservePushIdentity,
   requiresNodePty,
 } from "./run-local.ts";
@@ -39,6 +40,83 @@ test("launcher help distinguishes per-process core selection and Pi identity lim
     "existing\nPi sessions are never reloaded or bound by guessing",
   );
 });
+
+test("runtime arguments preserve default selection and reject ambiguity before startup", () => {
+  expect(parseLauncherArgs([])).toEqual({ help: false, runtime: undefined });
+  expect(parseLauncherArgs(["--runtime=herdr-core"])).toEqual({
+    help: false,
+    runtime: "herdr-core",
+  });
+  expect(parseLauncherArgs(["--runtime=herdr"])).toEqual({
+    help: false,
+    runtime: "herdr",
+  });
+  for (const args of [
+    ["--runtime=herdr-core", "--help"],
+    ["-h", "--runtime=herdr-core"],
+  ]) {
+    expect(parseLauncherArgs(args)).toEqual({ help: true, runtime: "herdr-core" });
+  }
+  for (const args of [
+    ["--runtime=other"],
+    ["--runtime"],
+    ["--runtime", "herdr-core"],
+    ["--runtime=herdr", "--runtime=herdr-core"],
+    ["--runtime=herdr-core", "--runtime=herdr-core"],
+    ["--help", "--unknown"],
+  ]) {
+    expect(() => parseLauncherArgs(args)).toThrow();
+  }
+});
+
+for (const script of ["start:core", "start:herdr"]) {
+  test(`${script} help uses the package alias without starting or validating a runtime`, () => {
+    const result = Bun.spawnSync([process.execPath, "run", script, "--help"], {
+      cwd: join(import.meta.dir, ".."),
+      env: { ...process.env, OVIS_RUNTIME: "invalid-help-must-not-start" },
+      timeout: 15_000,
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toContain("bun run start:core");
+    expect(result.stdout.toString()).toContain("bun run start:herdr");
+    expect(result.stdout.toString()).toContain("No auto-detection or fallback");
+  });
+
+  test(`${script} overrides inherited runtime but refuses an occupied port before effects`, () => {
+    const owner = Bun.listen({
+      hostname: "127.0.0.1",
+      port: 0,
+      socket: { data() {} },
+    });
+    try {
+      const result = Bun.spawnSync([process.execPath, "run", script], {
+        cwd: join(import.meta.dir, ".."),
+        env: {
+          ...process.env,
+          OVIS_RUNTIME: "invalid-inherited-runtime",
+          PORT: String(owner.port),
+          HERDR_TEST_MODE: undefined,
+          HERDR_TEST_LIVE: undefined,
+          HERDR_TEST_HOOKS: undefined,
+        },
+        timeout: 15_000,
+      });
+      expect(result.exitCode).not.toBe(0);
+      const error = result.stderr.toString();
+      // Core remains unsupported on Windows, before any port or native effects.
+      if (script === "start:core" && process.platform === "win32") {
+        expect(error).toContain("herdr-core is Linux/macOS only");
+      } else {
+        expect(error).toContain(`Port ${owner.port} is unavailable`);
+        expect(error).toContain("No build or server was started");
+      }
+      expect(error).not.toContain("Unknown OVIS_RUNTIME");
+      expect(owner.port).toBeGreaterThan(0);
+    } finally {
+      owner.stop();
+    }
+  });
+}
 
 test("PTY requirement retains Unix smoke and follows Windows native attach capability", () => {
   expect(requiresNodePty(false, "darwin")).toBe(true);
