@@ -8,6 +8,20 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.16.11] - 2026-11-10
+
+### Fixed
+
+- Match the actual thrown error in startup-alias regression tests instead of
+  searching neighboring source lines included in Bun's Windows diagnostics.
+  This corrects the Windows bootstrap CI assertion introduced in 0.16.10.
+
+### Boundaries
+
+- Runtime selection and application behavior are unchanged from 0.16.10.
+  Core remains Linux/macOS-only; no Windows host support is added.
+- The published 0.16.10 tag is unchanged. This is a source-only follow-up release.
+
 ## [0.16.10] - 2026-11-10
 
 ### Improved
@@ -5330,7 +5344,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.10...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.11...HEAD
+[0.16.11]: https://github.com/mahirocoko/herdr-web/compare/v0.16.10...v0.16.11
 [0.16.10]: https://github.com/mahirocoko/herdr-web/compare/v0.16.9...v0.16.10
 [0.16.9]: https://github.com/mahirocoko/herdr-web/compare/v0.16.8...v0.16.9
 [0.16.8]: https://github.com/mahirocoko/herdr-web/compare/v0.16.7...v0.16.8

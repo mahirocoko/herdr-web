@@ -103,14 +103,13 @@ for (const script of ["start:core", "start:herdr"]) {
       });
       expect(result.exitCode).not.toBe(0);
       const error = result.stderr.toString();
-      // Core remains unsupported on Windows, before any port or native effects.
+      // Match the thrown error, not neighboring source lines in Bun's diagnostic excerpt.
       if (script === "start:core" && process.platform === "win32") {
-        expect(error).toContain("herdr-core is Linux/macOS only");
+        expect(error).toContain("error: herdr-core is Linux/macOS only");
       } else {
-        expect(error).toContain(`Port ${owner.port} is unavailable`);
+        expect(error).toContain(`error: Port ${owner.port} is unavailable`);
         expect(error).toContain("No build or server was started");
       }
-      expect(error).not.toContain("Unknown OVIS_RUNTIME");
       expect(owner.port).toBeGreaterThan(0);
     } finally {
       owner.stop();

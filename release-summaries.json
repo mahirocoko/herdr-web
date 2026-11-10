@@ -1,4 +1,12 @@
 {
+  "0.16.11": {
+    "en": {
+      "fixed": ["Read actual startup errors in Windows regression checks, not neighboring source lines."]
+    },
+    "th": {
+      "fixed": ["แก้เทสต์เริ่ม Web บน Windows ให้ตรวจ error จริงแทนข้อความใน source ที่แนบมา"]
+    }
+  },
   "0.16.10": {
     "en": {
       "improved": ["Choose Herdr App/core or original Herdr with explicit startup commands."]
