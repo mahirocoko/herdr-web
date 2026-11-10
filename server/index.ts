@@ -73,7 +73,7 @@ import { CLIProxyRoutes } from "./cliproxy-routes.ts";
 import { UsageLoginService } from "./usage-login.ts";
 import { handleVoiceRequest, VoiceService } from "./voice.ts";
 
-import { forkCapabilityGate, forkRequestGate, type ForkPolicy } from "./fork-policy.ts";
+import { forkCapabilityGate, forkRequestGate, RefreshingForkPolicy, type ForkPolicy } from "./fork-policy.ts";
 import { BRIDGE_PROTOCOL } from "../shared/machines.ts";
 import { bridgeIdentity, registerBridge } from "./bridge.ts";
 import { handleMachineRequest } from "./machine-api.ts";
@@ -206,7 +206,7 @@ export function createServer(
     herdrConfigPath?: string;
     registerBridge?: boolean;
     /** Fork launcher only: strict ingress and explicit external-side-effect fences. */
-    forkPolicy?: ForkPolicy;
+    forkPolicy?: ForkPolicy | RefreshingForkPolicy;
     remoteOperations?: boolean;
     /** PLUGIN_ACTION_WAIT_MS; a test shortens it to see a run that outlasts the wait */
     pluginActionWaitMs?: number;
@@ -600,9 +600,14 @@ export function createServer(
       return compressResponse(request, await (async (): Promise<Response | undefined> => {
       const url = new URL(request.url);
       let { pathname } = url;
+      let requestPolicy: ForkPolicy | undefined;
       if (options.forkPolicy) {
         const address = bunServer.requestIP(request);
-        const denied = forkRequestGate(request, address !== null && isLoopbackAddress(address.address), options.forkPolicy);
+        const loopback = address !== null && isLoopbackAddress(address.address);
+        requestPolicy = options.forkPolicy instanceof RefreshingForkPolicy
+          ? await options.forkPolicy.forRequest(request, loopback)
+          : options.forkPolicy;
+        const denied = forkRequestGate(request, loopback, requestPolicy);
         if (denied) return denied;
       }
       const bridgeAuthorized = isAuthenticated(request, bridgeToken);
@@ -630,7 +635,11 @@ export function createServer(
         return errorResponse(error);
       }
       const requestShape = { loopback, forwarded, funnel, tailscaleLogin, forwardedFor, serveOnly };
-      const identity = await identityOf(token === "" && pairedDevice === null && isServeOwnerRequest(requestShape) && (pathname === "/ws" || pathname.startsWith("/api/")), requestHost);
+      // A recovered fork route carries its freshly checked owner through source auth too;
+      // the optional startup owner must not remain the authority for private requests.
+      const identity = requestPolicy?.tailnetHost
+        ? { owner: requestPolicy.ownerLogin!, tagged: false, soleLogin: null, dnsName: null, tailnetIp: null }
+        : await identityOf(token === "" && pairedDevice === null && isServeOwnerRequest(requestShape) && (pathname === "/ws" || pathname.startsWith("/api/")), requestHost);
       const access = decideAccess({
         ...requestShape,
         host: requestHost,

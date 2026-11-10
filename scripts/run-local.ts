@@ -1,12 +1,13 @@
 import { existsSync, lstatSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { createECDH } from "node:crypto";
+import { execFile } from "node:child_process";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { createServer } from "../server/index.ts";
 import { herdrSocketPath, ping } from "../server/herdr/client.ts";
 import { isRealNode } from "../server/pty/sidecar.ts";
 import { runtime, startRuntime, type Runtime } from "../server/herdr-core/runtime.ts";
-import type { ForkPolicy } from "../server/fork-policy.ts";
+import { RefreshingForkPolicy, type ForkPolicy } from "../server/fork-policy.ts";
 
 import {
   preparePrivateRuntimeTree,
@@ -62,10 +63,46 @@ export function preservePushIdentity(
   return true;
 }
 
-/** This fork never enters upstream direct-main, managed updater or bridge registration. */
-export function localPolicy(port: number): ForkPolicy {
+/** Discovery only: no Serve configuration, network changes or shell execution.
+ * A separate deadline settles readers even if child exit/pipe closure is delayed.
+ */
+export function readServeStatus(
+  tailscale: string | null = Bun.which("tailscale"),
+  timeoutMs = 5000,
+): Promise<string | null> {
+  if (!tailscale) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let settled = false;
+    const finish = (value: string | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    const child = execFile(tailscale, ["serve", "status", "--json"], {
+      timeout: timeoutMs,
+      killSignal: "SIGKILL",
+      maxBuffer: 65_536,
+      windowsHide: true,
+    }, (error, stdout) => finish(error ? null : stdout));
+    timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      finish(null);
+    }, timeoutMs);
+  });
+}
+
+/** This fork never enters upstream direct-main, managed updater or bridge registration.
+ * Private configuration is re-read through the same privacy guard on each discovery.
+ */
+export async function localPolicy(
+  port: number,
+  configPath = existingConfigPath(),
+  readServe: () => Promise<string | null> = readServeStatus,
+): Promise<ForkPolicy> {
   const policy: ForkPolicy = { port };
-  const config = privateConfiguration(existingConfigPath());
+  const config = privateConfiguration(configPath);
   if (!config) return policy;
   const owner = config.ownerLogin;
   if (
@@ -74,18 +111,18 @@ export function localPolicy(port: number): ForkPolicy {
     /[\x00-\x1f\x7f]/.test(owner)
   )
     throw new Error("Existing owner identity is invalid; left unchanged");
-  const tailscale = Bun.which("tailscale");
-  if (!tailscale) return policy;
-  const result = Bun.spawnSync([tailscale, "serve", "status", "--json"], {
-    timeout: 5000,
-    stderr: "ignore",
-  });
-  if (result.exitCode !== 0) return policy;
-  const web = JSON.parse(result.stdout.toString()).Web ?? {};
+  const status = await readServe();
+  if (status === null) return policy;
+  let web: Record<string, unknown>;
+  try {
+    web = JSON.parse(status)?.Web ?? {};
+  } catch {
+    return policy;
+  }
   const matching = Object.entries(web).filter(
     ([host, value]) =>
       /^[a-z0-9.-]+\.ts\.net:443$/.test(host) &&
-      (value as { Handlers?: Record<string, { Proxy?: string }> }).Handlers?.[
+      (value as { Handlers?: Record<string, { Proxy?: string }> } | null)?.Handlers?.[
         "/"
       ]?.Proxy === `http://127.0.0.1:${port}`,
   );
@@ -206,7 +243,8 @@ export async function startLocal() {
         );
     }
     buildClient(root);
-    const policy = localPolicy(port);
+    const policySource = new RefreshingForkPolicy(port, () => localPolicy(port));
+    const policy = await policySource.current();
     const pushPreserved = preservePushIdentity(stateDir);
     const instance = createServer({
       hostname: "127.0.0.1",
@@ -216,7 +254,7 @@ export async function startLocal() {
       registerBridge: false,
       remoteOperations: false,
       tailscaleOwner: policy.ownerLogin ?? null,
-      forkPolicy: policy,
+      forkPolicy: policySource,
       // Core's framed transport is available without a Node PTY sidecar; keep health and attach aligned.
       ...(core ? { terminalAttach: true, sidecar: true } : {}),
     });
@@ -239,7 +277,7 @@ export async function startLocal() {
       `Existing Push identity ${pushPreserved ? "preserved privately; no legacy subscription/policy stores changed" : "not configured"}`,
     );
     console.log(
-      `Herdr source-native app ready at http://127.0.0.1:${instance.port} (native ${native.version}, protocol ${native.protocol}; private ingress ${policy.tailnetHost ? "verified" : "not configured"})`,
+      `Herdr source-native app ready at http://127.0.0.1:${instance.port} (native ${native.version}, protocol ${native.protocol}; private ingress ${policy.tailnetHost ? "verified" : "not configured"} at startup; private requests recheck automatically)`,
     );
     return instance;
   } catch (error) {

@@ -146,4 +146,6 @@ Native Windows CI covers bootstrap, data-drive/profile NTFS and private-ACL fixt
 | Client build failure          | Fix the reported build/install error before retrying.                                             |
 | Private-state refusal         | Inspect the named path and owner; retain the error, not secret contents. Do not bypass the guard. |
 
+If a phone receives `invalid_host` while its Tailscale route is becoming ready, wait at least ten seconds and reload. Web rechecks private ingress on demand; a temporary startup discovery failure does not require a server restart. If rejection persists, verify the existing Serve hostname and proxy target match this Web port, and that the configured owner is still valid. Do not disable the ingress guard, clear browser storage or change network configuration as a generic workaround.
+
 Loopback works without configuring a network service. Private phone access requires an already configured, verified owner-only Tailscale Serve route. No public Funnel or generic reverse-proxy setup is supported here. See the [user guide](docs/guide.md) and [security policy](SECURITY.md) before exposing access.

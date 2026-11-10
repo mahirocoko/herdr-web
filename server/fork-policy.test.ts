@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { forkCapabilityGate, forkRequestGate } from "./fork-policy.ts";
+import { forkCapabilityGate, forkRequestGate, RefreshingForkPolicy, type ForkPolicy } from "./fork-policy.ts";
 import { forkBrowserReplacer, jsonResponse } from "./http.ts";
 
 const policy = {
@@ -16,6 +16,51 @@ const req = (
     method,
     headers: { host: "127.0.0.1:8787", ...headers },
   });
+
+test("private discovery is single-flight and rate-bounded while loopback bypasses a pending CLI read", async () => {
+  let now = 0;
+  let reads = 0;
+  let complete!: (policy: ForkPolicy) => void;
+  const source = new RefreshingForkPolicy(8787, () => {
+    reads++;
+    return new Promise<ForkPolicy>((resolve) => { complete = resolve; });
+  }, () => now);
+  const remote = req("/", { host: policy.tailnetHost });
+  const first = source.forRequest(remote, true);
+  const second = source.forRequest(remote, true);
+  await Promise.resolve();
+  expect(reads).toBe(1);
+  // These finish before the outstanding discovery promise is resolved.
+  expect(await source.forRequest(req(), true)).toEqual({ port: 8787 });
+  expect(await source.forRequest(remote, false)).toEqual({ port: 8787 });
+  complete(policy);
+  expect(await first).toEqual(policy);
+  expect(await second).toEqual(policy);
+  expect(await source.forRequest(remote, true)).toEqual(policy);
+  expect(reads).toBe(1);
+  now = 10_000;
+  const refreshed = source.forRequest(remote, true);
+  await Promise.resolve();
+  expect(reads).toBe(2);
+  complete({ port: 8787 });
+  expect(await refreshed).toEqual({ port: 8787 });
+});
+
+test("a throwing discovery revokes old authority and can recover on a later private request", async () => {
+  let now = 0;
+  let fail = false;
+  const source = new RefreshingForkPolicy(8787, async () => {
+    if (fail) throw new Error("CLI unavailable");
+    return policy;
+  }, () => now);
+  expect(await source.current()).toEqual(policy);
+  fail = true;
+  now = 10_000;
+  expect(await source.current()).toEqual({ port: 8787 });
+  fail = false;
+  now = 20_000;
+  expect(await source.current()).toEqual(policy);
+});
 
 describe("fork ingress before route side effects", () => {
   test("observed Android empty-destination navigation is not a general fetch exception", () => {

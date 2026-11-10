@@ -1,4 +1,12 @@
 {
+  "0.16.12": {
+    "en": {
+      "fixed": ["Recover Tailscale access after a temporary startup lookup failure without a restart.", "Bound route lookups and authenticate with the newly verified owner."]
+    },
+    "th": {
+      "fixed": ["ตรวจ Tailscale route ใหม่ได้หลัง startup ล้มเหลวชั่วคราว โดยไม่ต้องรีสตาร์ต Web", "จำกัดเวลาตรวจ route และใช้ owner ที่เพิ่งตรวจยืนยันในการอนุญาตให้เข้า"]
+    }
+  },
   "0.16.11": {
     "en": {
       "fixed": ["Read actual startup errors in Windows regression checks, not neighboring source lines."]

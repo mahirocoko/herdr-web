@@ -8,6 +8,50 @@ export interface ForkPolicy {
   ownerLogin?: string;
 }
 
+/** Read-only Serve discovery is retried on private requests, never frozen at startup.
+ * One asynchronous read per ten-second window is shared by concurrent requests.
+ * Local access never waits; an unsuccessful refresh withdraws the old private grant.
+ */
+export class RefreshingForkPolicy {
+  private policy: ForkPolicy;
+  private expiresAt = -Infinity;
+  private reading: Promise<ForkPolicy> | null = null;
+
+  constructor(
+    private readonly port: number,
+    private readonly readPolicy: () => Promise<ForkPolicy>,
+    private readonly now: () => number = () => performance.now(),
+  ) {
+    this.policy = { port };
+  }
+
+  current(): Promise<ForkPolicy> {
+    if (this.reading) return this.reading;
+    if (this.now() < this.expiresAt) return Promise.resolve(this.policy);
+    // Never serve stale authority while a replacement is being checked.
+    this.policy = { port: this.port };
+    this.reading = Promise.resolve()
+      .then(() => this.readPolicy())
+      .then((policy) => {
+        this.policy = policy;
+        return policy;
+      })
+      .catch(() => this.policy)
+      .finally(() => {
+        this.expiresAt = this.now() + 10_000;
+        this.reading = null;
+      });
+    return this.reading;
+  }
+
+  forRequest(request: Request, loopback: boolean): Promise<ForkPolicy> {
+    const host = request.headers.get("host")?.toLowerCase();
+    if (!loopback || host === `127.0.0.1:${this.port}` || host === `localhost:${this.port}`)
+      return Promise.resolve({ port: this.port });
+    return this.current();
+  }
+}
+
 const tailnet = new BlockList();
 tailnet.addSubnet("100.64.0.0", 10, "ipv4");
 tailnet.addSubnet("fd7a:115c:a1e0::", 48, "ipv6");

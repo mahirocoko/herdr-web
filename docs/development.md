@@ -13,7 +13,7 @@ The root is one source-native application adopted from the pinned upstream tree,
 | Shared styling, themes and settings                   | `src/styles.css`, `src/lib/`                                                                                 |
 | Display localization                                  | `src/lib/i18n.ts`, `src/lib/i18n.th.ts`; release languages in `shared/update.ts`                             |
 | HTTP/WebSocket server and source composition          | `server/index.ts`, `server/core/`                                                                            |
-| Fork ingress/capability policy                        | `server/fork-policy.ts`                                                                                      |
+| Fork ingress/capability policy                        | `server/fork-policy.ts`; read-only Serve discovery in `scripts/run-local.ts`                                   |
 | Native RPC and Node PTY                               | `server/herdr/`, `server/pty/`                                                                               |
 | Conversation dispatch/readers                         | `server/conversation.ts`, provider modules including `server/letta.ts`                                       |
 | Letta private index/parser and Stop witness           | `server/letta-store.ts`, `server/letta-parser.ts`, `server/letta-stop.ts`                                    |
@@ -54,6 +54,14 @@ bun scripts/bun-project.mjs --bun vite build --outDir .agent-state/qa/client-bui
 ```
 
 Choose an owned output directory and keep private artifacts ignored. Tests, builds and source checks do not replace rendered verification, native proof or human acceptance.
+
+## Private ingress discovery
+
+The launcher supplies `RefreshingForkPolicy` from `server/fork-policy.ts`, not a permanent startup snapshot. Startup performs one discovery; later private-host requests share an asynchronous read of `tailscale serve status --json` when the cached result is at least ten seconds old. Each CLI read is bounded to five seconds and 64 KiB. Local-host and non-loopback requests never wait for discovery. There is no background polling or Serve configuration change.
+
+`localPolicy` in `scripts/run-local.ts` re-reads the existing private owner configuration and verifies the same exact HTTPS-name/root-proxy match to this loopback port. An unavailable CLI, invalid result, missing route or rejected private configuration withdraws the cached private grant. A later request can recover without restarting Web. The newly verified owner also supplies source authentication for that request; the startup owner cannot keep a recovered route stuck. Host, loopback peer, owner, private source, Funnel and Origin checks still run before handlers, including WebSocket upgrades.
+
+The readiness log describes discovery **at startup**, not permanent Tailscale availability or physical-phone acceptance. Unit regressions in `server/fork-policy.test.ts` and `scripts/run-local.test.ts` cover unavailable startup → ready → failed refresh → recovery, shared reads and immediate local access. The HTTP fixture verifies source auth as `via: tailscale`; it does not establish device connectivity or Push delivery.
 
 ## Durable private state
 

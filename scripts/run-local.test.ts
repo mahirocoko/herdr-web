@@ -16,10 +16,120 @@ import { join } from "node:path";
 import {
   assertLocalPortAvailable,
   buildClient,
+  localPolicy,
   parseLauncherArgs,
   preservePushIdentity,
+  readServeStatus,
   requiresNodePty,
 } from "./run-local.ts";
+
+import { RefreshingForkPolicy } from "../server/fork-policy.ts";
+import { createServer } from "../server/index.ts";
+
+const serveFixture = (port: number, proxy = `http://127.0.0.1:${port}`) => JSON.stringify({
+  TCP: { "443": { HTTPS: true } },
+  Web: { "owner.tail-test.ts.net:443": { Handlers: { "/": { Proxy: proxy } } } },
+});
+
+test.if(process.platform !== "win32")("private ingress recovers on the same HTTP server after unavailable startup discovery", async () => {
+  const root = mkdtempSync(join(tmpdir(), "herdr-ingress-recovery-"));
+  const config = join(root, "owner.json");
+  writeFileSync(config, JSON.stringify({ ownerLogin: "owner@example.test" }), { mode: 0o600 });
+  let now = 0;
+  let status: string | null = null;
+  let reads = 0;
+  const source = new RefreshingForkPolicy(8787, () => localPolicy(8787, config, async () => {
+    reads++;
+    return status;
+  }), () => now);
+  let app: ReturnType<typeof createServer> | undefined;
+  try {
+    expect(await source.current()).toEqual({ port: 8787 });
+    app = createServer({ port: 0, hostname: "127.0.0.1", stateDir: join(root, "state"),
+      token: "", registerBridge: false, machines: false, terminalAttach: false,
+      tailscaleOwner: null, forkPolicy: source });
+    const base = `http://127.0.0.1:${app.port}`;
+    const headers = { host: "owner.tail-test.ts.net", "tailscale-user-login": "owner@example.test",
+      "x-forwarded-for": "100.70.1.2", "x-forwarded-proto": "https" };
+    const request = (patch: Record<string, string> = {}) => fetch(`${base}/api/health?scope=bridge`, { headers: { ...headers, ...patch } });
+    expect((await request()).status).toBe(403);
+    status = serveFixture(8787);
+    now = 10_000;
+    const responses = await Promise.all([request(), request(), request()]);
+    for (const response of responses) {
+      expect(response.status).toBe(200);
+      expect((await response.json()).auth).toMatchObject({ authenticated: true, via: "tailscale" });
+    }
+    expect(reads).toBe(2);
+    for (const patch of [
+      { "tailscale-user-login": "other@example.test" },
+      { "x-forwarded-for": "203.0.113.1" },
+      { "tailscale-funnel-request": "1" },
+      { origin: "https://attacker.test" },
+    ]) expect((await request(patch)).status).toBe(403);
+    // A later failure must revoke the cached grant, not reuse last-known-good authority.
+    status = "not JSON";
+    now = 20_000;
+    expect((await request()).status).toBe(403);
+    status = serveFixture(8787);
+    now = 30_000;
+    expect((await request()).status).toBe(200);
+    expect(reads).toBe(4);
+    writeFileSync(config, JSON.stringify({ ownerLogin: "new-owner@example.test" }));
+    now = 40_000;
+    expect((await request()).status).toBe(403);
+    const changedOwner = await request({ "tailscale-user-login": "new-owner@example.test" });
+    expect((await changedOwner.json()).auth).toMatchObject({ authenticated: true, via: "tailscale" });
+    status = "{}";
+    now = 50_000;
+    expect((await request({ "tailscale-user-login": "new-owner@example.test" })).status).toBe(403);
+  } finally {
+    app?.stop();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test.if(process.platform !== "win32")("Serve discovery retains exact route and private owner configuration checks", async () => {
+  const root = mkdtempSync(join(tmpdir(), "herdr-ingress-policy-"));
+  const config = join(root, "owner.json");
+  writeFileSync(config, JSON.stringify({ ownerLogin: "owner@example.test" }), { mode: 0o600 });
+  const read = (status: string | null) => localPolicy(8787, config, async () => status);
+  try {
+    expect(await read(serveFixture(8787))).toEqual({ port: 8787, tailnetHost: "owner.tail-test.ts.net", ownerLogin: "owner@example.test" });
+    for (const status of [null, "bad JSON", "null", "{}", serveFixture(9999), serveFixture(8787, "http://192.168.1.1:8787")])
+      expect(await read(status)).toEqual({ port: 8787 });
+    writeFileSync(config, JSON.stringify({ ownerLogin: "" }));
+    await expect(read(serveFixture(8787))).rejects.toThrow("owner identity is invalid");
+    writeFileSync(config, JSON.stringify({ ownerLogin: "owner@example.test" }));
+    chmodSync(config, 0o644);
+    await expect(read(serveFixture(8787))).rejects.toThrow("not private");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test.if(process.platform !== "win32")("Serve CLI timeout settles and terminates a child that ignores SIGTERM", async () => {
+  const root = mkdtempSync(join(tmpdir(), "herdr-serve-timeout-"));
+  const binary = join(root, "tailscale-fixture");
+  const pidPath = join(root, "pid");
+  writeFileSync(binary, `#!/bin/sh\ntrap '' TERM\nprintf '%s' "$$" > '${pidPath.replace(/'/g, "'\\''")}'\nexec /bin/sleep 60\n`, { mode: 0o700 });
+  try {
+    const started = performance.now();
+    // Allow macOS's first execution check of a fresh executable fixture.
+    expect(await readServeStatus(binary, 1000)).toBeNull();
+    expect(performance.now() - started).toBeLessThan(3000);
+    expect(existsSync(pidPath)).toBe(true);
+    const pid = Number(readFileSync(pidPath, "utf8"));
+    // kill(pid, 0) also succeeds for a terminated child awaiting OS reaping.
+    const state = Bun.spawnSync(["/bin/ps", "-p", String(pid), "-o", "stat="]).stdout.toString().trim();
+    expect(state === "" || state.startsWith("Z")).toBe(true);
+  } finally {
+    if (existsSync(pidPath)) {
+      try { process.kill(Number(readFileSync(pidPath, "utf8")), "SIGKILL"); } catch {}
+    }
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("launcher help distinguishes per-process core selection and Pi identity limits without starting a runtime", () => {
   const result = Bun.spawnSync(

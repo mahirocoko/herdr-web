@@ -8,6 +8,28 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.16.12] - 2026-11-10
+
+### Fixed
+
+- Recover private Tailscale access after a temporary startup discovery failure
+  without restarting Web. Private-host requests share an asynchronous route
+  lookup after the ten-second cache expires; local access does not wait for it.
+- Bound Serve CLI reads with a five-second deadline and terminate the direct
+  child on timeout. A failed refresh withdraws the previous private grant.
+- Authenticate recovered requests with the newly verified owner instead of
+  retaining the startup identity. Clarify startup diagnostics and troubleshooting.
+
+### Boundaries
+
+- Existing Host, loopback peer, owner, private-source, Funnel and Origin checks
+  remain in place. This does not enable LAN/public access or change Serve settings.
+- Same-server recovery and source authentication have HTTP-fixture coverage;
+  physical-phone and Windows-host acceptance remain unverified. Timeout cleanup
+  covers the direct CLI child, not arbitrary wrapper descendant trees.
+- This is a source-only fork release, not an installer, plugin, managed update
+  or deployment. Private runtime evidence is not included.
+
 ## [0.16.11] - 2026-11-10
 
 ### Fixed
@@ -5344,7 +5366,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.11...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.12...HEAD
+[0.16.12]: https://github.com/mahirocoko/herdr-web/compare/v0.16.11...v0.16.12
 [0.16.11]: https://github.com/mahirocoko/herdr-web/compare/v0.16.10...v0.16.11
 [0.16.10]: https://github.com/mahirocoko/herdr-web/compare/v0.16.9...v0.16.10
 [0.16.9]: https://github.com/mahirocoko/herdr-web/compare/v0.16.8...v0.16.9
