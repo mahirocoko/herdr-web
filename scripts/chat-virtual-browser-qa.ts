@@ -1,13 +1,13 @@
 /** Real ChatView over controlled HTTP; no live panes or provider calls. */
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium, type Page } from "playwright-core";
 import type { ConversationTurn } from "../shared/protocol.ts";
 import type {} from "./chat-virtual-fixture.tsx";
 
-const root = mkdtempSync(join(tmpdir(), "herdr-chat-virtual-"));
+mkdirSync(".agent-state/runtime/chat-virtual", { recursive: true });
+const root = mkdtempSync(join(".agent-state/runtime/chat-virtual", "build-"));
 const evidence = process.env.UI_EVIDENCE_DIR;
 if (evidence) mkdirSync(evidence, { recursive: true });
 let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
@@ -151,10 +151,10 @@ try {
         turns: Array.from({ length: older ? 20 : 1000 }, (_, index) => turn(older ? index - (page + 1) * 20 : index + newestStart, machine)),
       });
     }
-    if (url.pathname === "/") return new Response('<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chat virtualization QA</title><link rel="stylesheet" href="/chat-virtual-fixture.css"></head><body><div id="root"></div><script type="module" src="/chat-virtual-fixture.js"></script></body></html>', { headers: { "content-type": "text/html" } });
+    if (url.pathname === "/") return new Response('<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chat virtualization QA</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/chat-virtual-fixture.css"></head><body><div id="root"></div><script type="module" src="/chat-virtual-fixture.js"></script></body></html>', { headers: { "content-type": "text/html" } });
     return new Response(Bun.file(join(root, url.pathname.slice(1))));
   } });
-  browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
+  browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true, args: ["--no-sandbox"] });
   for (const [width, theme] of [[1440, "dark"], [1440, "light"], [390, "dark"], [390, "light"]] as const) {
     revision = 0; epoch = 1; holdOlder = false; olderReads = 0; wholeReads = 0;
     newestStart = 0; beginsAtOrigin = false; slideReads = 0;
@@ -166,6 +166,7 @@ try {
     page.setDefaultTimeout(15_000);
     const errors: string[] = [];
     page.on("pageerror", (error) => { errors.push(error.message); console.error(error.message); });
+    page.on("console", (message) => { if (message.type() === "error" || message.type() === "warning") errors.push(`${message.type()}: ${message.text()}`); });
     await page.goto(`http://127.0.0.1:${server.port}/`);
     await page.getByText("REVISION-0", { exact: true }).waitFor();
     await settleBottom(page);
@@ -219,8 +220,24 @@ try {
     assert.ok(await page.locator(".chat-view").evaluate((node) => node.scrollWidth <= node.clientWidth), "production terminal hierarchy has no horizontal overflow");
 
     await page.evaluate(() => window.chatQa.page(-1));
+    const immediate = await metrics(page);
+    assert.ok(immediate.bottom > 1 && immediate.anchor);
+    const pagingFrames = await page.evaluate(async (key) => {
+      const samples: Array<{ top: number; y: number | null }> = [];
+      for (let n = 0; n < 12; n++) {
+        await new Promise(requestAnimationFrame);
+        const row = [...document.querySelectorAll<HTMLElement>("[data-chat-row]")].find((row) => row.dataset.chatRow === key);
+        samples.push({ top: document.querySelector(".chat-view")!.scrollTop, y: row?.getBoundingClientRect().top ?? null });
+      }
+      return samples;
+    }, immediate.anchor.key);
+    // PageUp writes a native offset before the list's next layout. Compare actual frame positions,
+    // not pre-frame geometry. The scroll offset may adjust as preceding rows measure; the same
+    // logical row must keep its pixel position throughout that settling window.
+    const firstFrame = pagingFrames[0]!;
+    assert.ok(firstFrame.y !== null && pagingFrames.every((sample) => sample.y !== null && Math.abs(sample.y - firstFrame.y!) <= 1), `PageUp drifts across frames: ${JSON.stringify(pagingFrames)}`);
     const away = await metrics(page);
-    assert.ok(away.bottom > 1 && away.anchor);
+    assert.ok(away.anchor);
     revision = 101;
     await update(page);
     await page.getByRole("button", { name: "New messages" }).waitFor();
@@ -367,6 +384,37 @@ try {
     await page.reload();
     await page.getByText("REVISION-102", { exact: true }).waitFor();
     await settleBottom(page);
+    // #2720: the browser may draw past the measured footer or row wrapper.
+    const chatHeight = width === 390 ? 844 : 900;
+    for (const where of ["footer", "rows"] as const) {
+      // Each synthetic unmeasured shape starts from a fresh list. Removing the previous box
+      // clamps the browser upward and can leave its scroll event pending into the next shape.
+      if (where === "rows") {
+        await page.reload();
+        await page.getByText("REVISION-102", { exact: true }).waitFor();
+        await settleBottom(page);
+      }
+      await page.locator(".chat-transcript-virtual").evaluate((content, where) => {
+        const extra = document.createElement("div");
+        extra.className = "qa-unmeasured";
+        extra.style.height = "100px";
+        const rows = [...content.children].find((child) => child.querySelector("[data-chat-row]"));
+        if (where === "rows" && rows instanceof HTMLElement) {
+          Object.assign(extra.style, { position: "absolute", left: "0", width: "1px", top: `${rows.offsetHeight}px` });
+          rows.append(extra);
+        } else content.append(extra);
+      }, where);
+      await page.evaluate((height) => window.chatQa.resize(height - 1), chatHeight);
+      await page.evaluate(async () => { for (let n = 0; n < 3; n++) await new Promise(requestAnimationFrame); });
+      await settleBottom(page);
+      await page.evaluate(async () => { for (let n = 0; n < 8; n++) await new Promise(requestAnimationFrame); });
+      assert.ok((await metrics(page)).bottom <= 1, `drawn ${where} beyond measurement still lands at the end`);
+      assert.equal(await page.locator(".chat-virtual-jump").count(), 0);
+      await page.locator(".qa-unmeasured").evaluate((node) => node.remove());
+      await page.evaluate((height) => window.chatQa.resize(height), chatHeight);
+      await settleBottom(page);
+    }
+    console.log(`PASS ${width} ${theme}: unmeasured footer/rows do not clamp an end jump short`);
     await page.evaluate(() => window.chatQa.machine("remote"));
     await page.getByText("remote E1 ROW-999", { exact: true }).waitFor();
     assert.ok((await metrics(page)).keys.every((key) => key?.includes('"remote"')), "same-pane remote rows have a separate identity scope");
@@ -420,7 +468,10 @@ try {
   console.log("chat virtual: initial, streaming, manual follow and row restoration OK");
 } catch (error) {
   if (evidence && activePage && !activePage.isClosed()) {
-    try { await activePage.screenshot({ path: join(evidence, "chat-virtual-failed.png") }); }
+    try {
+      await activePage.screenshot({ path: join(evidence, "chat-virtual-failed.png") });
+      console.error("Failure state", JSON.stringify(await metrics(activePage)));
+    }
     catch (captureError) { console.error("Chat failure capture:", String(captureError)); }
   }
   throw error;

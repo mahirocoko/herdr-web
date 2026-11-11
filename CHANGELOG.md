@@ -8,6 +8,39 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.16.13] - 2026-11-11
+
+### Fixed
+
+- Keep HTML preview scripts off until explicitly enabled for the current page.
+  File/viewer changes discard permission; unsolicited focus from a docked page
+  revokes scripts and returns keyboard focus to the app. Adapted from upstream
+  [#3607](https://github.com/devswha/ovis/pull/3607).
+- Bound requested watch views and live/exiting watch processes at 64 per
+  connection, coalesce resizes and wait for the prior lifecycle before replacement.
+  Bound termination and pipe draining, and replace trailing-newline regex work
+  with a linear scan while preserving pending-text validation. Selected fixes from
+  [#3621](https://github.com/devswha/ovis/pull/3621).
+- Correct Chat end-offset measurement and cancellation of pending follow scrolls;
+  treat unfolding content as reading intent. Adapt the LegendList 3.3.5 patch
+  chain from [#2720](https://github.com/devswha/ovis/pull/2720),
+  [#3622](https://github.com/devswha/ovis/pull/3622) and
+  [#3650](https://github.com/devswha/ovis/pull/3650), retaining paging, selection,
+  focus-preserving DOM order and Pi read-only details.
+
+### Boundaries
+
+- The upstream snapshot pin, authenticated file routes/CSP, private ingress,
+  native input guards and Push identity are unchanged. Unsupported herdr-core
+  watch streams remain refused; no attach or input replay substitutes for them.
+- Sandbox/CSP are not complete network isolation after script opt-in. The
+  documented frame-navigation, WebRTC and engine-dependent resource-hint limits
+  remain. Headless desktop/mobile-viewport fixtures and mocked watch lifecycles
+  do not establish physical-device, real-provider or OS-child termination proof.
+  PageUp sampling begins at the first animation frame, not every intermediate paint.
+- This is a source-only fork release, not an installer, plugin, managed update,
+  remote bundle or deployment. No private runtime evidence is included.
+
 ## [0.16.12] - 2026-11-10
 
 ### Fixed
@@ -5366,7 +5399,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.12...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.13...HEAD
+[0.16.13]: https://github.com/mahirocoko/herdr-web/compare/v0.16.12...v0.16.13
 [0.16.12]: https://github.com/mahirocoko/herdr-web/compare/v0.16.11...v0.16.12
 [0.16.11]: https://github.com/mahirocoko/herdr-web/compare/v0.16.10...v0.16.11
 [0.16.10]: https://github.com/mahirocoko/herdr-web/compare/v0.16.9...v0.16.10

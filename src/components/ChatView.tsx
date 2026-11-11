@@ -38,7 +38,7 @@ import { isTodoTool, parseTodoAnswer, todoCallSummary, type TodoItem, type TodoS
 import { formatGoalTime, turnGoal, type GoalState, type GoalStatus } from "../lib/goals.ts";
 import { useSettings } from "../lib/settings.ts";
 import { PAGE_OVERLAP_ROWS, pageScrollDistance } from "../lib/pageScroll.ts";
-import { followGlides } from "../lib/followScroll.ts";
+import { dropPendingListScroll, followGlides } from "../lib/followScroll.ts";
 import { useMediaQuery } from "../lib/useMediaQuery.ts";
 import { statusEdgeRead } from "../lib/status.ts";
 import { askedQuestions } from "../lib/askQuestions.ts";
@@ -104,17 +104,6 @@ function FailureLine({ action, failure, onRetry }: { action: string; failure: Us
 }
 
 // No row is this object, so the list finds nothing to scroll to.
-const NO_ROW = Object.freeze({});
-/**
- * The list's scrollToEnd does not scroll at once: it waits for the list's next commit, and then
- * for the layout to settle after a data change (up to 800 ms). A follow asked for while the reader
- * was at the end can so land after the reader paged or scrolled away, and pull them back. Any newer
- * scroll request supersedes a waiting one; a request for no row supersedes it without moving.
- */
-function dropPendingListScroll(list: LegendListRef | null): void {
-  void list?.scrollToItem({ item: NO_ROW, animated: false });
-}
-
 const TRANSCRIPT_LINES = 400;
 const PROMPT_POLL_MS = 2000;
 /** Scrolling this close to the top asks for the page before it. */
@@ -1569,6 +1558,9 @@ export const ChatView = memo(function ChatView({ paneId, active = true, visible:
       footer={footer}
       label={logLabel}
       onScroll={onScroll}
+      onReading={() => {
+        pagingAway.current = true; stickToBottom.current = false; setAway(true);
+      }}
       renderRow={renderTurn}
     /> : <div className="chat-view" ref={scroller} onScroll={onScroll} role="log" aria-live="polite" aria-label={logLabel}>
       <div className="chat-transcript" data-conversation-source={state.conversationSource}>

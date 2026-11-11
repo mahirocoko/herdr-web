@@ -317,6 +317,27 @@ test('hardening backports permit only their exact source and test owners', () =>
   }
 })
 
+test('preview/watch/Chat backports remain exact owner exceptions', () => {
+  const owners = [
+    'patches/@legendapp%2Flist@3.3.5.patch', 'server/core/composer.ts', 'server/watch.ts',
+    'src/components/ChatTimeline.tsx', 'src/components/FileViewer.tsx',
+    'src/components/FileViewer.css', 'src/lib/followScroll.ts'
+  ]
+  for (const path of [...owners, 'src/lib/unapproved-preview.ts']) {
+    promotedFixture((root, tree, manifest) => {
+      const data = Buffer.from('pinned preview/watch/Chat fixture\n')
+      const blob = createHash('sha1').update(`blob ${data.length}\0`).update(data).digest('hex')
+      manifest.entries.push({ path, blob, mode: '100644', disposition: 'acquired' })
+      save(root, manifest)
+      mkdirSync(dirname(join(root, path)), { recursive: true })
+      writeFileSync(join(root, path), 'approved bounded backport\n')
+      const candidateTree = tree + `100644 blob ${blob}\t${path}\0`
+      if (owners.includes(path)) expect(verifyPromoted(root, candidateTree).patched).toContain(path)
+      else expect(() => verifyPromoted(root, candidateTree)).toThrow('Unapproved promoted source patch')
+    })
+  }
+})
+
 test('promoted manifest cannot authorize its own extra UI patch', () => {
   promotedFixture((root, tree, manifest) => {
     manifest.promotion.patches.push('src/App.tsx')

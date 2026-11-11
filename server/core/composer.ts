@@ -68,8 +68,13 @@ export const pendingIdentity = (pane: HerdrPane): PendingIdentity => ({
 });
 
 export const pendingText = (text: string): string => {
-  const normalized = text.replace(/[\r\n]+$/, "").replace(/\r\n?/g, "\n");
-  if (!normalized.trim() || normalized.length > 20_000 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/u.test(normalized)) {
+  // A reverse scan avoids retrying an unanchored trailing-break regex at every newline.
+  let end = text.length;
+  while (end > 0 && (text.charCodeAt(end - 1) === 10 || text.charCodeAt(end - 1) === 13)) end--;
+  const written = text.slice(0, end);
+  // CRLF can shrink at most twofold. Reject impossible sizes without rewriting megabytes.
+  const normalized = written.length > 2 * 20_000 ? written : written.replace(/\r\n?/g, "\n");
+  if (normalized.length > 20_000 || !normalized.trim() || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/u.test(normalized)) {
     throw new HerdrError("invalid_submit_text", "A pending chat message must be nonempty text, at most 20000 characters, without terminal control characters");
   }
   return normalized;

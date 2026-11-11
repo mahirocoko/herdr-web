@@ -473,8 +473,26 @@ export const PROMOTION_PATCHES = [
   'src/lib/i18n.th.ts',
   'server/prompt.ts',
   'server/prompt.test.ts',
+  // Focused preview/watch/Chat backports; preserve the original pin and the other dependency patch.
+  'patches/@legendapp%2Flist@3.3.5.patch',
+  'server/core/composer.ts',
+  'server/watch.ts',
+  'src/components/ChatTimeline.tsx',
+  'src/components/FileViewer.css',
+  'src/components/FileViewer.tsx',
+  'src/lib/followScroll.ts',
+  'src/lib/followScroll.test.ts',
+  'scripts/chat-virtual-browser-qa.ts',
 ]
 export const PROMOTION_ADDITIONS = [
+  'scripts/preview-scroll-browser-qa.ts',
+  'scripts/preview-scroll-fixture.tsx',
+  'server/core/composer-text.test.ts',
+  'server/core/connections-watches.test.ts',
+  'server/watch-lifecycle.test.ts',
+  'src/components/FileViewer.scripts.test.tsx',
+  'src/lib/usePageFocusGuard.ts',
+  'src/lib/usePageFocusGuard.test.tsx',
   'server/rpc-write.test.ts',
   // Focused opt-in core adapter from a4ff0c94; no pin or broad exception changes.
   'server/herdr-core/attach-session.ts',

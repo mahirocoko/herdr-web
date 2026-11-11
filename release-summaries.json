@@ -1,4 +1,12 @@
 {
+  "0.16.13": {
+    "en": {
+      "fixed": ["Require HTML script opt-in and recover keyboard focus from docked pages.", "Bound watch replacement and cleanup; process trailing newlines with a linear scan.", "Correct Chat end scrolling during measurement and keep newly unfolded content in view."]
+    },
+    "th": {
+      "fixed": ["ปิดสคริปต์ใน HTML preview จนกว่าจะอนุญาต และคืน focus เมื่อ preview แย่งคีย์บอร์ด", "จำกัด watch และรอ process เก่าจบก่อนเริ่มตัวใหม่ ตัด newline ด้วย linear scan", "แก้การเลื่อนไปท้ายแชตขณะวัดขนาด และไม่เลื่อนผ่านเนื้อหาที่เพิ่งขยาย"]
+    }
+  },
   "0.16.12": {
     "en": {
       "fixed": ["Recover Tailscale access after a temporary startup lookup failure without a restart.", "Bound route lookups and authenticate with the newly verified owner."]

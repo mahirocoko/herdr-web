@@ -215,6 +215,30 @@
   background: var(--pdf-page);
 }
 
+/* With scripts running beside the pane, the first press gives the page focus; the next is its own. */
+.file-viewer-page-frame {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  width: 100%;
+}
+
+.file-viewer-page-frame[data-page-shield] > .file-viewer-page { pointer-events: none; }
+
+.file-viewer-scripts {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex: none;
+  align-self: stretch;
+  margin-bottom: var(--space-2);
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+}
+
+.file-viewer-scripts .btn { flex: none; }
+
 /* Page | Source above an HTML file */
 .file-viewer-modes {
   flex: none;
@@ -523,11 +547,17 @@
 .file-viewer-docked video.file-viewer-media { width: 100%; }
 
 .file-viewer-docked .file-viewer-pdf,
-.file-viewer-docked .file-viewer-page {
+.file-viewer-docked .file-viewer-page,
+.file-viewer-docked .file-viewer-page-frame {
   flex: 1 1 auto;
   height: auto;
   min-height: 0;
   border-radius: 0;
+}
+
+.file-viewer-docked .file-viewer-scripts {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
 }
 
 .file-viewer-docked .file-viewer-audio { width: min(calc(100% - var(--space-6)), 480px); }

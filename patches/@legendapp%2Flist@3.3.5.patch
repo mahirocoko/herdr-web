@@ -1,7 +1,75 @@
 diff --git a/react.mjs b/react.mjs
 --- a/react.mjs
 +++ b/react.mjs
-@@ -5668,7 +5668,10 @@ function sortDOMElements(container, indexByElement) {
+@@ -1254,4 +1254,24 @@ function calculateOffsetWithOffsetPosition(ctx, offsetParam, params) {
+ // src/core/clampScrollOffset.ts
++function scrollableMaxOffset(state) {
++  var _a3, _b;
++  const node = (_b = (_a3 = state.refScroller.current) == null ? void 0 : _a3.getScrollableNode) == null ? void 0 : _b.call(_a3);
++  const content = node == null ? void 0 : node.querySelector(`:scope > .${LEGEND_LIST_CONTENT_CONTAINER_CLASS}`);
++  if (!node || !content) return 0;
++  // Drawn rows and unmeasured header/footer count, but temporary adjustment padding does not.
++  const horizontal = !!state.props.horizontal;
++  const view = node.getBoundingClientRect();
++  let end = 0;
++  const reach = (element) => {
++    const box = element.getBoundingClientRect();
++    end = Math.max(end, horizontal ? box.right - view.left + node.scrollLeft : box.bottom - view.top + node.scrollTop);
++  };
++  // A rendered row may already be taller than the list's measured wrapper.
++  for (const child of content.children) {
++    reach(child);
++    for (const row of child.children) reach(row);
++  }
++  return Math.max(0, end - (horizontal ? node.clientWidth : node.clientHeight));
++}
+ function clampScrollOffset(ctx, offset, scrollTarget) {
+   const state = ctx.state;
+   const contentSize = getContentSize(ctx);
+@@ -1260,7 +1280,9 @@ function clampScrollOffset(ctx, offset, scrollTarget) {
+     const baseMaxOffset = Math.max(0, contentSize - state.scrollLength);
+     const viewOffset = scrollTarget == null ? void 0 : scrollTarget.viewOffset;
+     const extraEndOffset = typeof viewOffset === "number" && viewOffset < 0 ? -viewOffset : 0;
+-    const maxOffset = baseMaxOffset + extraEndOffset;
++    // The browser can already draw farther than the list has measured.
++    // Do not clamp a jump short of that visible end.
++    const maxOffset = Math.max(baseMaxOffset + extraEndOffset, scrollableMaxOffset(state));
+     clampedOffset = Math.min(offset, maxOffset);
+   }
+   clampedOffset = Math.max(0, clampedOffset);
+@@ -4783,10 +4805,31 @@ function updateItemSizes(ctx, measurement) {
+     updateItemSizesBatch(ctx, [measurement]);
+   }
+ }
++// Hear a downward browser move before a pending measurement anchors the old viewport.
++// Upward clamping and the list's own in-flight adjustments are reconciled by ScrollAdjust.
++function hearUnheardScroll(ctx) {
++  const state = ctx.state;
++  if (state.scrollingTo || state.props.horizontal || !peek$(ctx, "readyToRender") || state.adjustingFromInitialMount || state.lastNativeScroll === void 0) {
++    return;
++  }
++  const target = getScrollAdjustTarget(ctx, null);
++  const live = target == null ? void 0 : target.scrollElement.scrollTop;
++  if (live === void 0) {
++    return;
++  }
++  const reported = state.lastNativeScroll;
++  const towardList = Math.min(reported, state.scroll) - 1 <= live && live <= Math.max(reported, state.scroll) + 1;
++  if (live - reported <= 1 || towardList) {
++    return;
++  }
++  state.scrollPending = live;
++  updateScroll(ctx, live, true, { fromNativeScrollEvent: true });
++}
+ function updateItemSizesBatch(ctx, measurements) {
+   var _a3;
+   const state = ctx.state;
+   const result = {};
++  hearUnheardScroll(ctx);
+   for (const measurement of measurements) {
+     const ownsMeasuredItem = measurement.containerId === void 0 || peek$(ctx, `containerItemKey${measurement.containerId}`) === measurement.itemKey;
+     if (ownsMeasuredItem) {
+@@ -5668,7 +5711,10 @@ function sortDOMElements(container, indexByElement) {
            break;
          }
        }
@@ -13,7 +81,7 @@ diff --git a/react.mjs b/react.mjs
          container.insertBefore(element, nextStableElement);
        } else {
          container.appendChild(element);
-@@ -5716,32 +5719,19 @@
+@@ -5716,32 +5762,19 @@
  function useDOMOrder(ref) {
    const ctx = useStateContext();
 -  const debounceRef = useRef(void 0);
@@ -61,7 +129,7 @@ diff --git a/react.mjs b/react.mjs
 +    }
 +  }, [ctx, version]);
  }
-@@ -6425,8 +6415,11 @@ function ScrollAdjust() {
+@@ -6425,8 +6458,11 @@ function ScrollAdjust() {
                window.getComputedStyle(contentNode)[axis.paddingEndProp]
              );
              const temporaryPaddingEnd = `${(currentPaddingEnd || 0) + pad}px`;
@@ -74,7 +142,21 @@ diff --git a/react.mjs b/react.mjs
              void contentNode.offsetHeight;
              scrollBy();
              if (resetPaddingRafRef.current !== void 0) {
-@@ -7288,6 +7281,7 @@ function createImperativeHandle(ctx, scheduleImperativeScrollCommit) {
+@@ -7194,10 +7230,12 @@ function scrollToEnd(ctx, options) {
+   }
+   const paddingBottom = state.props.stylePaddingBottom || 0;
+   const footerSize = peek$(ctx, "footerSize") || 0;
++  // Include the browser's drawn end, beyond the list's current measurements.
++  const unmeasured = Math.max(0, scrollableMaxOffset(state) - (getContentSize(ctx) - state.scrollLength));
+   scrollToIndex(ctx, {
+     ...options,
+     index,
+-    viewOffset: -paddingBottom - footerSize + ((options == null ? void 0 : options.viewOffset) || 0),
++    viewOffset: -paddingBottom - footerSize - unmeasured + ((options == null ? void 0 : options.viewOffset) || 0),
+     viewPosition: 1
+   });
+   return true;
+@@ -7288,6 +7326,7 @@ function createImperativeHandle(ctx, scheduleImperativeScrollCommit) {
    const startImperativeScroll = (resolve) => {
 +    state.mvcpAnchorLock = void 0;
      state.scheduledWork.cancel("imperativeScrollReady");
@@ -82,3 +164,34 @@ diff --git a/react.mjs b/react.mjs
      settlePendingImperativeScroll(state);
      state.pendingScrollResolve = resolve;
      return token;
+@@ -7436,15 +7475,22 @@ function createImperativeHandle(ctx, scheduleImperativeScrollCommit) {
+         params.index >= 0 ? () => isScrollToIndexReady(params.index) : void 0
+       );
+     },
+-    scrollToItem: ({ item, ...props }) => runScrollWithPromise(() => {
+-      const data = state.props.data;
+-      const index = data.indexOf(item);
+-      if (index !== -1) {
+-        scrollToIndex(ctx, { index, ...props });
+-        return true;
++    scrollToItem: ({ item, ...props }) => {
++      // A no-row request also ends a started non-initial scroll; otherwise it keeps
++      // pulling to the end for another 100ms as the reader unfolds a row.
++      if (state.scrollingTo && !state.scrollingTo.isInitialScroll && state.props.data.indexOf(item) === -1) {
++        finishScrollTo(ctx);
+       }
+-      return false;
+-    }),
++      return runScrollWithPromise(() => {
++        const data = state.props.data;
++        const index = data.indexOf(item);
++        if (index !== -1) {
++          scrollToIndex(ctx, { index, ...props });
++          return true;
++        }
++        return false;
++      });
++    },
+     scrollToOffset: (params) => runScrollWithPromise(() => {
+       scrollTo(ctx, params);
+       return true;

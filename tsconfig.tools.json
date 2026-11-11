@@ -27,6 +27,8 @@
     "scripts/pwa-update-browser-qa.ts",
     "scripts/chat-fallback-browser-qa.ts",
     "scripts/chat-fallback-fixture.tsx",
+    "scripts/preview-scroll-fixture.tsx",
+    "scripts/preview-scroll-browser-qa.ts",
     "scripts/chat-virtual-fixture.tsx",
     "scripts/chat-virtual-browser-qa.ts",
     "scripts/grok-chat-browser-qa.ts",

@@ -1,6 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
-import { followGlides } from "./followScroll.ts";
+import { dropPendingListScroll, followGlides } from "./followScroll.ts";
+
+test("reading supersedes a list scroll with a stable absent-row sentinel, never a new destination", () => {
+  const requests: Array<{ item: unknown; animated?: boolean }> = [];
+  const list = { scrollToItem: async (request: { item: unknown; animated?: boolean }) => { requests.push(request); } };
+  dropPendingListScroll(null);
+  dropPendingListScroll(list);
+  dropPendingListScroll(list);
+  expect(requests).toHaveLength(2);
+  expect(requests[0]?.item).toBe(requests[1]?.item);
+  expect(requests[0]?.animated).toBe(false);
+});
 
 describe("followGlides", () => {
   test("glides only while a turn works", () => {

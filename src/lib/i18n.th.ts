@@ -4,6 +4,9 @@
  * names remain unchanged, and placeholders in braces keep their English names.
  */
 export const TH: Record<string, string> = {
+  "Scripts in this page are off.": "สคริปต์ในหน้านี้ยังไม่ทำงาน",
+  "Run scripts": "เรียกใช้สคริปต์",
+  "This page took the keyboard, so its scripts are off again.": "หน้านี้แย่งโฟกัสแป้นพิมพ์ จึงปิดสคริปต์อีกครั้ง",
   "Input": "อินพุต",
   "Check host battery": "ดูแบตเครื่องเซิร์ฟเวอร์",
   "Checking host battery…": "กำลังตรวจสอบแบตเครื่องเซิร์ฟเวอร์…",

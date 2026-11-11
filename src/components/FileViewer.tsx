@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from "react";
 import { Braces, Check, Code, Copy, Download, Ellipsis, ExternalLink, Link2, Maximize2, PanelRight, TriangleAlert, X } from "lucide-react";
+import { flushSync } from "react-dom";
+import { usePageFocusGuard } from "../lib/usePageFocusGuard.ts";
 
 import "./FileViewer.css";
 import { DirectoryBrowser } from "./DirectoryBrowser.tsx";
@@ -144,7 +146,37 @@ function selectSource(element: HTMLElement): void {
  * A file an agent wrote, opened in the browser: images, video and audio (streamed, so they
  * play and seek at once), PDFs, HTML pages, and the start of a text file (markdown drawn, its images read through the file endpoint). Anything can be downloaded.
  */
-export function FileViewer({ path: asked, paneId, onClose, onOpen, keyboardActive = true, page = false, docked = false, panelStart, onKind, onTogglePresentation }: FileViewerProps) {
+export function FileViewer(props: FileViewerProps) {
+  const machineId = useMachineId();
+  // Reset before painting a new owner, not in an effect: even A → B → A must start afresh.
+  const identity = JSON.stringify([machineId, props.paneId, props.path, !!props.page, !!props.docked]);
+  return <FileViewerContent key={identity} {...props} />;
+}
+
+/** Owns consent only while this exact page is mounted. Source, another file or closing discards it. */
+function HtmlPagePreview({ url, title, docked }: { url: string; title: string; docked: boolean }) {
+  const t = useT();
+  const [scripts, setScripts] = useState(false);
+  const [stopped, setStopped] = useState(false);
+  const frame = useRef<HTMLIFrameElement | null>(null);
+  const guard = usePageFocusGuard(frame, docked && scripts, () => {
+    // Removing the old frame synchronously is what releases its keyboard focus.
+    flushSync(() => { setScripts(false); setStopped(true); });
+  });
+  return <>
+    <div className={scripts ? "visually-hidden" : "file-viewer-scripts"}>
+      <span role="status">{scripts ? null : stopped ? t("This page took the keyboard, so its scripts are off again.") : t("Scripts in this page are off.")}</span>
+      {!scripts && <button type="button" className="btn btn-ghost" onClick={() => { setStopped(false); setScripts(true); }}>{t("Run scripts")}</button>}
+    </div>
+    {/* Sandbox changes require a fresh document. Keep the opaque origin and existing server CSP. */}
+    <div className="file-viewer-page-frame" data-page-shield={guard.shield ? "" : undefined} onClick={guard.shield ? guard.enter : undefined}>
+      <iframe key={scripts ? "scripts" : "static"} ref={frame} className="file-viewer-page" src={url}
+        sandbox={scripts ? "allow-scripts" : ""} data-page-scripts={scripts ? "on" : "off"} title={title} />
+    </div>
+  </>;
+}
+
+function FileViewerContent({ path: asked, paneId, onClose, onOpen, keyboardActive = true, page = false, docked = false, panelStart, onKind, onTogglePresentation }: FileViewerProps) {
   const t = useT();
   const locale = useLocale();
   const { fetchFileInfo, fileUrl, fetchDirectories } = useMachineApi();
@@ -410,7 +442,7 @@ export function FileViewer({ path: asked, paneId, onClose, onOpen, keyboardActiv
       case "text":
         if (htmlPage && !source) return <>
           {!docked && modes}
-          <iframe className="file-viewer-page" src={pageUrl} sandbox="allow-scripts" title={info.name} />
+          <HtmlPagePreview key={JSON.stringify([path, info.path, pageUrl])} url={pageUrl} title={info.name} docked={docked} />
         </>;
         return <>
           {htmlPage && !docked && modes}

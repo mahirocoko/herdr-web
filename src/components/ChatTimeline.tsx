@@ -3,6 +3,7 @@ import { LegendList, type LegendListRef } from "@legendapp/list/react";
 
 import { ChatRowMemoryContext, type ChatRowMemory } from "../lib/chatRowState.tsx";
 import { chatMarkdownClipboardPayload } from "../lib/markdownClipboard.ts";
+import { dropPendingListScroll } from "../lib/followScroll.ts";
 // ChatTimeline.css is imported by ChatView: the frame and the loading state need it before this chunk
 
 export interface ChatTimelineRow {
@@ -24,11 +25,13 @@ export interface ChatTimelineProps<Row extends ChatTimelineRow> {
   footer: ReactNode;
   label: string;
   onScroll: () => void;
+  /** An unfold is reading intent, even before its grown content produces a scroll event. */
+  onReading?: () => void;
   renderRow: (row: Row, index: number) => ReactNode;
 }
 
 /** One scroll owner; selected and focused rows stay real DOM nodes outside its window. */
-export function ChatTimeline<Row extends ChatTimelineRow>({ rows, scope, source, scroller, listRef, following, smoothFollow, memories, header, footer, label, onScroll, renderRow }: ChatTimelineProps<Row>) {
+export function ChatTimeline<Row extends ChatTimelineRow>({ rows, scope, source, scroller, listRef, following, smoothFollow, memories, header, footer, label, onScroll, onReading, renderRow }: ChatTimelineProps<Row>) {
   const [selectionKeys, setSelectionKeys] = useState<string[]>([]);
   const [focusKey, setFocusKey] = useState<string | null>(null);
   useLayoutEffect(() => {
@@ -77,8 +80,17 @@ export function ChatTimeline<Row extends ChatTimelineRow>({ rows, scope, source,
     const focusChanged = () => setFocusKey(rowFor(document.activeElement));
     const focusOut = () => queueMicrotask(focusChanged);
     const interaction = (event: Event) => {
-      // a pending work block's head opens nothing
-      if (event.target instanceof Element && event.target.closest("summary, .work-block-head, .work-row-head, .chat-tool-more") && !event.target.closest(".work-block.is-pending")) manualLayout.current = true;
+      if (!(event.target instanceof Element) || event.target.closest(".work-block.is-pending")) return;
+      const control = event.target.closest("summary, .work-block-head, .work-row-head, .chat-tool-more, .chat-bubble-fold");
+      if (!control) return;
+      manualLayout.current = true;
+      const opening = control.matches("summary") ? !control.closest("details")?.open : control.getAttribute("aria-expanded") !== "true";
+      if (opening) {
+        // The list otherwise keeps an already-started end scroll alive as this row grows.
+        dropPendingListScroll(listRef.current);
+        following.current = false;
+        onReading?.();
+      }
     };
     document.addEventListener("selectionchange", selectionChanged);
     node.addEventListener("focusin", focusChanged);
@@ -101,7 +113,7 @@ export function ChatTimeline<Row extends ChatTimelineRow>({ rows, scope, source,
       node.removeEventListener("click", interaction, true);
       node.removeEventListener("copy", copy);
     };
-  }, [scroller, positions, rowKeys]);
+  }, [scroller, listRef, following, onReading, positions, rowKeys]);
 
   // A glide aims at the end it saw; content that grew meanwhile leaves it short. Where it stops, a
   // reader still following is put at the end at once.

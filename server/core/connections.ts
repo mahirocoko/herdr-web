@@ -12,7 +12,7 @@ import { HerdrError, herdrSocketPath } from "../herdr/client.ts";
 import type { MachineRelay } from "../machine-relay.ts";
 import { OUTPUT_HARD_BYTES, type OutputWindow } from "../output-window.ts";
 import type { PendingInputs } from "../pending-input.ts";
-import { PaneWatch } from "../watch.ts";
+import { PaneWatch, type PaneWatchOptions } from "../watch.ts";
 import { coreConnectionForSocket } from "../herdr-core/runtime.ts";
 
 /** Core has no read-only viewport stream. Never substitute an attach (which can own geometry). */
@@ -30,6 +30,17 @@ export interface SocketData {
   output: Map<string, OutputWindow>;
 }
 
+/** A connection owns at most this many observe processes, including ones still exiting. */
+const MAX_WATCHES = 64;
+
+interface PaneView {
+  process: Pick<PaneWatch, "kill" | "exited">;
+  /** No further frames or end notification are owed for this lifetime. */
+  over: boolean;
+  stopped: boolean;
+  next?: { cols: number; rows: number };
+}
+
 interface ConnectionState {
   closing: boolean;
   revoked: boolean;
@@ -37,7 +48,9 @@ interface ConnectionState {
   mode: ClientRole;
   /** how often `mode` changed: a switch away and back during an await is still a change */
   roles: number;
-  watches: Map<string, PaneWatch>;
+  watches: Map<string, PaneView>;
+  /** Latest requested grids waiting for an exiting process's slot. */
+  waiting: Map<string, { cols: number; rows: number }>;
   unwatchDevice?: () => void;
   /** One oversized frame is excluded from the normal backlog while it drains in order. */
   excused?: { ahead: number; frame: number; last: number };
@@ -55,7 +68,7 @@ function stateOf(client: Client): ConnectionState {
 /** The data for a connection's upgrade: it starts to interact unless its access is read-only. */
 export function connectionData(fields: { relay?: MachineRelay; deviceId: string | undefined; readOnly: boolean }): SocketData {
   const data: SocketData = { attached: new Map<string, { keepSize: boolean }>(), conversationInterests: new Set<string>(), output: new Map(), ...fields };
-  states.set(data, { closing: false, revoked: false, mode: fields.readOnly ? "observe" : "interact", roles: 0, watches: new Map<string, PaneWatch>() });
+  states.set(data, { closing: false, revoked: false, mode: fields.readOnly ? "observe" : "interact", roles: 0, watches: new Map<string, PaneView>(), waiting: new Map() });
   return data;
 }
 
@@ -123,13 +136,15 @@ export function send(client: Client, message: ServerMessage): number {
  * What a connection may do, its observe processes, and its end. A connection's panes stay with the
  * terminal code: `detachClaimed` detaches them while the claims still count, `dropClaims` forgets them.
  */
-export function createConnections<Lease>({ clients, present, pending, devices, detachClaimed, dropClaims }: {
+export function createConnections<Lease>({ clients, present, pending, devices, detachClaimed, dropClaims, startWatch = (options) => new PaneWatch(options) }: {
   clients: Set<Client>;
   present: Set<Client>;
   pending: PendingInputs<Client, Lease>;
   devices: DeviceStore;
   detachClaimed: (client: Client) => void;
   dropClaims: (client: Client) => void;
+  /** Test seam; production always starts the same read-only observe process. */
+  startWatch?: (options: PaneWatchOptions) => Pick<PaneWatch, "kill" | "exited">;
 }) {
   /** authorizeSocket as a test: may this connection type now? */
   function mayType(client: Client): boolean {
@@ -159,28 +174,92 @@ export function createConnections<Lease>({ clients, present, pending, devices, d
     state.mode = mode;
   }
 
+  function stopView(view: PaneView): void {
+    view.over = true;
+    if (view.stopped) return;
+    view.stopped = true;
+    view.process.kill();
+  }
+
+  const wanted = (view: PaneView): boolean => !view.over || view.next !== undefined;
+
   function watchPane(client: Client, paneId: string, geometry: { cols: number; rows: number }): void {
-    const { watches } = stateOf(client);
-    watches.get(paneId)?.kill();
-    watches.delete(paneId);
+    const state = stateOf(client);
+    if (state.closing || !clients.has(client)) return;
+    if (!paneWatchSupported()) {
+      send(client, { type: "watch-end", pane_id: paneId });
+      return;
+    }
+    const { watches, waiting } = state;
+    if (waiting.has(paneId)) { waiting.set(paneId, geometry); return; }
+    const current = watches.get(paneId);
+    if (current && wanted(current)) {
+      // Repeated geometry changes coalesce; a killed process still occupies its slot until exit.
+      current.next = geometry;
+      stopView(current);
+      return;
+    }
+    let views = waiting.size;
+    for (const view of watches.values()) if (wanted(view)) views++;
+    if (views >= MAX_WATCHES) {
+      send(client, { type: "watch-end", pane_id: paneId });
+      return;
+    }
+    if (current) {
+      // A canceled/ended view requested anew joins the queue; only an existing wanted resize
+      // keeps its reservation. It must also wait for its own old process to leave.
+      waiting.set(paneId, geometry);
+      stopView(current);
+      startWaiting(client);
+    } else if (watches.size >= MAX_WATCHES) waiting.set(paneId, geometry);
+    else startView(client, paneId, geometry);
+  }
+
+  function startWaiting(client: Client): void {
+    const { watches, waiting } = stateOf(client);
+    for (const [paneId, geometry] of waiting) {
+      if (watches.size >= MAX_WATCHES) return;
+      if (watches.has(paneId)) continue;
+      waiting.delete(paneId);
+      startView(client, paneId, geometry);
+    }
+  }
+
+  function startView(client: Client, paneId: string, geometry: { cols: number; rows: number }): void {
+    const state = stateOf(client);
+    if (state.closing || !clients.has(client)) return;
     const socketPath = herdrSocketPath();
     if (!paneWatchSupported(socketPath)) {
       send(client, { type: "watch-end", pane_id: paneId });
       return;
     }
+    const { watches } = state;
     try {
-      const watch = new PaneWatch({
+      let view: PaneView | undefined;
+      const ended = (): void => {
+        if (!view || watches.get(paneId) !== view || view.over) return;
+        view.over = true;
+        send(client, { type: "watch-end", pane_id: paneId });
+      };
+      const started: PaneView = view = { over: false, stopped: false, process: startWatch({
         paneId,
         ...geometry,
         socketPath,
-        onFrame: (data) => send(client, { type: "watch-data", pane_id: paneId, data }),
-        onEnd: () => {
-          if (watches.get(paneId) !== watch) return;
-          watches.delete(paneId);
-          send(client, { type: "watch-end", pane_id: paneId });
+        onFrame: (data) => {
+          if (view && !view.over && watches.get(paneId) === view) send(client, { type: "watch-data", pane_id: paneId, data });
         },
-      });
-      watches.set(paneId, watch);
+        onEnd: ended,
+      }) };
+      watches.set(paneId, started);
+      const exited = (): void => {
+        // Closing clears the map: neither a replacement nor a queued view may restart afterward.
+        if (watches.get(paneId) !== started) return;
+        ended();
+        watches.delete(paneId);
+        if (started.next) startView(client, paneId, started.next);
+        startWaiting(client);
+      };
+      void started.process.exited.then(exited, exited);
     } catch (error) {
       console.warn(`[watch] ${paneId} could not start: ${error instanceof Error ? error.message : String(error)}`);
       send(client, { type: "watch-end", pane_id: paneId });
@@ -188,15 +267,19 @@ export function createConnections<Lease>({ clients, present, pending, devices, d
   }
 
   function unwatchPane(client: Client, paneId: string): void {
-    const { watches } = stateOf(client);
-    watches.get(paneId)?.kill();
-    watches.delete(paneId);
+    const { watches, waiting } = stateOf(client);
+    if (waiting.delete(paneId)) return;
+    const view = watches.get(paneId);
+    if (!view) return;
+    view.next = undefined;
+    stopView(view);
   }
 
   function killWatches(client: Client): void {
-    const { watches } = stateOf(client);
-    for (const watch of watches.values()) watch.kill();
+    const { watches, waiting } = stateOf(client);
+    for (const view of watches.values()) stopView(view);
     watches.clear();
+    waiting.clear();
   }
 
   /**

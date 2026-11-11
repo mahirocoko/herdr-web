@@ -65,9 +65,12 @@ export interface PaneWatchOptions extends WatchStreamOptions {
   rows: number;
   /** The same socket the bridge's RPCs use, not the CLI's default session. */
   socketPath: string;
+  /** Bounded stop/drain grace; tests use a shorter interval. */
+  killGraceMs?: number;
 }
 
 const STDERR_TAIL_CHARS = 4096;
+const KILL_GRACE_MS = 1_000;
 
 /** A read-only viewport; unlike terminal attach it never owns the pane's size. */
 export class PaneWatch {
@@ -75,6 +78,9 @@ export class PaneWatch {
   private readonly proc: Bun.Subprocess<"ignore", "pipe", "pipe">;
   private killed = false;
   private ended = false;
+  private gone = false;
+  private killer: ReturnType<typeof setTimeout> | undefined;
+  private readonly readers: Array<{ cancel(): Promise<void> }> = [];
   private stderrTail = "";
 
   constructor(private readonly options: PaneWatchOptions) {
@@ -92,9 +98,16 @@ export class PaneWatch {
         this.stopChild();
       },
     });
-    // Drain both pipes before reporting exit: the last frame and failure diagnostics
-    // can arrive after the process-exit notification.
-    this.exited = Promise.all([this.proc.exited, this.readStdout(parser), this.readStderr()]).then(([code]) => {
+    const drained = Promise.all([this.readStdout(parser), this.readStderr()]);
+    this.exited = this.proc.exited.then(async (code) => {
+      clearTimeout(this.killer);
+      this.gone = true;
+      // A stopped view has nothing more to deliver. A natural exit gets a bounded final drain:
+      // a launcher's descendant may otherwise hold either pipe open forever after the parent exits.
+      if (this.killed || this.ended) this.dropOutput();
+      const drainTimer = setTimeout(() => this.dropOutput(), options.killGraceMs ?? KILL_GRACE_MS);
+      drainTimer.unref?.();
+      try { await drained; } finally { clearTimeout(drainTimer); }
       if (!this.killed && !this.ended && code !== 0) {
         console.warn(`[watch] ${options.paneId} exited (${code}): ${this.stderrTail.trim()}`);
       }
@@ -102,8 +115,15 @@ export class PaneWatch {
     });
   }
 
+  private dropOutput(): void {
+    for (const reader of this.readers) {
+      try { void reader.cancel().catch(() => {}); } catch { /* already released */ }
+    }
+  }
+
   private async readStdout(parser: WatchStreamParser): Promise<void> {
     const reader = this.proc.stdout.getReader();
+    this.readers.push(reader);
     const decoder = new TextDecoder();
     try {
       for (;;) {
@@ -127,6 +147,7 @@ export class PaneWatch {
 
   private async readStderr(): Promise<void> {
     const reader = this.proc.stderr.getReader();
+    this.readers.push(reader);
     const decoder = new TextDecoder();
     try {
       for (;;) {
@@ -149,12 +170,18 @@ export class PaneWatch {
   }
 
   private stopChild(): void {
+    if (this.gone || this.killer !== undefined) return;
     try { this.proc.kill(); } catch { /* already exited */ }
+    this.killer = setTimeout(() => {
+      try { this.proc.kill("SIGKILL"); } catch { /* already exited */ }
+    }, this.options.killGraceMs ?? KILL_GRACE_MS);
+    this.killer.unref?.();
   }
 
   kill(): void {
     if (this.killed) return;
     this.killed = true;
+    if (this.gone) this.dropOutput();
     this.stopChild();
   }
 }
