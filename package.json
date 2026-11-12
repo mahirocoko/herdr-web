@@ -1,7 +1,7 @@
 {
   "name": "herdr-web-ui",
   "private": true,
-  "version": "0.16.13",
+  "version": "0.16.14",
   "type": "module",
   "description": "Browser version of the herdr terminal - live herdr workspaces, panes and agents in a web UI",
   "license": "Apache-2.0 AND MIT",
@@ -14,6 +14,7 @@
     "build": "bun scripts/bun-project.mjs --bun vite build",
     "server": "bun scripts/bun-project.mjs scripts/run-local.ts",
     "start": "bun scripts/bun-project.mjs scripts/run-local.ts",
+    "stop": "bun scripts/bun-project.mjs scripts/stop-local.ts",
     "start:core": "bun scripts/bun-project.mjs scripts/run-local.ts --runtime=herdr-core",
     "start:herdr": "bun scripts/bun-project.mjs scripts/run-local.ts --runtime=herdr",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.tools.json",

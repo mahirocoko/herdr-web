@@ -19,7 +19,7 @@ The root is one source-native application adopted from the pinned upstream tree,
 | Letta private index/parser and Stop witness           | `server/letta-store.ts`, `server/letta-parser.ts`, `server/letta-stop.ts`                                    |
 | Pending/held input                                    | `server/pending-input.ts`, `src/lib/pendingMessages.ts`                                                      |
 | Wire contracts                                        | `shared/protocol.ts`, generated Herdr types in `shared/`                                                     |
-| Local bootstrap and private filesystem                | `scripts/bun-project.mjs`, `scripts/run-local.ts`, `scripts/private-filesystem.ts` and its PowerShell helper |
+| Local bootstrap, stop control and private filesystem   | `scripts/bun-project.mjs`, `scripts/run-local.ts`, `scripts/stop-local.ts`, `scripts/local-control.ts`, `scripts/private-filesystem.ts` and its PowerShell helper |
 | PWA                                                   | `public/manifest.webmanifest`, `public/sw.js`                                                                |
 | Source provenance                                     | `SOURCE_MANIFEST.json`, `scripts/verify-upstream.ts`                                                         |
 
@@ -64,6 +64,44 @@ For the original Herdr runtime, `core/connections.ts` retains at most 64 observe
 The LegendList 3.3.5 patch retains focus-preserving DOM ordering and adds drawn-end clamping, measurement-time scroll reconciliation and cancellation of an already-started non-initial follow. `ChatTimeline.tsx` records an unfold as reading intent before the row grows; explicit latest and paging remain with `ChatView.tsx`. Pi cards and the read-only dialog keep their existing owners.
 
 `scripts/preview-scroll-browser-qa.ts` exercises fictional GET-only fixtures through the real FileViewer/Chat/Pi components at desktop and narrow widths. `scripts/chat-virtual-browser-qa.ts` covers the larger virtualization, selection, older-page and unmeasured-end cases. Both accept `CHROME_PATH` for an already installed headless Chromium; neither downloads a browser or grants native/provider input permission. The preview fixture's explicit `--serve-only` mode is for a separately assigned isolated review and must be stopped afterward. Keep artifacts under ignored runtime paths. These fixtures are not physical-device, real-provider or human acceptance.
+
+## Foreground Web stop control
+
+`bun run stop` routes through `scripts/bun-project.mjs` to `scripts/stop-local.ts`;
+only the normal `scripts/run-local.ts` foreground launcher creates the fixed
+`.agent-state/runtime/upstream-v10700/web-control.sock`. Neither `createServer`
+nor the stop client creates runtime directories or a control server. Linux/macOS
+use the existing private runtime tree preparation, with canonical owner-only
+state validation before preparation (no repair of an existing unsafe directory).
+Windows startup keeps its native ACL owner; stop control is unavailable there,
+with Ctrl-C as the explicit fallback. No Windows named-pipe/ACL implementation is
+implied.
+
+`scripts/local-control.ts` owns the private local protocol: exact versioned ASCII
+JSON newline request/response, at most 128 bytes per frame, one request per
+connection, a two-second deadline and at most eight accepted peers. The stop
+client validates canonical owner-private state and socket type/uid/0600 mode,
+then connects only to that exact checkout path and rechecks identity before
+writing. There is no HTTP/account endpoint, shell execution, PID/port guessing,
+`pkill`, `hc stop`, terminal input or native session stop. Socket absence is a
+read-only no-op with an older-launcher Ctrl-C warning; malformed, oversized,
+unknown, stale and unresponsive endpoints never report success or get deleted.
+The acknowledgment means shutdown was requested, not a separate health/readiness
+probe. The private socket is a cooperative same-user boundary, not isolation
+from its owner or administrators.
+
+The launcher installs SIGINT/SIGTERM/exit cleanup immediately after runtime
+creation, before ping/build/policy/Web setup, and runs it on startup failure too.
+Stop uses the same instance cleanup after draining its acknowledgment. The core
+adapter and control listener check parent and socket dev/ino/type/uid identity
+before invoking Bun listener stop. Bun 1.4.2 otherwise unlinks even a replacement
+node at its original pathname. With lost identity they instead make callbacks
+inert, terminate tracked clients and unref the descriptor until process exit,
+leaving replacement nodes unchanged. These checks are not an atomic defense
+against hostile same-user races. No startup collision is automatically unlinked;
+crashes/forced kills can leave owner-inspection work. Focused temporary-directory
+regressions live in `scripts/local-control.test.ts` and
+`server/herdr-core/adapter.test.ts`; they do not replace live stop/start proof.
 
 ## Private ingress discovery
 

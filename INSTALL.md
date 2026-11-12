@@ -39,6 +39,37 @@ Open **http://127.0.0.1:8787**. The foreground launcher checks the port and nati
 bun start --help
 ```
 
+## Stopping this checkout's Web launcher
+
+On Linux/macOS, run from this checkout's canonical root:
+
+```sh
+bun run stop
+bun run stop --help
+```
+
+New foreground launchers create an owner-private Unix control socket at
+`.agent-state/runtime/upstream-v10700/web-control.sock`. Stop asks only that Web
+launcher to shut down; it does not stop Herdr, `hc` core, terminals or agent
+sessions, and does not signal a guessed PID or port. Ctrl-C in the foreground
+Web terminal remains available on every supported startup platform. Windows
+stop control is not implemented; use Ctrl-C, not WSL or a named-pipe workaround.
+
+An absent control socket is a harmless no-op, **not proof that Web is down**:
+older launchers need Ctrl-C in their verified foreground terminal. An occupied,
+nonprivate, stale or unresponsive socket fails closed unchanged. Startup also
+refuses an occupied control path; never auto-delete it, repair its permissions
+or use a broad process-kill command. Have its verified owner inspect unknown
+state before deciding recovery. This is cooperative same-user privacy, not
+isolation from the same user or administrators.
+
+Graceful Ctrl-C/SIGTERM/stop removes only sockets this process created while
+their directory and socket identities still match. If replaced, the nodes stay
+untouched; Bun's unsafe pathname-unlinking stop is skipped, clients are closed
+and the inert listener is unreferenced until process exit. Crashes/forced kills
+can leave sockets requiring owner inspection. Stop acknowledgment is not a
+health check or a managed restart; start again in the visible Web terminal.
+
 ## Running again and choosing a port
 
 Choose the runtime explicitly for everyday use:

@@ -1,4 +1,14 @@
 {
+  "0.16.14": {
+    "en": {
+      "new": ["Stop this checkout's Web launcher with bun run stop on Linux/macOS."],
+      "fixed": ["Release launcher-owned sockets on shutdown; preserve replaced or unknown paths."]
+    },
+    "th": {
+      "new": ["เพิ่ม bun run stop บน Linux/macOS เพื่อหยุดเฉพาะ Web ของ checkout นี้"],
+      "fixed": ["เมื่อปิด Web ตามปกติ จะเก็บกวาดเฉพาะ socket ที่สร้างเอง ไม่ลบ path ที่ถูกแทนที่"]
+    }
+  },
   "0.16.13": {
     "en": {
       "fixed": ["Require HTML script opt-in and recover keyboard focus from docked pages.", "Bound watch replacement and cleanup; process trailing newlines with a linear scan.", "Correct Chat end scrolling during measurement and keep newly unfolded content in view."]

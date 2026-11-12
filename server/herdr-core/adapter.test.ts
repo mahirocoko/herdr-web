@@ -1,7 +1,8 @@
 // Adapted from devswha/herdr-web-ui a4ff0c942716602c43362f05c8511984e2bcae44; MIT, see UPSTREAM_LICENSE.
 import { afterEach, describe, expect, it, jest } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import { chmodSync, lstatSync, mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { requestLocalStop, startLocalControl } from "../../scripts/local-control.ts";
 import { dirname, join } from "node:path";
 import { piActivityName, piChildPath, piParentForPane, readPiActivity } from "../pi-subagents.ts";
 import { forkBrowserReplacer } from "../http.ts";
@@ -171,7 +172,7 @@ async function setup(terminals: HcTerminal[], extra: Record<string, Handler> = {
   });
   const adapter = await startHerdrCoreAdapter(hc, socket);
   cleanups.push(() => { adapter.stop(); hc.close(); rmSync(dir, { recursive: true, force: true }); });
-  return { socket, cores, hc };
+  return { socket, cores, hc, adapter };
 }
 
 it("never acknowledges uncertain input when the close reply is lost or the connection ends", async () => {
@@ -266,6 +267,54 @@ it.skipIf(process.platform === "win32")("uses the shared framed core stream at t
 });
 
 describe.skipIf(process.platform === "win32")("herdr-core adapter", () => {
+  it("removes only its own socket on graceful stop and permits restart", async () => {
+    const { socket, hc, adapter } = await setup([terminal("t1")]);
+    await sessionSnapshot(socket);
+    const stopped = Promise.withResolvers<void>();
+    const control = startLocalControl(dirname(socket), () => { adapter.stop(); control.stop(); stopped.resolve(); });
+    cleanups.push(() => control.stop());
+    expect(await requestLocalStop(dirname(socket))).toBe("stopping");
+    await stopped.promise;
+    adapter.stop();
+    expect(lstatSync(socket, { throwIfNoEntry: false })).toBeUndefined();
+    const next = await startHerdrCoreAdapter(hc, socket);
+    cleanups.push(() => next.stop());
+    expect((await sessionSnapshot(socket)).panes.map((pane) => pane.pane_id)).toEqual(["t1"]);
+  });
+
+  for (const replacement of ["file", "symlink", "socket", "directory"]) {
+    it(`preserves replaced ${replacement} on stop instead of letting Bun unlink unknown work`, async () => {
+      const { socket, adapter } = await setup([terminal("t1")]);
+      const directory = dirname(socket);
+      if (replacement === "directory") {
+        renameSync(directory, `${directory}.old`);
+        cleanups.push(() => rmSync(`${directory}.old`, { recursive: true, force: true }));
+        symlinkSync(`${directory}.old`, directory);
+      } else {
+        renameSync(socket, join(directory, "original.sock"));
+        if (replacement === "file") writeFileSync(socket, "unknown work");
+        if (replacement === "symlink") symlinkSync(join(directory, "absent"), socket);
+        if (replacement === "socket") {
+          const other = Bun.listen({ unix: socket, socket: { data() {} } });
+          cleanups.push(() => other.stop(true));
+        }
+      }
+      const before = lstatSync(socket);
+      if (replacement === "directory") {
+        adapter.stop();
+      } else {
+        const stopped = Promise.withResolvers<void>();
+        const control = startLocalControl(directory, () => { adapter.stop(); control.stop(); stopped.resolve(); });
+        cleanups.push(() => control.stop());
+        expect(await requestLocalStop(directory)).toBe("stopping");
+        await stopped.promise;
+      }
+      adapter.stop();
+      expect(lstatSync(socket).ino).toBe(before.ino);
+      expect(lstatSync(socket).mode).toBe(before.mode);
+    });
+  }
+
   it("refuses a second adapter on a live socket and leaves the first serving", async () => {
     const { socket, hc } = await setup([terminal("t1")]);
     await sessionSnapshot(socket);

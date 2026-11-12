@@ -100,6 +100,8 @@ export async function startHerdrCoreAdapter(hc: HcConnection, socketPath: string
     throw new Error("herdr-core socket path is occupied; no existing file was changed");
   }
   const answers = createAnswers(hc, directory);
+  const peers = new Set<Socket<ConnectionState>>();
+  let stopped = false;
   const listener = Bun.listen<ConnectionState>({
     unix: socketPath,
     socket: {
@@ -112,7 +114,7 @@ export async function startHerdrCoreAdapter(hc: HcConnection, socketPath: string
           closed: false,
           read: makeLineReader(LINE_BYTES, (line) => {
             // one request per connection, as herdr reads it
-            if (!first) return;
+            if (stopped || !first) return;
             first = false;
             const request = parseRequest(line);
             if (!request) { send(socket, `${JSON.stringify({ id: "", error: { code: "bad_frame", message: "not a herdr request" } })}\n`, true); return; }
@@ -120,6 +122,8 @@ export async function startHerdrCoreAdapter(hc: HcConnection, socketPath: string
             void answers(request).then((reply) => send(socket, `${JSON.stringify({ id: request.id, ...reply })}\n`, true));
           }, () => socket.end()),
         };
+        if (stopped) { socket.terminate(); return; }
+        peers.add(socket);
       },
       data(socket, chunk) {
         socket.data.read(chunk);
@@ -128,23 +132,44 @@ export async function startHerdrCoreAdapter(hc: HcConnection, socketPath: string
         flush(socket);
       },
       close(socket) {
+        peers.delete(socket);
         socket.data.closed = true;
         socket.data.unsubscribe?.();
       },
       error(socket) {
+        peers.delete(socket);
         socket.data.closed = true;
         socket.data.unsubscribe?.();
       },
     },
   });
-  chmodSync(socketPath, 0o600);
-  return {
-    socketPath,
-    stop: () => {
-      // Bun owns the socket lifecycle. Do not remove a path that may have been replaced.
-      listener.stop(true);
-    },
+  const owned = lstatSync(socketPath);
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    for (const peer of peers) {
+      peer.data.closed = true;
+      peer.data.unsubscribe?.();
+      peer.terminate();
+    }
+    peers.clear();
+    // Bun 1.4.2 stop() unconditionally unlinks its original pathname. Only call
+    // it while both parent and socket still have our dev/ino/type/uid identity.
+    // Lost identity: inert callbacks + unref let exit close the descriptor without
+    // deleting a replacement node (including a symlink or replaced directory).
+    let matches = false;
+    try {
+      const currentParent = lstatSync(directory);
+      const current = lstatSync(socketPath, { throwIfNoEntry: false });
+      matches = currentParent.isDirectory() && realpathSync(directory) === resolve(directory)
+        && currentParent.dev === parent.dev && currentParent.ino === parent.ino && currentParent.uid === parent.uid
+        && !!current?.isSocket() && current.dev === owned.dev && current.ino === owned.ino && current.uid === owned.uid;
+    } catch { /* Unknown state remains unchanged. */ }
+    if (matches) listener.stop(true);
+    else listener.unref();
   };
+  try { chmodSync(socketPath, 0o600); } catch (error) { stop(); throw error; }
+  return { socketPath, stop };
 }
 
 function parseRequest(line: string): Request | null {

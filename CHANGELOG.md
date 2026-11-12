@@ -8,6 +8,32 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.16.14] - 2026-11-12
+
+### Added
+
+- Add `bun run stop` for this checkout's foreground Web launcher on Linux/macOS.
+  Use an owner-private local control socket instead of discovering or signalling
+  a process by PID or port. Herdr/core, terminals and agent sessions remain running.
+
+### Fixed
+
+- Install shutdown cleanup before native ping, client build and Web setup.
+  Graceful stop releases the launcher's own adapter and control sockets while
+  preserving replaced paths and unknown runtime state.
+- Fence Bun socket shutdown by directory and socket identity: Bun 1.4.2 would
+  otherwise unlink a replacement node at the listener's original pathname.
+
+### Boundaries
+
+- Stop control is Linux/macOS-only; Windows retains foreground Ctrl-C. Missing
+  control state is a no-op, not proof that an older launcher is down. Stale or
+  unresponsive sockets remain unchanged and require owner inspection.
+- Socket privacy and identity checks are cooperative, not atomic isolation from
+  the same user or administrators. Forced kills/crashes may leave socket paths.
+- This is a source-only fork release, not an installer, plugin, managed update,
+  remote bundle or deployment. No private runtime evidence is included.
+
 ## [0.16.13] - 2026-11-11
 
 ### Fixed
@@ -5399,7 +5425,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.13...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.14...HEAD
+[0.16.14]: https://github.com/mahirocoko/herdr-web/compare/v0.16.13...v0.16.14
 [0.16.13]: https://github.com/mahirocoko/herdr-web/compare/v0.16.12...v0.16.13
 [0.16.12]: https://github.com/mahirocoko/herdr-web/compare/v0.16.11...v0.16.12
 [0.16.11]: https://github.com/mahirocoko/herdr-web/compare/v0.16.10...v0.16.11

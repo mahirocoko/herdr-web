@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, realpathSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, statSync, writeFileSync } from "node:fs";
 import { createECDH } from "node:crypto";
 import { execFile } from "node:child_process";
 import { homedir } from "node:os";
@@ -8,6 +8,7 @@ import { herdrSocketPath, ping } from "../server/herdr/client.ts";
 import { isRealNode } from "../server/pty/sidecar.ts";
 import { runtime, startRuntime, type Runtime } from "../server/herdr-core/runtime.ts";
 import { RefreshingForkPolicy, type ForkPolicy } from "../server/fork-policy.ts";
+import { assertControlAvailable, startLocalControl } from "./local-control.ts";
 
 import {
   preparePrivateRuntimeTree,
@@ -203,13 +204,8 @@ export async function startLocal() {
   const selectedRuntime = runtime();
   assertLocalPortAvailable(port);
   const stateDir = join(root, ".agent-state/runtime/upstream-v10700");
-  if (selectedRuntime === "herdr-core" && existsSync(stateDir)) {
-    const state = lstatSync(stateDir);
-    if (!state.isDirectory() || realpathSync(stateDir) !== stateDir
-      || state.uid !== process.geteuid?.() || (state.mode & 0o077) !== 0) {
-      throw new Error("herdr-core requires canonical owner-only runtime state; no permissions repaired");
-    }
-  }
+  const hasControl = process.platform === "linux" || process.platform === "darwin";
+  if (hasControl) assertControlAvailable(stateDir);
   preparePrivateRuntimeTree(stateDir);
   process.env["HERDR_WEB_STATE_DIR"] = stateDir;
   process.env["HERDR_WEB_FORK_PRIVACY"] = "1";
@@ -221,6 +217,23 @@ export async function startLocal() {
       throw new Error("Installed Herdr binary is missing");
   }
   const core = await startRuntime(stateDir);
+  let instance: ReturnType<typeof createServer> | undefined;
+  let control: ReturnType<typeof startLocalControl> | undefined;
+  let stopped = false;
+  const cleanup = () => {
+    if (stopped) return;
+    stopped = true;
+    try { instance?.stop(); }
+    finally {
+      try { control?.stop(); }
+      finally { core?.stop(); }
+    }
+  };
+  const stop = () => { cleanup(); process.exit(0); };
+  // Core already owns a socket: install cleanup before ping, build, policy or Web creation.
+  process.on("SIGINT", stop);
+  process.on("SIGTERM", stop);
+  process.on("exit", cleanup);
   try {
     const native = await ping();
     if (native.protocol !== 22)
@@ -246,7 +259,7 @@ export async function startLocal() {
     const policySource = new RefreshingForkPolicy(port, () => localPolicy(port));
     const policy = await policySource.current();
     const pushPreserved = preservePushIdentity(stateDir);
-    const instance = createServer({
+    instance = createServer({
       hostname: "127.0.0.1",
       port,
       stateDir,
@@ -258,20 +271,7 @@ export async function startLocal() {
       // Core's framed transport is available without a Node PTY sidecar; keep health and attach aligned.
       ...(core ? { terminalAttach: true, sidecar: true } : {}),
     });
-    let stopped = false;
-    const stop = () => {
-      if (stopped) return;
-      stopped = true;
-      instance.stop();
-      core?.stop();
-      process.exit(0);
-    };
-    process.on("SIGINT", stop);
-    process.on("SIGTERM", stop);
-    process.on("exit", () => {
-      if (!stopped) instance.stop();
-      core?.stop();
-    });
+    if (hasControl) control = startLocalControl(stateDir, stop);
     await instance.statusReady;
     console.log(
       `Existing Push identity ${pushPreserved ? "preserved privately; no legacy subscription/policy stores changed" : "not configured"}`,
@@ -281,7 +281,10 @@ export async function startLocal() {
     );
     return instance;
   } catch (error) {
-    core?.stop();
+    cleanup();
+    process.off("SIGINT", stop);
+    process.off("SIGTERM", stop);
+    process.off("exit", cleanup);
     throw error;
   }
 }
@@ -328,7 +331,8 @@ Core Pi history needs an explicitly enabled compatible session observer; existin
 Pi sessions are never reloaded or bound by guessing. See INSTALL.md for setup/limits.
 Windows private state requires native NTFS ACL checks; host execution remains
 unverified. No Bash/WSL.
-Ctrl-C stops this process. No global install, managed updater or public bind.`);
+Ctrl-C stops this process; bun run stop also works on Linux/macOS for new launchers.
+No global install, managed updater or public bind.`);
   } else {
     if (options.runtime !== undefined) process.env["OVIS_RUNTIME"] = options.runtime;
     await startLocal();
