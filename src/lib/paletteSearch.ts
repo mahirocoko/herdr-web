@@ -3,7 +3,7 @@ import { t as moduleT, type Translate } from "./i18n.ts";
 import { paneStatus, type KnownStatus } from "./status.ts";
 import { tabLabel } from "./tabName.ts";
 
-export type PaletteStatusFilter = "all" | Exclude<KnownStatus, "unknown">;
+export type PaletteStatusFilter = "all" | Exclude<KnownStatus, "unknown" | "failed">;
 
 export const STATUS_FILTERS: readonly PaletteStatusFilter[] = ["all", "blocked", "working", "idle", "done", "waiting"];
 
@@ -36,7 +36,7 @@ export function statusCounts(panes: readonly HerdrPane[]): Record<PaletteStatusF
   const counts: Record<PaletteStatusFilter, number> = { all: panes.length, blocked: 0, working: 0, idle: 0, done: 0, waiting: 0 };
   for (const pane of panes) {
     const status = paneStatus(pane);
-    if (status !== "unknown") counts[status] += 1;
+    if (status !== "unknown" && status !== "failed") counts[status] += 1;
   }
   return counts;
 }

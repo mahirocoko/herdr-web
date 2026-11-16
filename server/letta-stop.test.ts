@@ -54,7 +54,9 @@ mock.module("./process-start.ts", () => ({
 }));
 mock.module("./herdr/client.ts", () => ({
   ...native,
+  paneGet: async () => structuredClone(pane),
   paneProcessInfo: async () => ({ foreground_processes: [{ pid }] }),
+  paneScrollInfo: async () => null,
   paneRead: async () => ({ text: screen }),
   paneSendText: async (
     _pane: string,
@@ -103,7 +105,8 @@ mock.module("./core/status.ts", () => ({
     hub = args;
     return {
       ...realCreateStatusHub(args),
-      clientSnapshot: async () => ({ panes: [structuredClone(pane)] }),
+      inputSnapshot: async () => ({ panes: [structuredClone(pane)] }),
+        clientSnapshot: async () => ({ panes: [structuredClone(pane)] }),
       countVisit() {},
     };
   },

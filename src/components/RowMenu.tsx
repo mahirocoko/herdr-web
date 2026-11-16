@@ -17,7 +17,7 @@ import "./RowMenu.css";
 import { useT } from "../lib/i18n.ts";
 import { useMediaQuery } from "../lib/useMediaQuery.ts";
 import { SHEET_QUERY, useSheetSwipe } from "../lib/sheets.ts";
-import { useSheetHistory } from "../lib/sheetHistory.ts";
+import { usePhoneSheetBack } from "../lib/sheetHistory.ts";
 
 export interface RowMenuItem {
   id: string;
@@ -71,7 +71,7 @@ export function RowMenu({ anchor, point, restoreFocusTo, title, subtitle, detail
   const surface = useRef<HTMLDivElement>(null);
   useSheetSwipe(surface, sheet ? onClose : null);
   // Back closes the sheet, not the pane under it
-  useSheetHistory(sheet, onClose);
+  usePhoneSheetBack(onClose);
   const [place, setPlace] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
   // where the button was when the menu was placed: a scroll that leaves it there is not a reason to close
   const placedAt = useRef<{ top: number; left: number } | null>(null);

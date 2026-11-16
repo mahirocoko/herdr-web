@@ -10,6 +10,7 @@
  */
 
 import type { AgentStatus, SlashCommand } from "../../shared/protocol.ts";
+import { AGENT_INPUT_DRAFT_MESSAGE } from "../../shared/input-draft.ts";
 import { skillSyntax } from "../../shared/skill-syntax.ts";
 import { knownStatus, STATUS_WORD } from "./status.ts";
 import { t } from "./i18n.ts";
@@ -76,10 +77,12 @@ export function sameMessage(a: string, b: string): boolean {
 }
 /** `agent`: the pane's agent, which names the input an input_draft refusal is about (Claude Code's when unknown) */
 export function submitNote(code: string, message: string, agent?: string | null): string {
+  if (code === "pending_wait" && message === "The provider request needs review; this message still waits for a new turn or Send now") return t("The provider request needs review; this message still waits for a new turn or Send now");
   if (code === "submit_partial") return t("Not confirmed: the terminal draft was cleared or may have changed. Your message stayed here. Check the terminal before sending again.");
   if (code === "agent_blocked") return t("Not sent: the agent is waiting for an answer in the terminal. Answer it first.");
   if (code === "read_only") return t("Not sent: this view only watches the pane.");
   if (code === "held_input") return t("Not sent: send or discard the held input first.");
+  if (code === "input_draft" && message === AGENT_INPUT_DRAFT_MESSAGE) return t("Not sent: the agent's input box in the terminal holds typed text. Send or clear it there, then send this message.");
   if (code === "input_draft" && agent === "hermes") return t("Not sent: Hermes' input in the terminal is not empty. Send or clear it there, then send this message.");
   if (code === "input_draft") return t("Not sent: Claude Code's input box in the terminal is not empty. Send or clear it there, then send this message.");
   if (code === "pending_input_unsupported") return t("Update this PC to send messages in the next turn. Your draft stayed here.");

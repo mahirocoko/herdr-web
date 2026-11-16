@@ -1,16 +1,19 @@
 /**
- * The screen work behind a chat send, owning no server state: clearing a Claude or Hermes input
- * box before a message, the message's own shape, the refusal a draft earns, and the immediate send
+ * The screen work behind a chat send, owning no server state: the existing Claude/Hermes input
+ * guards and positive styled draft evidence for other supported agents, the message's own shape,
+ * the refusal a draft earns, and the immediate send
  * itself (createSubmitText), handed the state it reads. Pending delivery and the immediate send
  * share them.
  */
 import type { HerdrPane } from "../../shared/protocol.ts";
+import { AGENT_INPUT_DRAFT_MESSAGE, draftScreenText, readsTypedDraft, screenFromAnsi, typedDraft } from "../../shared/input-draft.ts";
 import { secretPrompt } from "../../shared/secret-prompt.ts";
-import { agentPrompt, HerdrError, paneGet, paneRead, paneScrollInfo, paneSendKeys, paneSendText } from "../herdr/client.ts";
+import { agentPrompt, HerdrError, paneGet, paneProcessInfo, paneRead, paneScrollInfo, paneSendKeys, paneSendText } from "../herdr/client.ts";
 import { mirrorInput } from "../mirror-input.ts";
 import { paneContext } from "../pane-routes.ts";
 import { CLAUDE_CLEAR_INPUT_KEYS, claudeClearableDraft, claudeInputBoxContent, claudeInputDraft, claudeInputEmpty, claudeRestoredDraft, codexQuestionsCollapsed, heldCandidate, hermesInputDraft, lastChatSubmitted, modelListWaits, noteSubmitted, parseInteractivePrompt, viewportShowsLive } from "../prompt.ts";
-import { type PendingIdentity, PendingInputError } from "../pending-input.ts";
+import { guardPendingWrite, type PendingIdentity, PendingInputError, samePendingIdentity } from "../pending-input.ts";
+import { processStartedAt } from "../process-start.ts";
 
 const CLAUDE_INPUT_DRAFT_MESSAGE = "Claude Code's input box is not empty (a draft, bash mode, or a box that could not be read); send or clear it in the terminal, then send this message";
 
@@ -101,6 +104,40 @@ export async function freeHermesInput(paneId: string, identity?: PendingIdentity
   if (hermesInputDraft(live, viewportShowsLive(scrollBefore, scrollAfter, colors, before, live) ? colors : null)) {
     throw new InputDraftError(null, identity, null, HERMES_INPUT_DRAFT_MESSAGE);
   }
+}
+
+/**
+ * The new guard is deliberately positive-only, unlike Claude/Hermes. Colours are usable only on
+ * an unscrolled, stable live viewport whose whole text agrees. Plain/core reads, unsupported
+ * themes and unreadable shapes retain the old behaviour; reset/cursor escapes alone prove nothing.
+ * Identity/process and masked-input checks follow the awaited screen reads. Pending delivery still
+ * runs its own final checkPendingWrite after this, immediately before each actual write.
+ */
+export async function freeAgentInput(paneId: string, agent: string | null, identity?: PendingIdentity, columns?: number): Promise<void> {
+  if (!readsTypedDraft(agent)) return;
+  const pid = (await paneProcessInfo(paneId))?.foreground_processes?.[0]?.pid ?? null;
+  const bound = { ...(identity ?? pendingIdentity(await paneGet(paneId))), processPid: pid, processBirth: pid === null ? null : processStartedAt(pid) };
+  for (let round = 0; round < 3; round++) {
+    const before = (await paneRead({ paneId, source: "detection", format: "text" })).text;
+    const scrollBefore = await paneScrollInfo(paneId);
+    const colors = (await paneRead({ paneId, source: "visible", format: "ansi" })).text;
+    const scrollAfter = await paneScrollInfo(paneId);
+    const live = (await paneRead({ paneId, source: "detection", format: "text" })).text;
+    const screen = screenFromAnsi(colors);
+    if (!screen.styled) break;
+    if (!viewportShowsLive(scrollBefore, scrollAfter, colors, before, live) || draftScreenText(colors) !== draftScreenText(live)) continue;
+    if (typedDraft(agent, screen)) throw new InputDraftError(null, identity, null, AGENT_INPUT_DRAFT_MESSAGE);
+    break;
+  }
+  const current = pendingIdentity(await paneGet(paneId));
+  if (!samePendingIdentity(bound, current)) throw new HerdrError("pending_target_changed", "The pane's terminal or agent session changed during the input check; nothing was typed");
+  const fault = await guardPendingWrite(bound, columns, {
+    foregroundPid: async () => (await paneProcessInfo(paneId))?.foreground_processes?.[0]?.pid ?? null,
+    screen: async () => (await paneRead({ paneId, source: "detection", format: "text" })).text,
+    birth: processStartedAt,
+  });
+  if (fault === "target_changed") throw new HerdrError("pending_target_changed", "The pane's process changed during the input check; nothing was typed");
+  if (fault === "agent_blocked") throw new HerdrError("agent_blocked", "The terminal is waiting for masked input; answer it with the secret-input form first");
 }
 
 export async function claudeBoxReads(paneId: string): Promise<[string, string | null]> {
@@ -293,6 +330,10 @@ export function createSubmitText({ options, lastTyped, attachments, terminalAtta
         // a clear request or send anyway reached a Hermes pane only to be refused above: both are Claude's
         if ((pane?.agent ?? pane?.agent_session?.agent) === "hermes") {
           await freeHermesInput(paneId, identity ?? undefined);
+          inTime();
+        }
+        if (pane && readsTypedDraft(identity?.agent)) {
+          await freeAgentInput(paneId, identity!.agent, identity ?? undefined, attachments.get(paneId)?.cols);
           inTime();
         }
         try {

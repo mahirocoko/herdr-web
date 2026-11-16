@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { sheetHolds, sheetTraversal } from "./sheetHistory.ts";
 
 import { diffTargetFromState, diffTargetState, type RepoDiffTarget } from "./repoDiff.ts";
 
@@ -9,14 +10,17 @@ import { diffTargetFromState, diffTargetState, type RepoDiffTarget } from "./rep
 export function useRepoDiffViewer() {
   const [viewing, setViewing] = useState(() => diffTargetFromState(window.history.state));
   const closing = useRef(false);
+  const landing = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     const onPop = (event: PopStateEvent): void => {
+      if (sheetHolds(event)) return;
+      clearTimeout(landing.current);
       closing.current = false;
       setViewing(diffTargetFromState(event.state));
     };
     window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
+    return () => { window.removeEventListener("popstate", onPop); clearTimeout(landing.current); };
   }, []);
 
   const openDiff = useCallback((target: RepoDiffTarget) => {
@@ -32,7 +36,9 @@ export function useRepoDiffViewer() {
     if (closing.current) return;
     if (diffTargetFromState(window.history.state)) {
       closing.current = true;
-      window.history.back();
+      sheetTraversal(() => window.history.back());
+      clearTimeout(landing.current);
+      landing.current = setTimeout(() => { closing.current = false; }, 1000);
     } else setViewing(null);
   }, []);
 

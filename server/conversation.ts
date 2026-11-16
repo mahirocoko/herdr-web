@@ -231,6 +231,8 @@ interface TranscriptEntry {
   uuid?: string;
   parentUuid?: string | null;
   isMeta?: boolean;
+  /** Claude records an API refusal as assistant text, not as a successful answer. */
+  isApiErrorMessage?: boolean;
   isCompactSummary?: boolean;
   /** "updates": Claude Code shows the entry's thinking text as a progress message, not as reasoning */
   thinkingDisplay?: unknown;
@@ -429,14 +431,14 @@ export function parseClaudeTranscript(text: string, maxTurns = MAX_TURNS, option
       const turn = assistantTurn(entry.timestamp);
       // an entry that names no stop reason is still at work when it calls a tool
       const stop = entry.message?.stop_reason;
-      completed = stop === "end_turn";
+      completed = entry.isApiErrorMessage !== true && stop === "end_turn";
       atWork = stop === "tool_use" || (stop == null && content.some((block: unknown) => typeof block === "object" && block !== null && (block as { type?: unknown }).type === "tool_use"));
       if (entry.timestamp) turn.end_ts = entry.timestamp;
       for (const block of content) {
         if (typeof block !== "object" || block === null) continue;
         const b = block as { type?: string; text?: unknown; thinking?: unknown; name?: unknown; input?: unknown };
         if (b.type === "text" && typeof b.text === "string" && b.text.length > 0) {
-          turn.parts.push({ kind: "text", text: b.text });
+          turn.parts.push({ kind: "text", text: b.text, ...(entry.isApiErrorMessage === true ? { failed: true } : {}) });
         } else if (b.type === "thinking") {
           const thinking = typeof b.thinking === "string" ? b.thinking : typeof b.text === "string" ? b.text : "";
           // the terminal prints an "updates" entry's thinking as narration between the tools, so it

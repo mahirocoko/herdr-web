@@ -10,6 +10,8 @@
  * traversal lands, and whether it was one of its own.
  */
 
+import { sheetHolds, sheetOwnsEntry, sheetTraversal } from "./sheetHistory.ts";
+
 const KEY = "herdr-web-ui:settings";
 /** names an opening of Settings on the entry it began from and on each of its entries */
 const BASE_KEY = "herdr-web-ui:settings-base";
@@ -103,10 +105,13 @@ function rewind(by: number): void {
     request.expired = true;
     if (request.reopened) request.claim = false;
   }, LANDING_MS);
-  window.history.go(-by);
+  sheetTraversal(() => window.history.go(-by), by);
 }
 
 function reconcile(): void {
+  // A confirmation above Settings copies its state, not another Settings depth. Rotation
+  // or the parent's Close effect records intent now, then reconciles after that sheet leaves.
+  if (sheetOwnsEntry()) return;
   const state: unknown = window.history.state;
   if (pending !== null && state !== observed) releasePending();
   observed = state;
@@ -184,6 +189,7 @@ if (typeof window !== "undefined") {
     }) as History["pushState"];
   }
   window.addEventListener("popstate", (event) => {
+    if (sheetHolds(event)) { observed = window.history.state; reconcile(); return; }
     const previous = observed;
     observed = event.state;
     const entry = settingsEntry(event.state);

@@ -102,7 +102,7 @@ export function StatusBadge({ status, compact = false }: { status?: AgentStatus;
       title={description}
     >
       {compact && indicators !== "classic" && <span className="sidebar-status-glyph" aria-hidden="true" onAnimationStart={value === "working" ? alignBreath : undefined}>{indicatorGlyph(value, indicators)}</span>}
-      {compact && indicators === "classic" && value === "blocked" && <span className="sidebar-status-mark" aria-hidden="true">?</span>}
+      {compact && indicators === "classic" && (value === "blocked" || value === "failed") && <span className="sidebar-status-mark" aria-hidden="true">{value === "failed" ? "×" : "?"}</span>}
       {compact && indicators === "classic" && dot && <span className="sidebar-status-dot" aria-hidden="true" onAnimationStart={value === "working" ? alignBreath : undefined} />}
       <span className={compact ? "visually-hidden" : undefined}>{label}</span>
     </span>

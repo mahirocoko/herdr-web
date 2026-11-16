@@ -1,6 +1,6 @@
 import type { AgentStatus } from "../../shared/protocol.ts";
 
-export type KnownStatus = "idle" | "working" | "blocked" | "done" | "waiting" | "unknown";
+export type KnownStatus = "idle" | "working" | "blocked" | "done" | "waiting" | "failed" | "unknown";
 
 /** The one word every surface (sidebar, palette, composer) uses for an agent state. */
 export const STATUS_WORD: Readonly<Record<KnownStatus, string>> = {
@@ -9,6 +9,7 @@ export const STATUS_WORD: Readonly<Record<KnownStatus, string>> = {
   blocked: "INPUT",
   done: "DONE",
   waiting: "BG",
+  failed: "FAILED",
   unknown: "—",
 };
 
@@ -22,15 +23,15 @@ export type StatusIndicators = "classic" | HerdrIndicators;
  * state: it takes RUN's glyph, held still.
  */
 const INDICATOR_GLYPH: Readonly<Record<HerdrIndicators, Readonly<Record<KnownStatus, string>>>> = {
-  dots: { idle: "\u25CB", working: "\u25CF", blocked: "\u25CF", done: "\u25CF", waiting: "\u25CF", unknown: "\u00B7" },
-  symbols: { idle: "\u25CB", working: "\u25D0", blocked: "\u00D7", done: "\u2713", waiting: "\u25D0", unknown: "\u00B7" },
+  dots: { idle: "\u25CB", working: "\u25CF", blocked: "\u25CF", done: "\u25CF", waiting: "\u25CF", failed: "\u00D7", unknown: "\u00B7" },
+  symbols: { idle: "\u25CB", working: "\u25D0", blocked: "\u00D7", done: "\u2713", waiting: "\u25D0", failed: "\u00D7", unknown: "\u00B7" },
 };
 
 export function indicatorGlyph(status: KnownStatus, style: HerdrIndicators): string {
   return INDICATOR_GLYPH[style][status];
 }
 
-const KNOWN: Readonly<Record<string, KnownStatus>> = { idle: "idle", working: "working", blocked: "blocked", done: "done", waiting: "waiting" };
+const KNOWN: Readonly<Record<string, KnownStatus>> = { idle: "idle", working: "working", blocked: "blocked", done: "done", waiting: "waiting", failed: "failed" };
 
 /** herdr's AgentStatus is open-ended; the UI knows its states and files the rest under unknown. */
 export function knownStatus(status?: AgentStatus): KnownStatus {
@@ -52,7 +53,7 @@ export function paneStatus(pane: { agent_status?: AgentStatus; background_wait?:
  * colours the whole workspace, then one that finished and was not looked at yet, then a working one,
  * then one waiting on its turn's background work (working in all but name).
  */
-const ROLLUP: readonly KnownStatus[] = ["blocked", "done", "working", "waiting", "idle"];
+const ROLLUP: readonly KnownStatus[] = ["blocked", "failed", "done", "working", "waiting", "idle"];
 
 /**
  * One state for a row that stands for several panes, as herdr rolls a workspace's agents up:

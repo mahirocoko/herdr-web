@@ -38,7 +38,8 @@ export function FilesDialog({ start, paneId, viewing, onOpenFile, onOpenDiff, on
   const [changesVisited, setChangesVisited] = useState(false);
   useSheetSwipe(surface, onClose);
   // a file opened from the list is drawn over it with an entry of its own: Back closes the file first
-  usePhoneSheetBack(onClose, !viewing);
+  // Keep the list's entry under its viewer: Back returns here without pushing after Back.
+  usePhoneSheetBack(onClose);
   useEffect(() => {
     if (viewing) return;
     // a native modal over it (Add PC, from the palette) takes its own Escape

@@ -4,6 +4,12 @@
  * names remain unchanged, and placeholders in braces keep their English names.
  */
 export const TH: Record<string, string> = {
+  "Request failed": "เรียกโมเดลไม่สำเร็จ",
+  "{n} requests failed": "เรียกโมเดลไม่สำเร็จ {n} ครั้ง",
+  "Request failed, then tried again": "เรียกโมเดลไม่สำเร็จ แล้วลองใหม่",
+  "{n} requests failed, then tried again": "เรียกโมเดลไม่สำเร็จ {n} ครั้ง แล้วลองใหม่",
+  "FAILED": "ล้มเหลว",
+  "The provider request needs review; this message still waits for a new turn or Send now": "ต้องตรวจสอบคำขอที่ส่งไปยังโมเดล ข้อความนี้ยังรอรอบใหม่ หรือกดส่งตอนนี้",
   "Scripts in this page are off.": "สคริปต์ในหน้านี้ยังไม่ทำงาน",
   "Run scripts": "เรียกใช้สคริปต์",
   "This page took the keyboard, so its scripts are off again.": "หน้านี้แย่งโฟกัสแป้นพิมพ์ จึงปิดสคริปต์อีกครั้ง",
@@ -741,6 +747,7 @@ export const TH: Record<string, string> = {
   "Not sent: the agent is waiting for an answer in the terminal. Answer it first.": "ไม่ได้ส่ง: เอเจนต์กำลังรอคำตอบในเทอร์มินัล ให้ตอบตรงนั้นก่อน",
   "Not sent: this view only watches the pane.": "ไม่ได้ส่ง: มุมมองนี้จะดูเฉพาะช่องเท่านั้น",
   "Not sent: Claude Code's input box in the terminal is not empty. Send or clear it there, then send this message.": "ไม่ได้ส่ง: กล่องอินพุตของ Claude Code ในเทอร์มินัลไม่ว่างเปล่า ส่งหรือล้างที่นั่น จากนั้นส่งข้อความนี้",
+  "Not sent: the agent's input box in the terminal holds typed text. Send or clear it there, then send this message.": "ไม่ได้ส่ง: ช่องพิมพ์ของเอเจนต์ในเทอร์มินัลมีข้อความอยู่ ให้ส่งหรือล้างข้อความตรงนั้นก่อน แล้วค่อยส่งข้อความนี้",
   "Not sent: Hermes' input in the terminal is not empty. Send or clear it there, then send this message.": "ไม่ได้ส่ง: อินพุต Hermes' ในเทอร์มินัลไม่ว่างเปล่า ส่งหรือล้างที่นั่น จากนั้นส่งข้อความนี้",
   "Not sent: Claude Code's input box in the terminal already holds “{draft}”.": "ไม่ได้ส่ง: กล่องอินพุตของ Claude Code ในเทอร์มินัลมี “{draft}” อยู่แล้ว",
   "Clear it and send": "ล้างข้อมูลและส่ง",

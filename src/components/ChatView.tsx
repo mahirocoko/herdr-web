@@ -24,6 +24,7 @@ import type { LegendListRef } from "@legendapp/list/react";
 import { appendChatRowSlots, createChatRowSlots, prependChatRowSlots } from "../lib/chatRows.ts";
 import { ChatDetails, ChatRowMemoryContext, useChatRowToggle, type ChatRowMemory } from "../lib/chatRowState.tsx";
 import { turnRevision } from "../lib/turnRevision.ts";
+import { requestItems } from "../lib/failedRequests.ts";
 import { useWholeOutput as useScopedOutput } from "../lib/useWholeOutput.ts";
 import { turnSkills } from "../lib/skillActivity.ts";
 import { ApiError } from "../lib/api.ts";
@@ -451,6 +452,19 @@ function WorkRow({ paneId, part, stateKey }: { paneId: string; part: ToolPartTyp
   </div>;
 }
 
+/** Native request errors are not answers; a settled terminal failure opens until the reader chooses. */
+function FailedRequests({ parts, at, followed, live }: { parts: Extract<ConversationPart, { kind: "text" }>[]; at: string; followed: boolean; live: boolean }) {
+  const t = useT();
+  const n = parts.length;
+  const label = followed
+    ? t(n === 1 ? "Request failed, then tried again" : "{n} requests failed, then tried again", { n })
+    : t(n === 1 ? "Request failed" : "{n} requests failed", { n });
+  return <ChatDetails memoryKey={`failed:${at}`} defaultOpen={!followed && !live} data-failed-requests={at} className={`chat-skill chat-failed-requests${followed || live ? "" : " is-error"}`}>
+    <summary><CircleAlert aria-hidden="true" /><span className="chat-skill-name">{label}</span><ChevronDown className="chat-skill-caret" aria-hidden="true" /></summary>
+    <div className="chat-skill-detail">{parts.map((part, index) => <p key={index}>{part.text.replace(/^Error: /, "")}</p>)}</div>
+  </ChatDetails>;
+}
+
 function ThinkingRow({ text, stateKey }: { text: string; stateKey: string }) {
   const t = useT();
   const [chosen, setOpen] = useChatRowToggle(stateKey, false);
@@ -508,10 +522,13 @@ function WorkBlockView({ paneId, parts, duration, live, waiting, defaultOpen, sh
     </div>
     {/* the rows open and fold at the block's measured height; folded and settled, they are not drawn */}
     <AnimatedHeight open={open} animateContent={false}>
-      <div className="work-block-rows" onFocus={keepOpen} onClick={keepOpen}>{visible.map((part, index) =>
-        part.kind === "thinking" ? <ThinkingRow key={index} stateKey={`${blockKey === "work" ? "" : `${blockKey}:`}thinking:${parts.indexOf(part)}`} text={part.text} />
-          : part.kind === "text" ? <div key={index} className="work-narration"><Markdown>{part.text}</Markdown></div>
-            : part.kind === "tool" ? <WorkRow key={index} stateKey={`${blockKey === "work" ? "" : `${blockKey}:`}tool:${parts.indexOf(part)}`} paneId={paneId} part={part} /> : null)}
+      <div className="work-block-rows" onFocus={keepOpen} onClick={keepOpen}>{requestItems(visible).map((item) => {
+        if (item.kind === "failed") return <FailedRequests key={item.at} at={blockKey === "work" ? String(parts.indexOf(item.parts[0]!)) : `${blockKey}:${parts.indexOf(item.parts[0]!)}`} parts={item.parts} followed={item.followed || !pendingHead} live={live} />;
+        const { part, at } = item;
+        return part.kind === "thinking" ? <ThinkingRow key={at} stateKey={`${blockKey === "work" ? "" : `${blockKey}:`}thinking:${parts.indexOf(part)}`} text={part.text} />
+          : part.kind === "text" ? <div key={at} className="work-narration"><Markdown>{part.text}</Markdown></div>
+            : part.kind === "tool" ? <WorkRow key={at} stateKey={`${blockKey === "work" ? "" : `${blockKey}:`}tool:${parts.indexOf(part)}`} paneId={paneId} part={part} /> : null;
+      })}
       </div>
     </AnimatedHeight>
   </section>;
@@ -764,7 +781,8 @@ const Turn = memo(function Turn({ paneId, turn, live, waiting, showThinking, pi 
   }
   const { work, answer } = splitTurn(turn.parts);
   const workItems = pi ? piWorkItems(work) : work.length ? [{ index: 0, calls: [], work }] : [];
-  const answerText = answer.map((part) => part.text).join("\n\n");
+  const answerText = answer.filter((part) => part.failed !== true).map((part) => part.text).join("\n\n");
+  const hasAnswer = answer.some((part) => part.failed !== true);
   const goal = turnGoal(turn.parts);
   return <article className="chat-turn chat-turn-agent">
     <SkillActivityList parts={turn.parts} />
@@ -772,9 +790,11 @@ const Turn = memo(function Turn({ paneId, turn, live, waiting, showThinking, pi 
     {/* the pending head stands only above no answer: one above words would leave a gap when the turn ends */}
     {workItems.map((item, index) => item.calls.length > 0
       ? <PiSubagentCalls key={`calls:${item.index}`} parts={item.calls} />
-      : <WorkBlockView key={`work:${item.index}`} blockKey={pi ? `work:${item.index}` : "work"} paneId={paneId} parts={item.work} duration={formatWorkDuration(turn.ts, turn.end_ts ?? null)} live={live && index === workItems.length - 1} waiting={waiting && index === workItems.length - 1} defaultOpen={workStartsOpen(live, turn.parts)} showThinking={showThinking} pendingHead={answer.length === 0} />)}
-    {live && !waiting && answer.length === 0 && (workItems.length === 0 || workItems.at(-1)!.calls.length > 0) && <PendingWorkHead title={t("Working…")} />}
-    {answer.map((part, index) => <Markdown key={index} skills={skills}>{part.text}</Markdown>)}
+      : <WorkBlockView key={`work:${item.index}`} blockKey={pi ? `work:${item.index}` : "work"} paneId={paneId} parts={item.work} duration={formatWorkDuration(turn.ts, turn.end_ts ?? null)} live={live && index === workItems.length - 1} waiting={waiting && index === workItems.length - 1} defaultOpen={workStartsOpen(live, turn.parts)} showThinking={showThinking} pendingHead={!hasAnswer} />)}
+    {live && !waiting && !hasAnswer && (workItems.length === 0 || workItems.at(-1)!.calls.length > 0) && <PendingWorkHead title={t("Working…")} />}
+    {requestItems(answer).map((item) => item.kind === "failed"
+      ? <FailedRequests key={item.at} at={String(turn.parts.indexOf(item.parts[0]!))} parts={item.parts} followed={item.followed} live={live} />
+      : <Markdown key={item.at} skills={skills}>{item.part.text}</Markdown>)}
     {answerText.length > 0 && <div className="chat-turn-meta chat-agent-meta">
       {/* a mouse reads one copy glyph and the words "Plain text"; touch reads the two formats */}
       <CopyButton className="chat-meta-btn" text={answerText} label={t("Copy as markdown")} onResult={copied}><span className="chat-meta-fmt">MD</span></CopyButton>

@@ -234,6 +234,10 @@ export function createCodexTranscriptParser(state: CodexParseState = { turns: []
       const payload = record(entry.payload);
       const ts = string(entry.timestamp);
       if (entry.type === "event_msg") {
+        const turnId = string(payload.turn_id), rootId = string(payload.root_turn_id);
+        // A child writes its own turn; neither its error nor its end closes this parent.
+        if (turnId && rootId && turnId !== rootId) continue;
+        if (payload.type !== "task_started" && payload.type !== "turn_started" && turnId && state.activeTurnId && turnId !== state.activeTurnId) continue;
         if (payload.type === "item_completed" && (!state.activeTurnId || !payload.turn_id || payload.turn_id === state.activeTurnId)) {
           const item = record(payload.item);
           const id = string(item.id);
@@ -249,11 +253,13 @@ export function createCodexTranscriptParser(state: CodexParseState = { turns: []
             }
           }
         }
-        if (payload.type === "task_started") {
+        if (payload.type === "task_started" || payload.type === "turn_started") {
           state.startedAt = string(payload.started_at) || ts;
           state.activeTurnId = string(payload.turn_id) || undefined;
         }
-        if (payload.type === "task_complete" || payload.type === "turn_aborted") {
+        if (payload.type === "task_complete" || payload.type === "turn_complete" || payload.type === "turn_aborted") {
+          const failure = payload.type === "task_complete" ? string(record(payload.error).message) : "";
+          if (failure.trim()) assistant(ts).parts.push({ kind: "text", text: `Error: ${failure}`, failed: true });
           const turn = turns.at(-1);
           if (turn?.role === "assistant" && ts) turn.end_ts = ts;
           state.startedAt = undefined;
@@ -829,7 +835,7 @@ export function matchCodexTranscript(screen: string, candidates: { path: string;
   const matching = new Set<string>();
   for (const candidate of candidates) {
     const prose = parseCodexTranscript(candidate.text).filter((turn) => turn.role === "assistant")
-      .flatMap((turn) => turn.parts).filter((part) => part.kind === "text").slice(-8);
+      .flatMap((turn) => turn.parts).filter((part): part is Extract<ConversationPart, { kind: "text" }> => part.kind === "text" && part.failed !== true).slice(-8);
     if (prose.some((part) => {
       const anchor = answerAnchor(part.text);
       return anchor !== null && display.includes(anchor);
@@ -906,7 +912,7 @@ export function matchShortCodexAnswers(screen: string, candidates: { path: strin
   const display = normalizeDisplay(lastHeader >= 0 ? screen.slice(lastHeader) : screen);
   // every turn of what was read, not the newest 100: an answer said long ago is said
   const answers = candidates.map((candidate) => parseCodexTranscript(candidate.text, Infinity).filter((turn) => turn.role === "assistant")
-    .flatMap((turn) => turn.parts).flatMap((part) => part.kind === "text" ? [part.text] : []));
+    .flatMap((turn) => turn.parts).flatMap((part) => part.kind === "text" && part.failed !== true ? [part.text] : []));
   let found: { index: number; shown: string[] } | null = null;
   for (const [index, own] of answers.entries()) {
     const shown = newestAnswersShown(display, own);
@@ -955,7 +961,7 @@ function codexExchanges(text: string): CodexExchange[] {
     if (user !== null) exchanges.push({ user, assistant: assistant.join("\n") });
   };
   for (const turn of turns) {
-    const prose = turn.parts.flatMap((part) => part.kind === "text" ? [part.text] : []).join("\n");
+    const prose = turn.parts.flatMap((part) => part.kind === "text" && part.failed !== true ? [part.text] : []).join("\n");
     if (turn.role === "user") {
       finish();
       user = prose;

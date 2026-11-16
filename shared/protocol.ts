@@ -459,7 +459,7 @@ export interface SkillActivity {
 }
 
 export type ConversationPart =
-  | { kind: "text"; text: string; phase?: "commentary" | "final_answer" }
+  | { kind: "text"; text: string; phase?: "commentary" | "final_answer"; failed?: boolean }
   /** the agent's reasoning block; the client folds it and shows it only on request */
   | { kind: "thinking"; text: string }
   | { kind: "skill"; skill: SkillActivity }

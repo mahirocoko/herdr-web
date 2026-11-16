@@ -10,7 +10,9 @@ function fakeWindow() {
   /** a browser runs a traversal later, toward the entry it named when called: a test turns this on to open something meanwhile */
   let deferred = false;
   let pending = false;
+  let dropped = false;
   const traverse = (by: number): void => {
+    if (dropped) return;
     const next = Math.max(0, Math.min(entries.length - 1, index + by));
     if (next === index) return;
     const land = (): void => {
@@ -34,7 +36,7 @@ function fakeWindow() {
     get location() { return { href: entries[index]!.href }; },
     addEventListener(type: string, listener: (event: { state: unknown }) => void) { if (type === "popstate") listeners.push(listener); },
   };
-  return { window, entries, at: () => index, defer: (on: boolean) => { deferred = on; }, pending: () => pending, marks: () => entries.map((entry) => typeof (entry.state as Record<string, unknown> | null)?.["herdr-web-ui:sheet"] === "string") };
+  return { window, entries, at: () => index, defer: (on: boolean) => { deferred = on; }, drop: (on: boolean) => { dropped = on; }, pending: () => pending, marks: () => entries.map((entry) => typeof (entry.state as Record<string, unknown> | null)?.["herdr-web-ui:sheet"] === "string") };
 }
 const fake = fakeWindow();
 (globalThis as unknown as { window: unknown }).window = fake.window;
@@ -51,6 +53,39 @@ afterAll(() => {
 });
 
 describe("a phone's sheet in the history", () => {
+  it("Back closes only the upper of two still-open surfaces", async () => {
+    let lower = 0, upper = 0;
+    const leaveLower = hooks.enter(() => { lower += 1; });
+    const leaveUpper = hooks.enter(() => { upper += 1; });
+    h.back(); await settled();
+    const result = { lower, upper };
+    leaveUpper(); leaveLower(); await settled();
+    expect(result).toEqual({ lower: 0, upper: 1 });
+  });
+
+  it("Files keeps its entry under a file, so Back returns before closing Files", async () => {
+    let closed = 0;
+    const start = fake.at();
+    const leave = hooks.enter(() => { closed += 1; });
+    h.pushState({ file: "fictional.md" }, "");
+    h.back(); await settled();
+    const result = { closed, at: fake.at() - start };
+    h.forward(); await settled();
+    expect(closed).toBe(0); // entering the child file is not Back out of Files
+    expect(h.state).toMatchObject({ file: "fictional.md" });
+    expect(sheetSteppedOff()).toBe(false); // the viewer must receive this Forward
+    let upper = 0;
+    const leaveUpper = hooks.enter(() => { upper++; });
+    h.back(); await settled();
+    expect(upper).toBe(1); expect(closed).toBe(0); // ancestry must not shelter a new top surface
+    leaveUpper(); await settled();
+    h.back(); await settled();
+    expect(closed).toBe(0);
+    h.back(); await settled();
+    expect(closed).toBe(1);
+    leave(); await settled();
+    expect(result).toEqual({ closed: 0, at: 1 });
+  });
   it("is an entry Back closes, and leaves no entry behind when closed another way", async () => {
     let closed = 0;
     const leave = hooks.enter(() => { closed += 1; });
@@ -94,7 +129,8 @@ describe("a phone's sheet in the history", () => {
     expect(fake.window.location.href).toBe("/?pane=b");
   });
 
-  it("reuses the entry for a sheet opened from a sheet", async () => {
+  // A closing menu still hands off; only two simultaneously open surfaces now stack.
+  it("reuses the entry for a replacement opened as the first sheet closes", async () => {
     const start = fake.at();
     const leaveFirst = hooks.enter(() => {});
     leaveFirst();
@@ -156,6 +192,56 @@ describe("a phone's sheet in the history", () => {
     expect(fake.at()).toBe(start);
   });
 
+  it("does not ask the lower sheet when the upper sheet refuses", async () => {
+    let lower = 0, upper = 0;
+    const leaveLower = hooks.enter(() => { lower++; });
+    const upperId = enterSheet(() => { upper++; return false; }, null);
+    const length = fake.entries.length;
+    h.back(); await settled();
+    expect({ lower, upper }).toEqual({ lower: 0, upper: 1 });
+    expect(fake.entries.length).toBe(length); // refused Back traversed, never refilled
+    leaveSheet(upperId); await settled();
+    expect(lower).toBe(0);
+    h.back(); await settled(); expect(lower).toBe(1);
+    leaveLower(); await settled();
+  });
+
+  it("does not close a surviving lower surface on Forward onto a retired upper entry", async () => {
+    let lower = 0, upper = 0;
+    const leaveLower = hooks.enter(() => { lower++; });
+    const leaveUpper = hooks.enter(() => { upper++; });
+    h.back(); await settled(); h.forward(); await settled();
+    expect({ lower, upper }).toEqual({ lower: 0, upper: 1 });
+    leaveUpper(); leaveLower(); await settled();
+    // The retired entry is ordinary, not an unbounded skip/refill loop.
+    h.back(); await settled(); h.back(); await settled();
+  });
+
+  it("bounds a browser-dropped cleanup so the next real Back is not cleanup", async () => {
+    const first = hooks.enter(() => {});
+    fake.drop(true); first(); await settled();
+    await new Promise((resolve) => setTimeout(resolve, 1050));
+    fake.drop(false);
+    let closed = 0;
+    const leave = hooks.enter(() => { closed++; });
+    h.back(); await settled();
+    expect(closed).toBe(1);
+    leave(); await settled(); h.back(); await settled();
+  });
+
+  it("consumes a busy restore already in flight without reopening a sheet that closed meanwhile", async () => {
+    const id = enterSheet(() => false, null);
+    fake.defer(true);
+    const landed = new Promise<void>((resolve) => {
+      fake.window.addEventListener("popstate", () => resolve());
+    });
+    h.back(); await landed;
+    leaveSheet(id);
+    await settled(); fake.defer(false);
+    expect(fake.marks()[fake.at()]).toBe(false);
+    h.back(); await settled();
+  });
+
   it("tells the app a closed sheet's own step off its entry from a Back", async () => {
     // the app's Back listens after this module, as App's effect does
     const seen: boolean[] = [];
@@ -166,6 +252,7 @@ describe("a phone's sheet in the history", () => {
     expect(seen).toEqual([true]);
     hooks.enter(() => {});
     h.back(); await settled();
-    expect(seen).toEqual([true, false]);
+    // A real Back consumed by the top surface is also not pane navigation.
+    expect(seen).toEqual([true, true]);
   });
 });

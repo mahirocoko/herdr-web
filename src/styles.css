@@ -2301,7 +2301,8 @@ button {
   animation: pulse var(--dur-pulse) var(--ease-pulse) infinite;
 }
 
-.badge-blocked {
+.badge-blocked,
+.badge-failed {
   color: var(--status-blocked);
   background: var(--status-blocked-tint);
 }

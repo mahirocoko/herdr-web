@@ -15,12 +15,14 @@ import { claudePanePid, claudePaneSession, forgetPaneTranscriptState } from "../
 import type { DeviceStore } from "../devices.ts";
 import { createGjcStatus, gjcPanes, readOmoSnapshot, reconcileProviderStatus } from "../gjc-status.ts";
 import type { HerdrMachineProfile } from "../herdr-profiles.ts";
-import { paneGet, sessionSnapshot } from "../herdr/client.ts";
+import { paneGet, paneProcessInfo, sessionSnapshot } from "../herdr/client.ts";
+import { processStartedAt } from "../process-start.ts";
+import { ProviderFailures, type ProviderBinding } from "../provider-failure.ts";
 import { launchedAgents } from "../launched-agents.ts";
 import { bridgeAgentNews, MachineManager } from "../machines.ts";
 import { omoPanes } from "../omo.ts";
 import { OMO_ALIASES, OmoStatus } from "../omo-status.ts";
-import type { PendingInputs } from "../pending-input.ts";
+import { samePendingIdentity, type PendingIdentity, type PendingInputs } from "../pending-input.ts";
 import { promptWaitEnded } from "../prompt.ts";
 import { type AlertTiming, createPushService, defaultStateDir } from "../push.ts";
 import { SessionPlans } from "../session-plan.ts";
@@ -44,6 +46,7 @@ export function createStatusHub<Lease>({ options, devices, clients, present, pen
     pushLoopbackHttp?: boolean;
     backgroundWait?: { grace: number; limit: number };
     statusNow?: () => number;
+    providerFailure?: { resolve: (pane: HerdrPane) => Promise<ProviderBinding | null>; timeoutMs?: number };
   };
   devices: DeviceStore;
   clients: Set<Client>;
@@ -54,7 +57,9 @@ export function createStatusHub<Lease>({ options, devices, clients, present, pen
   usage: UsageService;
   usageLogin: UsageLoginService;
 }) {
-  const push = createPushService({
+  let providerFailures: ProviderFailures | undefined;
+  const providerProcesses = new Map<string, PendingIdentity>();
+  const pushService = createPushService({
     stateDir: options.stateDir ?? defaultStateDir(),
     timing: options.alertTiming,
     now: options.statusNow,
@@ -65,6 +70,10 @@ export function createStatusHub<Lease>({ options, devices, clients, present, pen
       return paneTitle(await paneGet(paneId));
     },
   });
+
+  // Failure is a presentation state, never a new native input state or a successful alert.
+  const push = { ...pushService, onStatus: (paneId: string, status: AgentStatus, machineId = "local") =>
+    pushService.onStatus(paneId, machineId === "local" ? providerFailures?.display(paneId, status) ?? status : status, machineId) };
 
   /** `done` for agents herdr loses track of (server/completion.ts), kept across restarts */
   const completions = new CompletionTracker(join(options.stateDir ?? defaultStateDir(), "completions.json"));
@@ -115,8 +124,43 @@ export function createStatusHub<Lease>({ options, devices, clients, present, pen
     codexPath: async (pane) => codexOpenRollout(pane.pane_id, pane.cwd, await paneCodexHome(pane.pane_id, options.codexHome)),
     onChange: (paneId, summary) => planChanged(paneId, summary),
   });
+  providerFailures = new ProviderFailures({
+    ...options.providerFailure,
+    resolve: options.providerFailure?.resolve ?? resolveProviderBinding,
+    onChange: (paneId) => {
+      const native = completions.current(paneId);
+      if (native === undefined) return;
+      const shown = providerFailures!.display(paneId, native);
+      pending.status(paneId, shown); drainPending(paneId);
+      broadcastAll(paneStatus(paneId, native));
+      push.onStatus(paneId, alertStatus(shown, waitingOf(paneId))).catch(logPushError);
+    },
+  });
+  async function resolveProviderBinding(pane: HerdrPane): Promise<ProviderBinding | null> {
+    const key = (value: HerdrPane) => JSON.stringify([value.agent, value.terminal_id, value.agent_session ?? null]);
+    const first = (await paneProcessInfo(pane.pane_id))?.foreground_processes?.[0]?.pid;
+    const birth = first == null ? null : processStartedAt(first);
+    if (first == null || birth === null) return null;
+    const processIdentity: PendingIdentity = { agent: pane.agent ?? null, terminalId: pane.terminal_id, session: key(pane), processPid: first, processBirth: birth };
+    let path: string | null = null;
+    if (pane.agent === "claude") {
+      const session = await claudePaneSession(pane);
+      if (session?.pid === first) path = session.path;
+    } else if (pane.agent === "codex") path = await codexOpenRollout(pane.pane_id, pane.cwd, await paneCodexHome(pane.pane_id, options.codexHome));
+    if (path === null) return null;
+    const current = await paneGet(pane.pane_id);
+    const last = (await paneProcessInfo(pane.pane_id))?.foreground_processes?.[0]?.pid;
+    if (key(current) !== key(pane) || last !== first || !samePendingIdentity(processIdentity, { ...processIdentity, processBirth: processStartedAt(first) })) return null;
+    // Darwin birth is an estimate from whole elapsed seconds. Keep the established token
+    // while the existing PID/session/birth guard still matches, rather than serializing drift.
+    const previous = providerProcesses.get(pane.pane_id);
+    const stable = previous && samePendingIdentity(previous, processIdentity) ? previous : processIdentity;
+    providerProcesses.set(pane.pane_id, stable);
+    return { path, identity: JSON.stringify(stable) };
+  }
   /** herdr's snapshot with OmO's and GJC's own status in it: what the completion tracker and web push are given */
   const rawSnapshot = async (): Promise<SessionSnapshot> => {
+    const ticket = providerFailures!.capture();
     const snapshot = await omoSnapshot();
     await gjc.refresh(snapshot.panes);
     const named = gjc.apply(omo.apply(snapshot));
@@ -126,12 +170,13 @@ export function createStatusHub<Lease>({ options, devices, clients, present, pen
     void piAgents.refresh(named.panes).catch(() => undefined);
     // an agent this server started has had no turn yet: its start screen is no work (launched-agents.ts)
     for (const pane of named.panes) pane.agent_status = launchedAgents.settle(pane.pane_id, pane.agent_status);
+    void providerFailures!.refresh(named.panes, ticket).catch(() => undefined);
     return named;
   };
   const backgroundOf = (paneId: string): number => omo.backgroundOf(paneId) || claudeAgents.countOf(paneId) || piAgents.countOf(paneId);
   const waitingOf = (paneId: string): boolean => waits.waiting(paneId) || ((completions.current(paneId) === "idle" || completions.current(paneId) === "done") && piAgents.countOf(paneId) > 0);
-  /** the snapshot clients get: finishes settled, OmO panes named, background tasks, waits and plan progress */
-  const clientSnapshot = async (): Promise<SessionSnapshot> => {
+  /** Native/completion state for manual input, with background/plan metadata; no failure presentation. */
+  const inputSnapshot = async (): Promise<SessionSnapshot> => {
     const snapshot = await completions.readSnapshot(rawSnapshot);
     if (!snapshot.panes.some((pane) => backgroundOf(pane.pane_id) > 0 || waitingOf(pane.pane_id) || plans.summaryOf(pane.pane_id) !== null)) return snapshot;
     return {
@@ -144,6 +189,7 @@ export function createStatusHub<Lease>({ options, devices, clients, present, pen
       }),
     };
   };
+  const clientSnapshot = async (): Promise<SessionSnapshot> => providerFailures!.apply(await inputSnapshot());
   /**
    * A browser visit for the daily active message: the call is made now so the visit's day is the
    * trigger's, the panes are read after. Nothing is read while telemetry cannot send; a socket open
@@ -164,7 +210,7 @@ export function createStatusHub<Lease>({ options, devices, clients, present, pen
   }
   /** A pane's status frame: every one says whether the pane waits on its turn's background work. */
   const paneStatus = (paneId: string, status: AgentStatus, about: { background_tasks?: number; plan?: PlanSummary | null } = {}): ServerMessage =>
-    ({ type: "pane-status", pane_id: paneId, agent_status: status, ...about, ...(waitingOf(paneId) ? { background_wait: true as const } : {}) });
+    ({ type: "pane-status", pane_id: paneId, agent_status: providerFailures!.display(paneId, status), ...about, ...(waitingOf(paneId) ? { background_wait: true as const } : {}) });
   const machines = options.machines === false ? null : new MachineManager(options.stateDir ?? defaultStateDir(), push, completions, clientSnapshot, options.remoteOperations);
   if (machines && options.herdrProfiles) machines.watchHerdrProfiles(options.herdrProfiles);
 
@@ -273,8 +319,9 @@ export function createStatusHub<Lease>({ options, devices, clients, present, pen
       if (raw === "working") promptWaitEnded(paneId);
       // an agent herdr lost on the way still works and finishes as such (server/completion.ts);
       // an OmO pane whose session is not known keeps herdr's status, under its own name
+      providerFailures!.observe(paneId, raw, agent);
       const status = completions.observe(paneId, raw, omo.runs(paneId) ? "omo" : gjc.runs(paneId) ? "gjc" : agent);
-      pending.status(paneId, status); drainPending(paneId);
+      pending.status(paneId, providerFailures!.display(paneId, status)); drainPending(paneId);
       // a Claude turn that ended holds on its background work: what it started is read now, while
       // the pane is still taken for the status before (work that ended before the turn did holds
       // nothing), and this frame says all of it, so none says the pane finished first
@@ -292,7 +339,7 @@ export function createStatusHub<Lease>({ options, devices, clients, present, pen
       // The split canvas follows herdr's focused pane (also the sole visible pane while zoomed).
       broadcastAll({ type: "session-changed" });
       if (!completions.seen(paneId)) return;
-      pending.status(paneId, "idle"); drainPending(paneId);
+      pending.status(paneId, providerFailures!.display(paneId, "idle")); drainPending(paneId);
       broadcastAll(paneStatus(paneId, "idle"));
       push.onStatus(paneId, alertStatus("idle", waits.waiting(paneId))).catch(logPushError);
     },
@@ -305,7 +352,7 @@ export function createStatusHub<Lease>({ options, devices, clients, present, pen
         // known ready baseline can schedule a fresh guarded check even when the tracker
         // still remembers working; an unknown baseline never supplies that permission.
         const status = pane.agent_status === "idle" || pane.agent_status === "done" ? pane.agent_status : completions.current(pane.pane_id) ?? pane.agent_status;
-        pending.baseline(pane.pane_id, status); drainPending(pane.pane_id);
+        pending.baseline(pane.pane_id, providerFailures!.display(pane.pane_id, status)); drainPending(pane.pane_id);
       }
     },
     // a pane created a moment ago got its agent after the roster's own read of it. After the
@@ -316,13 +363,15 @@ export function createStatusHub<Lease>({ options, devices, clients, present, pen
     onResync: (panes, newer) => {
       completions.resync(panes, newer);
       const settled = (pane: HerdrPane): AgentStatus => completions.current(pane.pane_id) ?? pane.agent_status;
-      for (const pane of panes) { pending.baseline(pane.pane_id, settled(pane)); drainPending(pane.pane_id); }
+      for (const pane of panes) { pending.baseline(pane.pane_id, providerFailures!.display(pane.pane_id, settled(pane))); drainPending(pane.pane_id); }
       for (const pane of panes) if (!newer.has(pane.pane_id) && pane.agent === "claude") waits.status(pane.pane_id, settled(pane));
       push.resync(panes.map((pane) => ({ ...pane, agent_status: alertStatus(settled(pane), waits.waiting(pane.pane_id)) })), newer);
     },
     onPaneEnded: (paneId) => {
       if (usageLogin.ended(paneId)) usage.invalidate();
       holdPendingPane(paneId, { code: "pane_not_found", message: "The pane ended; its pending messages were not sent" });
+      providerFailures!.forget(paneId);
+      providerProcesses.delete(paneId);
       pending.forget(paneId);
       waits.forget(paneId);
       completions.forget(paneId);
@@ -342,5 +391,5 @@ export function createStatusHub<Lease>({ options, devices, clients, present, pen
   waitTimer.unref?.();
   plans.start();
 
-  return { push, omo, gjc, claudeAgents, piAgents, plans, clientSnapshot, countVisit, machines, broadcastAll, logPushError, collector, waitTimer };
+  return { push, omo, gjc, claudeAgents, piAgents, plans, inputSnapshot, clientSnapshot, providerInputHeld: (paneId: string) => providerFailures!.held(paneId), countVisit, machines, broadcastAll, logPushError, collector, waitTimer };
 }

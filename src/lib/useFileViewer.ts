@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { outsideSettings } from "./settingsHistory.ts";
 import type { FilePresentation } from "./filePresentation.ts";
+import { sheetHolds, sheetTraversal } from "./sheetHistory.ts";
 
 interface FilePreview {
   path: string;
@@ -43,15 +44,18 @@ function backUnderPreview(): Promise<unknown> | undefined {
 export function useFileViewer() {
   const [viewing, setViewing] = useState(() => previewFromState(window.history.state));
   const closing = useRef(false);
+  const landing = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     const onPop = (event: PopStateEvent): void => {
+      if (sheetHolds(event)) return;
+      clearTimeout(landing.current);
       closing.current = false;
       // Forward restores the preview with its original PC/pane, including after reload.
       setViewing(previewFromState(event.state));
     };
     window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
+    return () => { window.removeEventListener("popstate", onPop); clearTimeout(landing.current); };
   }, []);
 
   const openFile = useCallback((preview: FilePreview, replace = false) => {
@@ -70,7 +74,13 @@ export function useFileViewer() {
       closing.current = true;
       // X, Escape and scrim clicks consume the same entry as the system Back button. A traversal
       // the browser refuses lands nowhere and fires no popstate: the latch is let go for the next click.
-      backUnderPreview()?.catch(() => { closing.current = false; });
+      sheetTraversal(() => {
+        const way = backUnderPreview();
+        void way?.catch(() => { closing.current = false; });
+        return way;
+      });
+      clearTimeout(landing.current);
+      landing.current = setTimeout(() => { closing.current = false; }, 1000);
     } else setViewing(null);
   }, []);
 

@@ -19,10 +19,12 @@ export function useChatRowToggle(key: string, initial: boolean | null) {
 }
 
 /** Native disclosures retain their open state when their row leaves the DOM. */
-export function ChatDetails({ memoryKey, onToggle, ...props }: ComponentProps<"details"> & { memoryKey: string }) {
-  const [open, setOpen] = useChatRowToggle(memoryKey, false);
-  return <details {...props} open={open === true} onToggle={(event) => {
-    setOpen(event.currentTarget.open);
+export function ChatDetails({ memoryKey, onToggle, defaultOpen = false, ...props }: ComponentProps<"details"> & { memoryKey: string; defaultOpen?: boolean }) {
+  const [chosen, setChosen] = useChatRowToggle(memoryKey, null);
+  const open = chosen ?? defaultOpen;
+  return <details {...props} open={open} onToggle={(event) => {
+    // Setting open during render also fires toggle; only a reader changes the choice.
+    if (event.currentTarget.open !== open) setChosen(event.currentTarget.open);
     onToggle?.(event);
   }} />;
 }

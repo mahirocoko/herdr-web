@@ -1,5 +1,5 @@
 import { handleWorkspaceRequest } from "./workspace-routes.ts";
-import { closeMention, createSubmitText, freeClaudeBox, freeHermesInput, InputDraftError, pendingFault, pendingIdentity, pendingText } from "./core/composer.ts";
+import { closeMention, createSubmitText, freeAgentInput, freeClaudeBox, freeHermesInput, InputDraftError, pendingFault, pendingIdentity, pendingText } from "./core/composer.ts";
 import { createInputLane } from "./core/input.ts";
 import { type Client, connectionData, connectionOf, createConnections, paneWatchSupported, presenceOf, send, type SocketData } from "./core/connections.ts";
 import { createStatusHub } from "./core/status.ts";
@@ -335,7 +335,7 @@ export function createServer(
     authorizePending(owner, paneId, lease);
     // The same normalized snapshot the client sees includes a known Codex finish that
     // herdr reports as unknown. Nothing is inferred from a bare unknown state.
-    const pane = (await clientSnapshot()).panes.find((candidate) => candidate.pane_id === paneId);
+    const pane = (await inputSnapshot()).panes.find((candidate) => candidate.pane_id === paneId);
     if (!pane) throw new HerdrError("pane_not_found", `pane ${paneId} not found`);
     const info = await paneProcessInfo(paneId);
     const pid = info?.foreground_processes?.[0]?.pid ?? null;
@@ -433,6 +433,7 @@ export function createServer(
         }
       };
       recoveryReady(context);
+      if (automatic && providerInputHeld(paneId)) throw new HerdrError("pending_wait", "The provider request needs review; this message still waits for a new turn or Send now");
       if (recovery && !pending.interruptReview(paneId, true)) throw new HerdrError("pending_uncertain", "Check the earlier unconfirmed delivery in the terminal before sending again");
       if (automatic && context.working) {
         pending.observe(paneId, "working", mark);
@@ -443,6 +444,7 @@ export function createServer(
       // read comes after the colors, so text typed between the two is in the box and holds the message.
       if (context.identity.agent === "claude") await freeClaudeBox(paneId, context.working, () => authorizePending(owner, paneId, lease), arrivedAt + (options.submitDeadlineMs ?? SUBMIT_DEADLINE_MS));
       else if (context.identity.agent === "hermes") await freeHermesInput(paneId, context.identity);
+      else await freeAgentInput(paneId, context.identity.agent, context.identity, lease.sighting.facts().cols);
       await checkPendingWrite(paneId, lease, identity);
       if (Date.now() - arrivedAt > (options.submitDeadlineMs ?? SUBMIT_DEADLINE_MS)) throw new HerdrError("submit_timeout", "The pending message waited too long; nothing was typed");
       authorizePending(owner, paneId, lease);
@@ -450,6 +452,7 @@ export function createServer(
       const allowed = (): boolean => {
         try {
           authorizePending(owner, paneId, lease);
+          if (automatic && providerInputHeld(paneId)) return false;
           if (recovery) {
             authorizePending(owner, paneId, recovery.lease);
             if (!recovery.lease.sighting.facts().sameClaim || !lettaStops.current(recovery)
@@ -573,7 +576,7 @@ export function createServer(
     return true;
   }
 
-  const { push, omo, gjc, claudeAgents, piAgents, plans, clientSnapshot, countVisit, machines, broadcastAll, logPushError, collector, waitTimer } = createStatusHub({ options, devices, clients, present, pending, drainPending, holdPendingPane, usage, usageLogin });
+  const { push, omo, gjc, claudeAgents, piAgents, plans, inputSnapshot, clientSnapshot, providerInputHeld, countVisit, machines, broadcastAll, logPushError, collector, waitTimer } = createStatusHub({ options, devices, clients, present, pending, drainPending, holdPendingPane, usage, usageLogin });
   const bridgeToken = randomBytes(32).toString("hex");
 
   type PortalStartup = { ok: true } | { ok: false; error: unknown };

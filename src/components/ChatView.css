@@ -1531,6 +1531,7 @@
 .chat-skill.is-error { border-color: var(--status-blocked); }
 .chat-skill-detail { padding: 0 var(--space-2) var(--space-2); overflow-wrap: anywhere; }
 .chat-skill-detail p { margin: 0 0 var(--space-1); color: var(--text-dim); }
+.chat-failed-requests .chat-skill-detail p { white-space: pre-wrap; }
 
 .chat-skill[open] .chat-skill-caret { transform: rotate(180deg); }
 

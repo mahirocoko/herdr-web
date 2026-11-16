@@ -16,6 +16,7 @@ import { launchAgent } from "../lib/agentLaunchMode.ts";
 import { userErrorMessage, type UserError } from "../lib/userError.ts";
 import { nativeModalOver, useFocusTrap } from "../lib/useFocusTrap.ts";
 import { useSheetSwipe } from "../lib/sheets.ts";
+import { usePhoneSheetBack } from "../lib/sheetHistory.ts";
 import { passingFolder, recentDirectories } from "../lib/recent-directories.ts";
 
 /** The dialog as New tab: the workspace the tab joins, whose folder it uses, and the number herdr will give it. */
@@ -90,6 +91,9 @@ export function NewSessionDialog({ open, defaultCwd, tab = null, onClose, onCrea
   }, [open, cwd]);
   const surface = useFocusTrap<HTMLFormElement>(open, { initialFocus: firstFieldRef });
   useSheetSwipe(surface, pending ? null : onClose);
+  usePhoneSheetBack(() => { if (pending) return false; onClose(); }, open);
+  // The browser inside the dialog is a separate level; Back preserves the dialog's fields.
+  usePhoneSheetBack(() => { if (pending) return false; setBrowsing(false); }, open && browsing);
   const defaultCwdRef = useRef(defaultCwd);
   defaultCwdRef.current = defaultCwd;
   const prefillRef = useRef(prefill);
