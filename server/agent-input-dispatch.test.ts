@@ -196,6 +196,7 @@ describe("current server/index.ts pending draft delivery", () => {
     expect(writes).toHaveLength(1);
     failKey = false;
     callbacks.onStatus("p", "idle", "letta");
+    // fixed wait: an idle event must not replay the uncertain write during this observation window.
     await Bun.sleep(20);
     expect(writes).toHaveLength(1);
     expect(await f.sendNow(queued.pending, 101)).toMatchObject({ ok: false });

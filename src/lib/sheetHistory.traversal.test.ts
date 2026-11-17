@@ -7,13 +7,16 @@ const entries: Array<{ key: string; state: Record<string, unknown>; href: string
   { key: "b", state: { foreign: { keep: true } }, href: "/?pane=b" },
 ];
 let at = 1, next = 0, delay = false, reject = false, dropped = false, holdRestore = false;
+let pendingLandings = 0;
 const pendingRestores: Array<() => void> = [];
 const listeners: Array<(event: PopStateEvent) => void> = [];
 function go(by: number): void {
   if (dropped) return;
   const target = at + by;
   if (!entries[target] || target === at) return;
+  pendingLandings++;
   const land = (): void => {
+    pendingLandings--;
     at = Math.min(target, entries.length - 1);
     const event = { state: entries[at]!.state } as PopStateEvent;
     for (const listener of listeners) listener(event);
@@ -52,7 +55,14 @@ const fake = {
 const { enterSheet, leaveSheet, sheetHolds, sheetTraversal } = await import("./sheetHistory.ts");
 const consumed: boolean[] = [];
 listeners.push((event) => consumed.push(sheetHolds(event)));
-const settled = () => new Promise((done) => setTimeout(done, 25));
+const settled = async (): Promise<void> => {
+  const deadline = Date.now() + 1000;
+  do {
+    // Yield for leaveSheet cleanup and popstate microtasks; wait on actual fake traversals.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    if (Date.now() > deadline) throw new Error("Fictional history traversal did not land");
+  } while (pendingLandings > 0);
+};
 afterAll(() => { if (original) Object.defineProperty(globalThis, "window", original); else delete (globalThis as { window?: unknown }).window; });
 
 it("a file/diff Close landing belongs to its owner, not a sheet opened while it travels", async () => {

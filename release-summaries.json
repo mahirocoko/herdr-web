@@ -1,4 +1,12 @@
 {
+  "0.16.15": {
+    "en": {
+      "fixed": ["Refuse Chat sends when supported ANSI snapshots show an existing native draft.", "Show provider failures and retry history without reporting a successful answer.", "Keep touch Back on the topmost surface across Files, Settings and rotation."]
+    },
+    "th": {
+      "fixed": ["ถ้าอ่านหน้าจอ ANSI ที่รองรับแล้วพบร่างเดิมใน terminal จะไม่ส่งข้อความจาก Chat ทับ", "แสดงข้อผิดพลาดจาก provider และประวัติ retry ไม่รายงานเป็นคำตอบสำเร็จ", "บนจอสัมผัส Back จะปิดเฉพาะหน้าต่างบนสุด รวมถึง Files, Settings และตอนหมุนจอ"]
+    }
+  },
   "0.16.14": {
     "en": {
       "new": ["Stop this checkout's Web launcher with bun run stop on Linux/macOS."],

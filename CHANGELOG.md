@@ -8,6 +8,42 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.16.15] - 2026-11-17
+
+### Fixed
+
+- Refuse Chat Send, Send now and automatic pending delivery when supported
+  Pi/OmO, Codex or Letta ANSI snapshots positively show an existing native
+  composer draft. Preserve Web text and held rows for review without clearing
+  or replaying native input.
+- Keep explicit Claude API errors and Codex task-completion errors visible as
+  failed requests, including error-only turns. Group retry failures without
+  reordering, preserve reader disclosure choices, and keep errors out of successful
+  answer copying. Bound live failure status and automatic-delivery holds to
+  positively observed current-turn, process and session evidence.
+- On touch layouts, Back dismisses only the topmost surface. Preserve Files
+  beneath file/diff viewers and Forward navigation; reconcile explicit Close,
+  Settings rotation and busy refusal without bypassing an upper confirmation.
+  Coarse-touch landscape participates without changing desktop dialog styling.
+
+### Boundaries
+
+- These are selective upstream adaptations, not a snapshot upgrade. The source
+  pin, private ingress, native identity/input guards, Letta Stop witness, Pi
+  parent/child privacy and Push identity remain unchanged.
+- Draft recognition requires positive ANSI evidence; herdr-core plain-text reads
+  do not establish this protection. Final native reads and writes are not atomic.
+  Failure observation requires an established live binding and positive turn
+  evidence; cold/already-running turns, late records and unsupported lifecycles
+  are not fully covered.
+- Retired/reloaded sheet markers may retain an ordinary extra Back step. Cold
+  unactivated browser history, traversal beyond the one-second landing window,
+  iframes, older browsers and physical gestures are not fully certified.
+  Fictional/unit and headless viewport checks do not establish real-provider,
+  native-input or physical-device coverage.
+- This is a source-only fork release, not an installer, plugin, managed update,
+  remote bundle or deployment. No private runtime evidence is included.
+
 ## [0.16.14] - 2026-11-12
 
 ### Added
@@ -5425,7 +5461,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.14...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.15...HEAD
+[0.16.15]: https://github.com/mahirocoko/herdr-web/compare/v0.16.14...v0.16.15
 [0.16.14]: https://github.com/mahirocoko/herdr-web/compare/v0.16.13...v0.16.14
 [0.16.13]: https://github.com/mahirocoko/herdr-web/compare/v0.16.12...v0.16.13
 [0.16.12]: https://github.com/mahirocoko/herdr-web/compare/v0.16.11...v0.16.12

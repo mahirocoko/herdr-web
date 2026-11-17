@@ -220,6 +220,7 @@ describe("a phone's sheet in the history", () => {
   it("bounds a browser-dropped cleanup so the next real Back is not cleanup", async () => {
     const first = hooks.enter(() => {});
     fake.drop(true); first(); await settled();
+    // fixed wait: cross the one-second dropped-traversal deadline before the next real Back.
     await new Promise((resolve) => setTimeout(resolve, 1050));
     fake.drop(false);
     let closed = 0;
