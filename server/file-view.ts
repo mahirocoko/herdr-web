@@ -454,6 +454,9 @@ export function isHtmlPage(info: FileInfo): boolean {
   return info.kind === "text" && info.mime === "text/html";
 }
 
+/** Shared by non-PDF file answers and conversation images opened on their own. */
+export const FILE_POLICY = "sandbox; default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'";
+
 /**
  * The file itself. `download` asks the browser to save it. Answers are sandboxed (an HTML
  * or SVG file opened from this origin must not run script with the app's access), and
@@ -472,7 +475,7 @@ export function fileResponse(info: FileInfo, download: boolean, render = false, 
   // a PDF is drawn by the browser's own viewer, which refuses a sandboxed document; its
   // scripts stay inside that viewer, never on this origin
   if (page) headers.set("content-security-policy", pagePolicy(media?.source ?? null));
-  else if (info.kind !== "pdf") headers.set("content-security-policy", "sandbox; default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'");
+  else if (info.kind !== "pdf") headers.set("content-security-policy", FILE_POLICY);
   // text shows as text, whatever its extension says it runs as
   const type = page ? "text/html; charset=utf-8" : info.kind === "text" && info.mime !== "image/svg+xml" ? "text/plain; charset=utf-8" : info.mime;
   if (page && info.size <= EMBED_PAGE_BYTES) {

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, it, jest } from "bun:test";
-import { HerdrSocket } from "./ws.ts";
+import { backoffDelay, HerdrSocket } from "./ws.ts";
 import type { PendingMessage } from "../../shared/protocol.ts";
 import { OUTPUT_STALLED_CLOSE_CODE } from "../../shared/terminal-flow.ts";
 
@@ -874,6 +874,7 @@ it("reconnects at once when the page wakes instead of waiting out the backoff, a
 
 it("backs off repeated short-lived opens, even when each receives a snapshot and terminal readiness", () => {
   jest.useFakeTimers();
+  const random = jest.spyOn(Math, "random").mockReturnValue(0.5);
   const { client, socket } = liveClient([]);
   try {
     let current = socket;
@@ -894,6 +895,7 @@ it("backs off repeated short-lived opens, even when each receives a snapshot and
     }
   } finally {
     client.close();
+    random.mockRestore();
     jest.useRealTimers();
   }
 });
@@ -1804,3 +1806,48 @@ it("ends the connection when the page is left, and connects again only when it i
     jest.useRealTimers();
   }
 });
+
+it("keeps the first four reconnect delays fixed without drawing randomness", () => {
+  const random = jest.spyOn(Math, "random").mockReturnValue(0);
+  try {
+    expect([0, 1, 2, 3].map(backoffDelay)).toEqual([250, 500, 1000, 2000]);
+    expect(random).not.toHaveBeenCalled();
+  } finally { random.mockRestore(); }
+});
+
+for (const [draw, delays] of [[0, [2000, 2500, 2500]], [0.5, [4000, 5000, 5000]], [1 - Number.EPSILON, [6000, 7500, 7500]]] as const) {
+  it(`centers later reconnect windows on the capped base at random=${draw}`, () => {
+    const random = jest.spyOn(Math, "random").mockReturnValue(draw);
+    try {
+      [4, 5, 32].forEach((attempt, i) => expect(backoffDelay(attempt)).toBeCloseTo(delays[i]!, 8));
+      expect(random).toHaveBeenCalledTimes(3);
+    } finally { random.mockRestore(); }
+  });
+}
+
+for (const [draw, delays] of [[0, [250, 500, 1000, 2000, 2000, 2500]], [0.875, [250, 500, 1000, 2000, 5500, 6875]]] as const) {
+  it(`uses the jittered delay in actual reconnect timers at random=${draw}`, () => {
+    jest.useFakeTimers();
+    const random = jest.spyOn(Math, "random").mockReturnValue(draw);
+    const client = new HerdrSocket("ws://test/ws");
+    client.connect();
+    let current = FakeSocket.last;
+    try {
+      for (const delay of delays) {
+        current.disconnect();
+        expect(client.state).toBe("waiting");
+        jest.advanceTimersByTime(delay - 1);
+        expect(FakeSocket.last).toBe(current);
+        jest.advanceTimersByTime(1);
+        const next = FakeSocket.last;
+        expect(next).not.toBe(current);
+        expect(submissions(next)).toEqual([]);
+        current = next;
+      }
+    } finally {
+      client.close();
+      random.mockRestore();
+      jest.useRealTimers();
+    }
+  });
+}

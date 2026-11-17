@@ -164,6 +164,24 @@
   border-radius: var(--radius-md);
 }
 
+/* Keep endpoint buttons focusable, with the same resting paint as disabled icon buttons. */
+.settings-stepper > .icon-button[aria-disabled="true"] {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.settings-stepper > .icon-button[aria-disabled="true"]:active {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text);
+}
+
+@media (hover: hover) {
+  .settings-stepper > .icon-button[aria-disabled="true"]:hover {
+    background: transparent;
+  }
+}
+
 .settings-stepper output {
   min-width: 3.5em;
   color: var(--text-strong);

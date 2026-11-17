@@ -10899,9 +10899,16 @@
       "src/lib/useRepoDiffViewer.ts",
       "src/components/FilesDialog.tsx",
       "src/components/NewSessionDialog.tsx",
-      "src/components/RowMenu.tsx"
+      "src/components/RowMenu.tsx",
+      "server/file-view.ts",
+      "src/components/SettingsControls.tsx",
+      "src/components/SettingsControls.css",
+      "src/lib/ws.test.ts"
     ],
     "additions": [
+      "server/conversation-image-policy.test.ts",
+      "src/components/SettingsControls.test.tsx",
+      "scripts/settings-stepper-browser-qa.ts",
       "src/lib/sheetHistory.traversal.test.ts",
       "src/lib/settingsSheetHistory.test.ts",
       "scripts/sheet-history-fixture.tsx",

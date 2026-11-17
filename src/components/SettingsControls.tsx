@@ -59,9 +59,9 @@ export function Segmented<T extends string>({ label, value, options, onChange }:
 export function Stepper({ label, value, text, min, max, decreaseLabel, increaseLabel, onChange }: { label: string; value: number; text: string; min: number; max: number; decreaseLabel: string; increaseLabel: string; onChange: (value: number) => void }) {
   return (
     <div className="settings-stepper" role="group" aria-label={label}>
-      <button type="button" className="icon-button" aria-label={decreaseLabel} disabled={value <= min} onClick={() => onChange(value - 1)}><Minus aria-hidden="true" /></button>
+      <button type="button" className="icon-button" aria-label={decreaseLabel} aria-disabled={value <= min || undefined} onClick={() => { if (value > min) onChange(value - 1); }}><Minus aria-hidden="true" /></button>
       <output aria-live="polite">{text}</output>
-      <button type="button" className="icon-button" aria-label={increaseLabel} disabled={value >= max} onClick={() => onChange(value + 1)}><Plus aria-hidden="true" /></button>
+      <button type="button" className="icon-button" aria-label={increaseLabel} aria-disabled={value >= max || undefined} onClick={() => { if (value < max) onChange(value + 1); }}><Plus aria-hidden="true" /></button>
     </div>
   );
 }

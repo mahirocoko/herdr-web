@@ -59,6 +59,12 @@ const DISCONNECTED: SubmitResult = { ok: false, code: "disconnected", message: "
 /** The connection dropped before the request's frame left: nothing can have reached the pane. */
 const NOT_TRANSMITTED: SubmitResult = { ok: false, code: "not_transmitted", message: "the connection dropped before this message was sent" };
 
+/** Keep the first four restart retries fixed; later attempts spread around the capped base. */
+export function backoffDelay(retries: number): number {
+  const step = Math.min(5000, 250 * 2 ** retries);
+  return retries < 4 ? step : step * (0.5 + Math.random());
+}
+
 /**
  * Where the connection stands. `connected` and the input checks still read the socket itself:
  * a frozen page's socket can turn CLOSED before any event updates this.
@@ -605,7 +611,7 @@ export class HerdrSocket {
 
   private scheduleReconnect(): void {
     if (this.disposed || this.reconnectTimer !== null) return;
-    const delay = Math.min(5000, 250 * 2 ** this.retries);
+    const delay = backoffDelay(this.retries);
     this.retries += 1;
     this.connectionState = "waiting";
     this.reconnectTimer = window.setTimeout(() => {

@@ -501,8 +501,16 @@ export const PROMOTION_PATCHES = [
   'src/components/FilesDialog.tsx',
   'src/components/NewSessionDialog.tsx',
   'src/components/RowMenu.tsx',
+  // #3915, #3828, #3942: selected image policy, Settings endpoint focus and reconnect jitter.
+  'server/file-view.ts',
+  'src/components/SettingsControls.tsx',
+  'src/components/SettingsControls.css',
+  'src/lib/ws.test.ts',
 ]
 export const PROMOTION_ADDITIONS = [
+  'server/conversation-image-policy.test.ts',
+  'src/components/SettingsControls.test.tsx',
+  'scripts/settings-stepper-browser-qa.ts',
   'src/lib/sheetHistory.traversal.test.ts',
   'src/lib/settingsSheetHistory.test.ts',
   'scripts/sheet-history-fixture.tsx',
