@@ -8,6 +8,31 @@ runtime publishing. Earlier fork releases are listed on
 
 ## [Unreleased]
 
+## [0.16.16] - 2026-11-17
+
+### Fixed
+
+- Apply the existing sandboxed file content policy to Chat conversation images.
+  Preserve authentication, pane-bound image resolution, MIME and cache behavior.
+- Keep focus on Settings stepper buttons at the minimum and maximum values.
+  Refuse out-of-range pointer and keyboard activation, retaining disabled paint
+  and visible keyboard focus without changing the dialog anatomy.
+- Spread later WebSocket reconnect attempts with jitter while keeping the first
+  four delays at 250, 500, 1000 and 2000ms. Later delays vary around the 4s and
+  capped 5s bases, up to about 7.5s; input and uncertain writes are never replayed.
+
+### Boundaries
+
+- These are three selected upstream fixes, not a snapshot upgrade. The source
+  pin, private ingress/authentication, native identity/input guards, browser PWA
+  behavior, preview consent and Push identity remain unchanged.
+- Handler and fake-socket tests plus isolated Settings browser checks do not
+  establish every Settings page, screen reader, real-provider, network-failure
+  or physical-device scenario. Independent rendered coverage is narrower than
+  the main component fixture matrix.
+- This is a source-only fork release, not an installer, plugin, managed update,
+  remote bundle or deployment. No private runtime evidence is included.
+
 ## [0.16.15] - 2026-11-17
 
 ### Fixed
@@ -5461,7 +5486,8 @@ First public version.
 - Installable PWA, a mobile key bar, web push alerts and optional token auth.
 - Distribution as a herdr plugin.
 
-[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.15...HEAD
+[Unreleased]: https://github.com/mahirocoko/herdr-web/compare/v0.16.16...HEAD
+[0.16.16]: https://github.com/mahirocoko/herdr-web/compare/v0.16.15...v0.16.16
 [0.16.15]: https://github.com/mahirocoko/herdr-web/compare/v0.16.14...v0.16.15
 [0.16.14]: https://github.com/mahirocoko/herdr-web/compare/v0.16.13...v0.16.14
 [0.16.13]: https://github.com/mahirocoko/herdr-web/compare/v0.16.12...v0.16.13

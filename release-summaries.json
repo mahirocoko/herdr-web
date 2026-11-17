@@ -1,4 +1,12 @@
 {
+  "0.16.16": {
+    "en": {
+      "fixed": ["Apply the sandboxed file policy to Chat images; preserve authentication and caching.", "Keep focus on Settings stepper buttons at their limits and refuse out-of-range presses.", "Jitter later WebSocket reconnect attempts while keeping the first four delays unchanged."]
+    },
+    "th": {
+      "fixed": ["ภาพจาก Chat ใช้ sandbox policy เดียวกับ file route โดยคง auth และ cache เดิม", "เมื่อค่าถึงขอบเขต ปุ่มบวกลบใน Settings ยังรับ focus อยู่ และกดต่อแล้วไม่เปลี่ยนค่า", "สุ่มเวลาเชื่อมต่อ WebSocket ในรอบหลัง ลดหลายแท็บเชื่อมพร้อมกัน สี่ครั้งแรกยังใช้เวลาเดิม"]
+    }
+  },
   "0.16.15": {
     "en": {
       "fixed": ["Refuse Chat sends when supported ANSI snapshots show an existing native draft.", "Show provider failures and retry history without reporting a successful answer.", "Keep touch Back on the topmost surface across Files, Settings and rotation."]
